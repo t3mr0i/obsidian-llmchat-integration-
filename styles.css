@@ -1,214 +1,912 @@
-/* xterm.js styles - Copyright (c) 2014 The xterm.js authors. MIT License */
+/* LLM Plugin Styles — Lufthansa Theme */
 
-.xterm {
-    cursor: text;
-    position: relative;
-    user-select: none;
-    -ms-user-select: none;
-    -webkit-user-select: none;
+/* ============================================
+   Lufthansa Design System
+   Dark Blue: #05164d  |  Mid Blue: #1a3c8a
+   Gold: #fdc300       |  Gold Hover: #e5b000
+   Font: Helvetica Neue (closest to LH Text)
+   ============================================ */
+
+/* Color palette — scoped to plugin containers */
+.llm-chat-view,
+.llm-chat-modal,
+.llm-quick-prompt-modal,
+.llm-provider-details {
+  --lh-navy: #05164d;
+  --lh-navy-light: #0a2266;
+  --lh-blue: #1a3c8a;
+  --lh-blue-light: #2a5cba;
+  --lh-gold: #fdc300;
+  --lh-gold-dim: #e5b000;
+  --lh-gold-subtle: rgba(253, 195, 0, 0.12);
+  --lh-warm-white: #fafaf7;
+  --lh-cool-gray: #e8eaef;
+  --lh-font: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-family: var(--lh-font);
+  letter-spacing: 0.01em;
 }
 
-.xterm.focus,
-.xterm:focus {
-    outline: none;
+/* Dark mode adjustments */
+.theme-dark .llm-chat-view,
+.theme-dark .llm-chat-modal,
+.theme-dark .llm-quick-prompt-modal {
+  --lh-warm-white: #1a1d24;
+  --lh-cool-gray: #252830;
+  --lh-gold-subtle: rgba(253, 195, 0, 0.08);
 }
 
-.xterm .xterm-helpers {
-    position: absolute;
-    top: 0;
-    z-index: 5;
+/* ============================================
+   Provider Settings
+   ============================================ */
+.llm-provider-details {
+  margin: 10px 0;
+  border: 1px solid var(--lh-cool-gray, var(--background-modifier-border));
+  border-radius: 6px;
+  padding: 10px;
+  border-left: 3px solid var(--lh-gold);
 }
 
-.xterm .xterm-helper-textarea {
-    padding: 0;
-    border: 0;
-    margin: 0;
-    position: absolute;
-    opacity: 0;
-    left: -9999em;
-    top: 0;
-    width: 0;
-    height: 0;
-    z-index: -5;
-    white-space: nowrap;
-    overflow: hidden;
-    resize: none;
+.llm-provider-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 5px;
+  font-family: var(--lh-font);
 }
 
-.xterm .composition-view {
-    background: #000;
-    color: #FFF;
-    display: none;
-    position: absolute;
-    white-space: nowrap;
-    z-index: 1;
+.llm-provider-details[open] summary {
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--lh-cool-gray, var(--background-modifier-border));
+  padding-bottom: 10px;
 }
 
-.xterm .composition-view.active {
-    display: block;
+.llm-provider-settings {
+  padding-left: 10px;
 }
 
-.xterm .xterm-viewport {
-    background-color: #000;
-    overflow-y: scroll;
-    cursor: default;
-    position: absolute;
-    right: 0;
-    left: 0;
-    top: 0;
-    bottom: 0;
+/* ============================================
+   Chat Modal
+   ============================================ */
+.llm-chat-modal {
+  padding: 20px;
+  min-width: 500px;
+  max-width: 800px;
 }
 
-.xterm .xterm-screen {
-    position: relative;
+.llm-chat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid var(--lh-gold, var(--background-modifier-border));
 }
 
-.xterm .xterm-screen canvas {
-    position: absolute;
-    left: 0;
-    top: 0;
+.llm-chat-header h2 {
+  margin: 0;
+  font-family: var(--lh-font);
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
-.xterm .xterm-scroll-area {
-    visibility: hidden;
+.llm-provider-selector {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-.xterm-char-measure-element {
-    display: inline-block;
-    visibility: hidden;
-    position: absolute;
-    top: 0;
-    left: -9999em;
-    line-height: normal;
+/* ============================================
+   Messages
+   ============================================ */
+.llm-chat-messages {
+  max-height: 400px;
+  overflow-y: auto;
+  margin-bottom: 15px;
+  padding: 10px;
+  background-color: var(--lh-warm-white, var(--background-secondary));
+  border-radius: 6px;
 }
 
-.xterm.enable-mouse-events {
-    cursor: default;
+.llm-message {
+  margin-bottom: 15px;
+  padding: 12px 14px;
+  border-radius: 6px;
+  transition: box-shadow 0.15s ease;
 }
 
-.xterm.xterm-cursor-pointer,
-.xterm .xterm-cursor-pointer {
-    cursor: pointer;
+/* User messages — Lufthansa Navy */
+.llm-message-user {
+  background: linear-gradient(135deg, var(--lh-navy) 0%, var(--lh-navy-light) 100%);
+  color: #ffffff;
+  margin-left: 50px;
+  border-radius: 6px 6px 2px 6px;
+  box-shadow: 0 1px 3px rgba(5, 22, 77, 0.2);
 }
 
-.xterm.column-select.focus {
-    cursor: crosshair;
+/* Assistant messages — clean with gold accent */
+.llm-message-assistant {
+  background-color: var(--lh-warm-white, var(--background-primary));
+  color: var(--text-normal);
+  margin-right: 50px;
+  border: 1px solid var(--lh-cool-gray, var(--background-modifier-border));
+  border-left: 3px solid var(--lh-gold);
+  border-radius: 6px 6px 6px 2px;
 }
 
-.xterm .xterm-accessibility:not(.debug),
-.xterm .xterm-message {
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    right: 0;
-    z-index: 10;
-    color: transparent;
-    pointer-events: none;
+.llm-message-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
 }
 
-.xterm .xterm-accessibility-tree:not(.debug) *::selection {
-    color: transparent;
+.llm-message-user .llm-message-header {
+  color: rgba(255, 255, 255, 0.75);
 }
 
-.xterm .xterm-accessibility-tree {
-    user-select: text;
-    white-space: pre;
+.llm-message-content {
+  word-wrap: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+  line-height: 1.55;
 }
 
-.xterm .live-region {
-    position: absolute;
-    left: -9999px;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
+.llm-message-user .llm-message-content {
+  white-space: pre-wrap;
 }
 
-.xterm-dim {
-    opacity: 1 !important;
+/* ============================================
+   Chat Input
+   ============================================ */
+.llm-chat-input {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
-.xterm-underline-1 { text-decoration: underline; }
-.xterm-underline-2 { text-decoration: double underline; }
-.xterm-underline-3 { text-decoration: wavy underline; }
-.xterm-underline-4 { text-decoration: dotted underline; }
-.xterm-underline-5 { text-decoration: dashed underline; }
-
-.xterm-overline {
-    text-decoration: overline;
+.llm-chat-input-container {
+  display: flex;
+  gap: 10px;
 }
 
-.xterm-overline.xterm-underline-1 { text-decoration: overline underline; }
-.xterm-overline.xterm-underline-2 { text-decoration: overline double underline; }
-.xterm-overline.xterm-underline-3 { text-decoration: overline wavy underline; }
-.xterm-overline.xterm-underline-4 { text-decoration: overline dotted underline; }
-.xterm-overline.xterm-underline-5 { text-decoration: overline dashed underline; }
-
-.xterm-strikethrough {
-    text-decoration: line-through;
+.llm-chat-input {
+  flex: 1;
+  resize: vertical;
+  min-height: 60px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--lh-cool-gray, var(--background-modifier-border));
+  background-color: var(--background-primary);
+  font-family: var(--lh-font);
+  font-size: 0.95em;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.xterm-screen .xterm-decoration-container .xterm-decoration {
-    z-index: 6;
-    position: absolute;
+.llm-chat-input:focus {
+  border-color: var(--lh-gold);
+  box-shadow: 0 0 0 2px var(--lh-gold-subtle);
+  outline: none;
 }
 
-.xterm-screen .xterm-decoration-container .xterm-decoration.xterm-decoration-top-layer {
-    z-index: 7;
+/* Send button — Lufthansa Gold CTA */
+.llm-chat-send {
+  padding: 10px 22px;
+  background: linear-gradient(180deg, var(--lh-gold) 0%, var(--lh-gold-dim) 100%);
+  color: var(--lh-navy);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 700;
+  font-family: var(--lh-font);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.82em;
+  transition: transform 0.1s ease, box-shadow 0.15s ease;
+  box-shadow: 0 1px 3px rgba(253, 195, 0, 0.3);
 }
 
-.xterm-decoration-overview-ruler {
-    z-index: 8;
-    position: absolute;
-    top: 0;
-    right: 0;
-    pointer-events: none;
+.llm-chat-send:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(253, 195, 0, 0.4);
 }
 
-.xterm-decoration-top {
-    z-index: 2;
-    position: relative;
+.llm-chat-send:active {
+  transform: translateY(0);
 }
 
-/* OpenCode Terminal Styles */
-
-.vault-terminal {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    width: 100%;
-    padding: 8px;
-    box-sizing: border-box;
-    background: var(--background-secondary);
+.llm-chat-send:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
-.vault-terminal-host {
-    flex: 1;
-    overflow: hidden;
-    min-height: 0;
+/* Cancel button */
+.llm-chat-cancel {
+  padding: 10px 20px;
+  background-color: var(--background-modifier-error);
+  color: var(--text-on-accent);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-family: var(--lh-font);
 }
 
-/* Fix xterm viewport scrolling */
-.vault-terminal .xterm-viewport {
-    overflow-y: auto !important;
+.llm-chat-cancel:hover {
+  opacity: 0.9;
 }
 
-.vault-terminal .xterm-screen {
-    height: 100%;
+/* ============================================
+   Code in Messages
+   ============================================ */
+.llm-message-content code {
+  background-color: var(--lh-gold-subtle, var(--background-modifier-code));
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-size: 0.9em;
 }
 
-/* Hide the helper textarea that xterm uses - prevent scroll issues */
-.vault-terminal .xterm-helper-textarea {
-    position: absolute !important;
-    top: 0 !important;
-    left: -9999px !important;
-    width: 1px !important;
-    height: 1px !important;
-    z-index: -1000 !important;
-    opacity: 0 !important;
+.llm-message-content pre {
+  background-color: var(--lh-navy, var(--background-modifier-code));
+  color: var(--lh-cool-gray, #e0e0e0);
+  padding: 12px 14px;
+  border-radius: 5px;
+  overflow-x: auto;
+  margin: 0.5em 0;
+  border: 1px solid rgba(253, 195, 0, 0.15);
 }
 
-/* Ensure terminal fills container */
-.vault-terminal .xterm {
-    height: 100%;
+.llm-message-content pre code {
+  background: none;
+  padding: 0;
+  color: inherit;
+}
+
+/* ============================================
+   Loading / Spinner
+   ============================================ */
+.llm-loading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.llm-loading-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--lh-blue, var(--background-modifier-border));
+  border-top-color: var(--lh-gold);
+  border-radius: 50%;
+  animation: llm-spin 0.8s linear infinite;
+}
+
+@keyframes llm-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ============================================
+   Quick Prompt Modal
+   ============================================ */
+.llm-quick-prompt-modal {
+  padding: 20px;
+  min-width: 400px;
+}
+
+.llm-quick-prompt-input {
+  width: 100%;
+  min-height: 100px;
+  margin-bottom: 15px;
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid var(--lh-cool-gray, var(--background-modifier-border));
+  resize: vertical;
+  font-family: var(--lh-font);
+}
+
+.llm-quick-prompt-input:focus {
+  border-color: var(--lh-gold);
+  box-shadow: 0 0 0 2px var(--lh-gold-subtle);
+  outline: none;
+}
+
+.llm-quick-prompt-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.llm-inline-suggestion {
+  color: var(--text-muted);
+  font-style: italic;
+  opacity: 0.7;
+}
+
+/* ============================================
+   Status Bar
+   ============================================ */
+.llm-status-bar-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--lh-font);
+}
+
+.llm-status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--text-muted);
+}
+
+.llm-status-indicator.active {
+  background-color: var(--lh-gold);
+  box-shadow: 0 0 4px rgba(253, 195, 0, 0.5);
+}
+
+.llm-status-indicator.connecting {
+  background-color: var(--lh-gold);
+  animation: llm-status-pulse 1s ease-in-out infinite;
+}
+
+@keyframes llm-status-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.llm-status-indicator.error {
+  background-color: var(--text-error);
+}
+
+/* ============================================
+   Error Message
+   ============================================ */
+.llm-error-message {
+  color: var(--text-error);
+  padding: 10px 12px;
+  background-color: rgba(var(--color-red-rgb), 0.1);
+  border-radius: 6px;
+  margin-bottom: 10px;
+  border-left: 3px solid var(--text-error);
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+
+/* ============================================
+   Empty State
+   ============================================ */
+.llm-empty-state {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 40px 20px;
+}
+
+.llm-empty-state h3 {
+  margin-bottom: 10px;
+  font-family: var(--lh-font);
+  font-weight: 700;
+}
+
+/* ============================================
+   Quick Prompt (additional)
+   ============================================ */
+.llm-quick-prompt-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.llm-quick-prompt-header h2 {
+  margin: 0;
+  font-family: var(--lh-font);
+}
+
+.llm-quick-prompt-input-container {
+  margin-bottom: 15px;
+}
+
+.llm-quick-prompt-label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.llm-quick-prompt-submit {
+  margin-top: 10px;
+  padding: 8px 16px;
+}
+
+.llm-quick-prompt-response {
+  margin-top: 15px;
+  padding: 15px;
+  background-color: var(--lh-warm-white, var(--background-secondary));
+  border-radius: 6px;
+  border-left: 3px solid var(--lh-gold);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.llm-quick-prompt-action {
+  padding: 8px 16px;
+  border-radius: 5px;
+  cursor: pointer;
+  border: 1px solid var(--lh-cool-gray, var(--background-modifier-border));
+  background-color: var(--background-secondary);
+  font-family: var(--lh-font);
+}
+
+.llm-quick-prompt-action:hover {
+  background-color: var(--lh-gold-subtle);
+  border-color: var(--lh-gold);
+}
+
+/* ============================================
+   Clear Button
+   ============================================ */
+.llm-clear-btn {
+  padding: 5px 10px;
+  background: transparent;
+  border: 1px solid var(--lh-cool-gray, var(--background-modifier-border));
+  border-radius: 5px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-family: var(--lh-font);
+  transition: all 0.15s ease;
+}
+
+.llm-clear-btn:hover {
+  color: var(--text-error);
+  border-color: var(--text-error);
+}
+
+/* ============================================
+   Chat View (Side Panel)
+   ============================================ */
+.llm-chat-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 12px;
+}
+
+.llm-chat-view .llm-chat-header {
+  flex-shrink: 0;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid var(--lh-gold, var(--background-modifier-border));
+}
+
+.llm-chat-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  font-size: 0.85em;
+}
+
+.llm-context-toggle {
+  display: flex;
+  align-items: center;
+}
+
+.llm-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 0.9em;
+}
+
+.llm-toggle-label input[type="checkbox"] {
+  margin: 0;
+  accent-color: var(--lh-gold);
+}
+
+.llm-icon-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  color: var(--text-muted);
+  border-radius: 4px;
+  margin-left: auto;
+  transition: all 0.15s ease;
+}
+
+.llm-icon-btn:hover {
+  color: var(--text-error);
+  background-color: var(--background-modifier-hover);
+}
+
+.llm-chat-view .llm-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  background-color: var(--lh-warm-white, var(--background-primary-alt));
+  border-radius: 6px;
+  margin-bottom: 12px;
+  max-height: none;
+}
+
+.llm-chat-view .llm-chat-input-container {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.llm-chat-view .llm-chat-input {
+  width: 100%;
+  min-height: 60px;
+  max-height: 150px;
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.llm-input-buttons {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.llm-chat-view .llm-message {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border-radius: 6px;
+}
+
+.llm-chat-view .llm-message-user {
+  background: linear-gradient(135deg, var(--lh-navy) 0%, var(--lh-navy-light) 100%);
+  color: #ffffff;
+  margin-left: 40px;
+  border-radius: 6px 6px 2px 6px;
+}
+
+.llm-chat-view .llm-message-user .llm-message-header {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.llm-chat-view .llm-message-assistant {
+  background: var(--lh-warm-white, var(--background-secondary));
+  color: var(--text-normal);
+  margin-right: 40px;
+  border-radius: 6px 6px 6px 2px;
+  border: 1px solid var(--lh-cool-gray, var(--background-modifier-border));
+  border-left: 3px solid var(--lh-gold);
+}
+
+.llm-message-role {
+  font-weight: 700;
+  font-size: 0.82em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.llm-message-time {
+  font-size: 0.75em;
+  opacity: 0.55;
+}
+
+/* ============================================
+   Message Actions
+   ============================================ */
+.llm-message-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.llm-message:hover .llm-message-actions {
+  opacity: 1;
+}
+
+.llm-action-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  color: var(--text-muted);
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.llm-action-btn:hover {
+  color: var(--lh-gold);
+  background-color: var(--lh-gold-subtle);
+}
+
+.llm-action-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.llm-chat-view .llm-empty-state {
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.llm-empty-hint {
+  font-size: 0.85em;
+  opacity: 0.6;
+  margin-top: 8px;
+}
+
+/* Loading indicator styled as message */
+.llm-loading-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* ============================================
+   Settings Inputs
+   ============================================ */
+.llm-file-input {
+  flex: 1;
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--lh-cool-gray, var(--background-modifier-border));
+  background-color: var(--background-primary);
+  color: var(--text-muted);
+  font-size: 0.9em;
+  margin-right: 8px;
+  font-family: var(--lh-font);
+}
+
+.llm-browse-btn {
+  padding: 6px 12px;
+  margin-right: 4px;
+}
+
+.llm-timeout-input {
+  width: 80px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--lh-cool-gray, var(--background-modifier-border));
+  background-color: var(--background-primary);
+  margin-right: 8px;
+  font-family: var(--lh-font);
+}
+
+/* ============================================
+   Progress Indicators
+   ============================================ */
+.llm-progress-container {
+  margin: 10px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.llm-progress-history {
+  padding: 4px 12px;
+  font-size: 0.85em;
+  color: var(--text-muted);
+}
+
+.llm-tool-history-item {
+  display: flex;
+  align-items: flex-start;
+  padding: 2px 0;
+  font-family: var(--font-monospace);
+  font-size: 0.9em;
+}
+
+.llm-tool-complete {
+  color: var(--lh-gold);
+  flex-shrink: 0;
+}
+
+.llm-tool-active {
+  color: var(--lh-blue-light, var(--text-accent));
+  flex-shrink: 0;
+}
+
+.llm-tool-name {
+  color: var(--lh-blue-light, var(--text-accent));
+  font-weight: 500;
+}
+
+.llm-tool-detail {
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
+.llm-tool-count {
+  color: var(--text-muted);
+  font-size: 0.9em;
+}
+
+.llm-tool-history {
+  font-family: var(--font-monospace);
+  color: var(--lh-blue-light, var(--text-accent));
+}
+
+/* Clickable file links */
+.llm-file-link {
+  color: var(--lh-blue-light, var(--text-accent));
+  text-decoration: underline;
+  cursor: pointer;
+  font-family: var(--font-monospace);
+  font-size: 0.95em;
+}
+
+.llm-file-link:hover {
+  color: var(--lh-gold);
+}
+
+.llm-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 5px;
+  font-size: 0.85em;
+  animation: llm-pulse 2s ease-in-out infinite;
+}
+
+.llm-progress-tool {
+  background-color: var(--lh-gold-subtle, var(--background-modifier-info));
+  color: var(--text-normal);
+  border: 1px solid rgba(253, 195, 0, 0.25);
+}
+
+.llm-progress-thinking {
+  background-color: var(--background-modifier-message);
+  color: var(--text-muted);
+  border: 1px solid var(--lh-cool-gray, var(--background-modifier-border));
+}
+
+.llm-progress-status {
+  background-color: var(--background-secondary);
+  color: var(--text-muted);
+  border: 1px solid var(--lh-cool-gray, var(--background-modifier-border));
+}
+
+.llm-progress-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+.llm-progress-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.llm-progress-text {
+  flex: 1;
+}
+
+@keyframes llm-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* ============================================
+   Markdown in Messages
+   ============================================ */
+.llm-message-content p {
+  margin: 0 0 0.5em 0;
+}
+
+.llm-message-content p:last-child {
+  margin-bottom: 0;
+}
+
+.llm-message-content h1,
+.llm-message-content h2,
+.llm-message-content h3,
+.llm-message-content h4,
+.llm-message-content h5,
+.llm-message-content h6 {
+  margin: 0.5em 0 0.3em 0;
+  font-weight: 700;
+  font-family: var(--lh-font);
+}
+
+.llm-message-content h1 { font-size: 1.4em; }
+.llm-message-content h2 { font-size: 1.25em; }
+.llm-message-content h3 { font-size: 1.1em; }
+
+.llm-message-content ul,
+.llm-message-content ol {
+  margin: 0.3em 0;
+  padding-left: 1.5em;
+}
+
+.llm-message-content li {
+  margin: 0.2em 0;
+}
+
+.llm-message-content blockquote {
+  border-left: 3px solid var(--lh-gold);
+  margin: 0.5em 0;
+  padding-left: 10px;
+  color: var(--text-muted);
+}
+
+.llm-message-content a {
+  color: var(--lh-blue-light, var(--text-accent));
+  text-decoration: none;
+}
+
+.llm-message-content a:hover {
+  color: var(--lh-gold);
+  text-decoration: underline;
+}
+
+.llm-message-content strong {
+  font-weight: 700;
+}
+
+.llm-message-content em {
+  font-style: italic;
+}
+
+.llm-message-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.5em 0;
+}
+
+.llm-message-content th,
+.llm-message-content td {
+  border: 1px solid var(--lh-cool-gray, var(--background-modifier-border));
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.llm-message-content th {
+  background-color: var(--lh-navy);
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.theme-dark .llm-message-content th {
+  background-color: var(--lh-navy-light);
+}
+
+.llm-message-content hr {
+  border: none;
+  border-top: 1px solid var(--lh-cool-gray, var(--background-modifier-border));
+  margin: 1em 0;
+}
+
+/* ============================================
+   Scrollbar (Webkit)
+   ============================================ */
+.llm-chat-messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+.llm-chat-messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.llm-chat-messages::-webkit-scrollbar-thumb {
+  background-color: var(--lh-blue);
+  border-radius: 3px;
+}
+
+.llm-chat-messages::-webkit-scrollbar-thumb:hover {
+  background-color: var(--lh-gold);
 }

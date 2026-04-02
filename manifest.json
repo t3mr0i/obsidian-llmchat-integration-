@@ -1,10 +1,10 @@
 {
-  "id": "opencode-sidebar",
-  "name": "OpenCode CLI Sidebar",
-  "version": "1.0.6",
+  "id": "obsidian-llm",
+  "name": "LLM Integration",
+  "version": "1.0.0",
   "minAppVersion": "1.0.0",
-  "description": "Add an OpenCode CLI sidebar for AI assisted management and coding.",
-  "author": "Derek Ross",
-  "authorUrl": "https://github.com/derekross",
+  "description": "Integrate with multiple LLM CLI tools (Claude, OpenCode, Codex, Gemini) from within Obsidian",
+  "author": "Kai Detmers",
+  "authorUrl": "https://github.com/t3mr0i",
   "isDesktopOnly": true
 }
