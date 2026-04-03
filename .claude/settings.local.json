@@ -5,7 +5,13 @@
       "Bash(git reflog:*)",
       "Bash(git gc:*)",
       "Bash(git:*)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:docs.anthropic.com)",
+      "WebFetch(domain:platform.openai.com)",
+      "WebFetch(domain:ai.google.dev)",
+      "WebFetch(domain:ollama.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:openai.com)"
     ]
   }
 }

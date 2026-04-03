@@ -912,16 +912,121 @@
 }
 
 /* ============================================
+   Settings Layout
+   ============================================ */
+.llm-settings h3 {
+  margin-top: 24px;
+  margin-bottom: 8px;
+  font-family: var(--lh-font, inherit);
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding-bottom: 6px;
+}
+
+.llm-provider-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.llm-provider-name {
+  font-weight: 600;
+  font-family: var(--lh-font, inherit);
+}
+
+.llm-provider-badge {
+  font-size: 0.75em;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.llm-badge-enabled {
+  background-color: rgba(253, 195, 0, 0.15);
+  color: var(--lh-gold, #fdc300);
+}
+
+.llm-badge-disabled {
+  background-color: var(--background-modifier-hover);
+  color: var(--text-muted);
+}
+
+.llm-provider-desc {
+  margin: 4px 0 12px 0;
+  font-style: italic;
+}
+
+/* Advanced toggle within providers */
+.llm-advanced-toggle {
+  margin-top: 12px;
+  border: none;
+  padding: 0;
+  border-left: none;
+}
+
+.llm-advanced-toggle summary {
+  font-size: 0.85em;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px 0;
+  font-family: var(--lh-font, inherit);
+}
+
+.llm-advanced-toggle summary:hover {
+  color: var(--text-normal);
+}
+
+.llm-advanced-toggle[open] summary {
+  margin-bottom: 8px;
+}
+
+.llm-advanced-settings {
+  padding-left: 8px;
+  border-left: 2px solid var(--background-modifier-border);
+}
+
+/* Global advanced section */
+.llm-advanced-section {
+  margin-top: 20px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.llm-section-summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 1em;
+  font-family: var(--lh-font, inherit);
+  padding: 4px;
+}
+
+.llm-advanced-section[open] .llm-section-summary {
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding-bottom: 10px;
+}
+
+/* Temperature / setting value display */
+.llm-setting-value {
+  font-size: 0.8em;
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-left: 6px;
+}
+
+/* ============================================
    Local LLM Settings
    ============================================ */
 .llm-connection-result {
   font-size: 0.85em;
   margin-right: 8px;
-  font-family: var(--lh-font);
+  font-family: var(--lh-font, inherit);
 }
 
 .llm-connection-success {
-  color: var(--lh-gold);
+  color: var(--lh-gold, #fdc300);
   font-weight: 600;
 }
 

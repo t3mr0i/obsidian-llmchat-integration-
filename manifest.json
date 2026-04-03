@@ -1,9 +1,9 @@
 {
   "id": "obsidian-llm",
   "name": "LLM Integration",
-  "version": "1.0.0",
+  "version": "0.3.0",
   "minAppVersion": "1.0.0",
-  "description": "Integrate with multiple LLM CLI tools (Claude, OpenCode, Codex, Gemini) from within Obsidian",
+  "description": "Chat with AI models directly inside Obsidian — supports Claude, GPT, Gemini, and local models via Ollama",
   "author": "Kai Detmers",
   "authorUrl": "https://github.com/t3mr0i",
   "isDesktopOnly": true

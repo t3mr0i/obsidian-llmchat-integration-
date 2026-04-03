@@ -8,6 +8,7 @@ const PROVIDER_DISPLAY_NAMES: Record<LLMProvider, string> = {
   opencode: "OpenCode",
   codex: "Codex",
   gemini: "Gemini",
+  local: "Local LLM",
 };
 
 export class ChatModal extends Modal {

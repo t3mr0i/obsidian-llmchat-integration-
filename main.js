@@ -52,42 +52,56 @@ var ACP_SUPPORTED_PROVIDERS = ["claude", "opencode", "gemini", "codex"];
 var PROVIDER_MODELS = {
   claude: [
     { value: "", label: "Default (CLI default)" },
-    { value: "claude-opus-4-6", label: "Claude Opus 4.6 (latest, most intelligent)" },
-    { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6 (latest, balanced)" },
+    // Current generation
+    { value: "claude-opus-4-6", label: "Claude Opus 4.6 (flagship)" },
+    { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6 (balanced)" },
     { value: "claude-haiku-4-5", label: "Claude Haiku 4.5 (fast)" },
-    // Legacy - still available
-    { value: "claude-opus-4-5", label: "Claude Opus 4.5 (legacy)" },
-    { value: "claude-sonnet-4-5", label: "Claude Sonnet 4.5 (legacy)" },
-    { value: "claude-sonnet-4-0", label: "Claude Sonnet 4 (legacy)" }
+    // Previous generation
+    { value: "claude-sonnet-4-5", label: "Claude Sonnet 4.5" },
+    { value: "claude-opus-4-5", label: "Claude Opus 4.5" },
+    { value: "claude-opus-4-1", label: "Claude Opus 4.1" },
+    { value: "claude-sonnet-4-0", label: "Claude Sonnet 4" },
+    { value: "claude-opus-4-0", label: "Claude Opus 4" }
   ],
   gemini: [
     { value: "", label: "Default (CLI default)" },
-    { value: "gemini-3-pro-preview", label: "Gemini 3 Pro (preview)" },
-    { value: "gemini-3-flash-preview", label: "Gemini 3 Flash (preview, fast)" },
-    { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
-    { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash (fast)" }
+    // Latest
+    { value: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro (flagship, preview)" },
+    { value: "gemini-3-flash-preview", label: "Gemini 3 Flash (fast, preview)" },
+    { value: "gemini-3.1-flash-lite-preview", label: "Gemini 3.1 Flash Lite (budget, preview)" },
+    // Production
+    { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro (reasoning)" },
+    { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash (fast)" },
+    { value: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite (budget)" },
+    // Specialized
+    { value: "gemini-3.1-flash-live-preview", label: "Gemini 3.1 Flash Live (realtime)" },
+    { value: "deep-research-pro-preview-12-2025", label: "Deep Research Pro (autonomous)" }
   ],
   opencode: [
     { value: "", label: "Default (CLI default)" },
-    { value: "anthropic/claude-opus-4-6", label: "Claude Opus 4.6 (latest)" },
-    { value: "anthropic/claude-sonnet-4-6", label: "Claude Sonnet 4.6 (latest, balanced)" },
+    // Anthropic
+    { value: "anthropic/claude-opus-4-6", label: "Claude Opus 4.6 (flagship)" },
+    { value: "anthropic/claude-sonnet-4-6", label: "Claude Sonnet 4.6 (balanced)" },
     { value: "anthropic/claude-haiku-4-5", label: "Claude Haiku 4.5 (fast)" },
-    { value: "openai/gpt-5.4", label: "GPT-5.4" },
+    // OpenAI
+    { value: "openai/gpt-5.4", label: "GPT-5.4 (flagship)" },
     { value: "openai/gpt-5.4-mini", label: "GPT-5.4 Mini (fast)" },
-    { value: "openai/gpt-5.4-nano", label: "GPT-5.4 Nano (cheapest)" },
-    // Legacy Copilot entries
+    { value: "openai/gpt-5.4-nano", label: "GPT-5.4 Nano (budget)" },
+    { value: "openai/o3", label: "o3 (reasoning)" },
+    { value: "openai/o4-mini", label: "o4-mini (reasoning, fast)" },
+    // Copilot
     { value: "github-copilot/gpt-5", label: "GPT-5 (Copilot)" },
-    { value: "github-copilot/gpt-5-mini", label: "GPT-5 Mini (Copilot, fast)" }
+    { value: "github-copilot/gpt-5-mini", label: "GPT-5 Mini (Copilot)" }
   ],
   codex: [
     { value: "", label: "Default (CLI default)" },
     { value: "gpt-5.4", label: "GPT-5.4 (flagship)" },
     { value: "gpt-5.4-mini", label: "GPT-5.4 Mini (fast)" },
-    { value: "gpt-5.4-nano", label: "GPT-5.4 Nano (cheapest)" },
-    // Legacy
-    { value: "o3", label: "o3 (reasoning, legacy)" },
-    { value: "o4-mini", label: "o4-mini (reasoning, legacy)" },
-    { value: "gpt-5", label: "GPT-5 (legacy)" }
+    { value: "gpt-5.4-nano", label: "GPT-5.4 Nano (budget)" },
+    { value: "o3", label: "o3 (reasoning)" },
+    { value: "o4-mini", label: "o4-mini (reasoning, fast)" },
+    { value: "gpt-5", label: "GPT-5" },
+    { value: "gpt-4o", label: "GPT-4o (legacy)" }
   ],
   local: [
     { value: "", label: "Fetch models from server..." }
@@ -496,6 +510,13 @@ var PROVIDER_DISPLAY_NAMES = {
   gemini: "Gemini (Google)",
   local: "Local LLM"
 };
+var PROVIDER_DESCRIPTIONS = {
+  claude: "Anthropic's Claude models \u2014 requires the Claude CLI",
+  opencode: "Multi-provider CLI supporting Claude, GPT, and more",
+  codex: "OpenAI's Codex CLI \u2014 requires an OpenAI API key",
+  gemini: "Google's Gemini models \u2014 requires the Gemini CLI",
+  local: "Run models on your own machine with Ollama, LM Studio, or similar"
+};
 var LLMSettingTab = class extends import_obsidian.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
@@ -504,10 +525,25 @@ var LLMSettingTab = class extends import_obsidian.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "LLM Integration Settings" });
-    new import_obsidian.Setting(containerEl).setName("Default Provider").setDesc("Which LLM provider to use by default").addDropdown((dropdown) => {
-      const providers2 = ["claude", "opencode", "codex", "gemini", "local"];
-      providers2.forEach((provider) => {
+    containerEl.addClass("llm-settings");
+    containerEl.createEl("h2", { text: "LLM Integration" });
+    containerEl.createEl("p", {
+      text: "Chat with AI models directly in Obsidian. Choose a provider below to get started.",
+      cls: "setting-item-description"
+    });
+    this.addGeneralSettings(containerEl);
+    this.addProvidersSection(containerEl);
+    this.addConversationSettings(containerEl);
+    this.addAdvancedSettings(containerEl);
+  }
+  // ════════════════════════════════════════════
+  //  General Settings
+  // ════════════════════════════════════════════
+  addGeneralSettings(containerEl) {
+    containerEl.createEl("h3", { text: "General" });
+    new import_obsidian.Setting(containerEl).setName("Default AI provider").setDesc("Which AI to use when you open a new chat").addDropdown((dropdown) => {
+      const allProviders = ["claude", "opencode", "codex", "gemini", "local"];
+      allProviders.forEach((provider) => {
         dropdown.addOption(provider, PROVIDER_DISPLAY_NAMES[provider]);
       });
       dropdown.setValue(this.plugin.settings.defaultProvider);
@@ -516,9 +552,9 @@ var LLMSettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       });
     });
-    new import_obsidian.Setting(containerEl).setName("Response Insert Position").setDesc("Where to insert LLM responses in the document").addDropdown((dropdown) => {
-      dropdown.addOption("cursor", "At cursor position");
-      dropdown.addOption("end", "At end of document");
+    new import_obsidian.Setting(containerEl).setName("Insert responses").setDesc("Where to place AI responses when using quick commands on selected text").addDropdown((dropdown) => {
+      dropdown.addOption("cursor", "At cursor");
+      dropdown.addOption("end", "End of note");
       dropdown.addOption("replace-selection", "Replace selection");
       dropdown.setValue(this.plugin.settings.insertPosition);
       dropdown.onChange(async (value) => {
@@ -526,19 +562,19 @@ var LLMSettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       });
     });
-    new import_obsidian.Setting(containerEl).setName("Stream Output").setDesc("Show LLM response as it streams in (when supported)").addToggle((toggle) => {
+    new import_obsidian.Setting(containerEl).setName("Live streaming").setDesc("Show the AI's response word-by-word as it's being generated").addToggle((toggle) => {
       toggle.setValue(this.plugin.settings.streamOutput);
       toggle.onChange(async (value) => {
         this.plugin.settings.streamOutput = value;
         await this.plugin.saveSettings();
       });
     });
-    const systemPromptSetting = new import_obsidian.Setting(containerEl).setName("System Prompt File").setDesc("Select a markdown file to use as the system prompt (optional)");
+    const systemPromptSetting = new import_obsidian.Setting(containerEl).setName("Custom instructions").setDesc("Pick a note from your vault to use as instructions for the AI (optional)");
     const systemPromptInput = systemPromptSetting.controlEl.createEl("input", {
       type: "text",
       cls: "llm-file-input",
       attr: {
-        placeholder: "No file selected",
+        placeholder: "None selected",
         readonly: "true"
       }
     });
@@ -563,29 +599,20 @@ var LLMSettingTab = class extends import_obsidian.PluginSettingTab {
       systemPromptInput.value = "";
       await this.plugin.saveSettings();
     });
-    new import_obsidian.Setting(containerEl).setName("Default Timeout").setDesc("Default timeout in seconds for all providers (can be overridden per-provider)").addSlider((slider) => {
-      slider.setLimits(10, 600, 10);
-      slider.setValue(this.plugin.settings.defaultTimeout);
-      slider.setDynamicTooltip();
-      slider.onChange(async (value) => {
-        this.plugin.settings.defaultTimeout = value;
-        await this.plugin.saveSettings();
-      });
-    });
-    containerEl.createEl("h3", { text: "Provider Settings" });
-    const providers = ["claude", "opencode", "codex", "gemini"];
-    providers.forEach((provider) => {
-      this.addProviderSettings(containerEl, provider);
-    });
-    containerEl.createEl("h3", { text: "Conversation History" });
-    new import_obsidian.Setting(containerEl).setName("Enable Conversation History").setDesc("Maintain context across multiple prompts in a session").addToggle((toggle) => {
+  }
+  // ════════════════════════════════════════════
+  //  Conversation Settings
+  // ════════════════════════════════════════════
+  addConversationSettings(containerEl) {
+    containerEl.createEl("h3", { text: "Conversation" });
+    new import_obsidian.Setting(containerEl).setName("Remember conversation").setDesc("The AI remembers previous messages so you can have a back-and-forth conversation").addToggle((toggle) => {
       toggle.setValue(this.plugin.settings.conversationHistory.enabled);
       toggle.onChange(async (value) => {
         this.plugin.settings.conversationHistory.enabled = value;
         await this.plugin.saveSettings();
       });
     });
-    new import_obsidian.Setting(containerEl).setName("Max History Messages").setDesc("Maximum number of previous messages to include as context").addSlider((slider) => {
+    new import_obsidian.Setting(containerEl).setName("Memory length").setDesc("How many previous messages the AI can see (more = better context, but uses more tokens)").addSlider((slider) => {
       slider.setLimits(1, 50, 1);
       slider.setValue(this.plugin.settings.conversationHistory.maxMessages);
       slider.setDynamicTooltip();
@@ -594,54 +621,62 @@ var LLMSettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       });
     });
-    containerEl.createEl("h3", { text: "Advanced" });
-    new import_obsidian.Setting(containerEl).setName("Allow File Writes").setDesc("Allow LLM to write and edit files. For Claude, this enables --dangerously-skip-permissions flag. Use with caution.").addToggle((toggle) => {
-      toggle.setValue(this.plugin.settings.allowFileWrites);
-      toggle.onChange(async (value) => {
-        this.plugin.settings.allowFileWrites = value;
-        await this.plugin.saveSettings();
-      });
+  }
+  // ════════════════════════════════════════════
+  //  Providers Section
+  // ════════════════════════════════════════════
+  addProvidersSection(containerEl) {
+    containerEl.createEl("h3", { text: "AI Providers" });
+    containerEl.createEl("p", {
+      text: "Enable the providers you want to use. Cloud providers need their CLI tool installed; Local LLM connects to a server on your machine.",
+      cls: "setting-item-description"
     });
-    new import_obsidian.Setting(containerEl).setName("Debug Mode").setDesc("Log detailed execution info to the developer console (Ctrl+Shift+I)").addToggle((toggle) => {
-      toggle.setValue(this.plugin.settings.debugMode);
-      toggle.onChange(async (value) => {
-        this.plugin.settings.debugMode = value;
-        await this.plugin.saveSettings();
-      });
+    const providers = ["claude", "opencode", "codex", "gemini", "local"];
+    providers.forEach((provider) => {
+      if (provider === "local") {
+        this.addLocalProviderSettings(containerEl);
+      } else {
+        this.addCloudProviderSettings(containerEl, provider);
+      }
     });
   }
-  addProviderSettings(containerEl, provider) {
-    var _a3, _b, _c;
-    if (provider === "local") {
-      this.addLocalProviderSettings(containerEl);
-      return;
-    }
+  // ════════════════════════════════════════════
+  //  Cloud Provider Settings (simplified)
+  // ════════════════════════════════════════════
+  addCloudProviderSettings(containerEl, provider) {
+    var _a3;
     const providerConfig = this.plugin.settings.providers[provider];
     const displayName = PROVIDER_DISPLAY_NAMES[provider];
     const detailsEl = containerEl.createEl("details", {
       cls: "llm-provider-details"
     });
-    detailsEl.createEl("summary", { text: displayName });
+    const summaryEl = detailsEl.createEl("summary");
+    const summaryContent = summaryEl.createDiv({ cls: "llm-provider-summary" });
+    summaryContent.createSpan({ text: displayName, cls: "llm-provider-name" });
+    summaryContent.createSpan({
+      text: providerConfig.enabled ? "Enabled" : "Disabled",
+      cls: `llm-provider-badge ${providerConfig.enabled ? "llm-badge-enabled" : "llm-badge-disabled"}`
+    });
     const settingsContainer = detailsEl.createDiv({ cls: "llm-provider-settings" });
-    new import_obsidian.Setting(settingsContainer).setName("Enabled").setDesc(`Enable ${displayName} as an available provider`).addToggle((toggle) => {
+    settingsContainer.createEl("p", {
+      text: PROVIDER_DESCRIPTIONS[provider],
+      cls: "setting-item-description llm-provider-desc"
+    });
+    new import_obsidian.Setting(settingsContainer).setName("Enable").addToggle((toggle) => {
       toggle.setValue(providerConfig.enabled);
       toggle.onChange(async (value) => {
         this.plugin.settings.providers[provider].enabled = value;
+        const badge = summaryContent.querySelector(".llm-provider-badge");
+        if (badge) {
+          badge.textContent = value ? "Enabled" : "Disabled";
+          badge.className = `llm-provider-badge ${value ? "llm-badge-enabled" : "llm-badge-disabled"}`;
+        }
         await this.plugin.saveSettings();
       });
     });
     this.addModelSetting(settingsContainer, provider, (_a3 = providerConfig.model) != null ? _a3 : "");
-    new import_obsidian.Setting(settingsContainer).setName("Custom Command").setDesc("Override the default CLI command (leave empty for default)").addText((text) => {
-      var _a4;
-      text.setPlaceholder(this.getDefaultCommand(provider));
-      text.setValue((_a4 = providerConfig.customCommand) != null ? _a4 : "");
-      text.onChange(async (value) => {
-        this.plugin.settings.providers[provider].customCommand = value || void 0;
-        await this.plugin.saveSettings();
-      });
-    });
     if (provider === "gemini") {
-      new import_obsidian.Setting(settingsContainer).setName("Yolo Mode").setDesc("Auto-confirm dangerous operations without prompting. Required for non-interactive use.").addToggle((toggle) => {
+      new import_obsidian.Setting(settingsContainer).setName("Auto-confirm actions").setDesc("Allow Gemini to run commands without asking for permission each time").addToggle((toggle) => {
         var _a4;
         toggle.setValue((_a4 = providerConfig.yoloMode) != null ? _a4 : false);
         toggle.onChange(async (value) => {
@@ -650,18 +685,27 @@ var LLMSettingTab = class extends import_obsidian.PluginSettingTab {
         });
       });
     }
+    const advancedDetails = settingsContainer.createEl("details", {
+      cls: "llm-advanced-toggle"
+    });
+    advancedDetails.createEl("summary", { text: "Advanced options" });
+    const advancedContainer = advancedDetails.createDiv({ cls: "llm-advanced-settings" });
     if (ACP_SUPPORTED_PROVIDERS.includes(provider)) {
-      const thinkingModeSetting = new import_obsidian.Setting(settingsContainer).setName("Thinking Mode (ACP)").setDesc('Extended thinking level. Common values: "none", "low", "medium", "high". Leave empty for agent default.').addText((text) => {
+      const thinkingModeSetting = new import_obsidian.Setting(advancedContainer).setName("Thinking depth").setDesc("How deeply the AI reasons before answering (none, low, medium, high)").addDropdown((dropdown) => {
         var _a4;
-        text.setPlaceholder("Agent default");
-        text.setValue((_a4 = providerConfig.thinkingMode) != null ? _a4 : "");
-        text.onChange(async (value) => {
+        dropdown.addOption("", "Default");
+        dropdown.addOption("none", "None \u2014 fastest");
+        dropdown.addOption("low", "Low");
+        dropdown.addOption("medium", "Medium");
+        dropdown.addOption("high", "High \u2014 most thorough");
+        dropdown.setValue((_a4 = providerConfig.thinkingMode) != null ? _a4 : "");
+        dropdown.onChange(async (value) => {
           this.plugin.settings.providers[provider].thinkingMode = value.trim() || void 0;
           await this.plugin.saveSettings();
         });
       });
       thinkingModeSetting.settingEl.style.display = providerConfig.useAcp ? "" : "none";
-      const acpSetting = new import_obsidian.Setting(settingsContainer).setName("Use ACP Mode").setDesc("Use Agent Client Protocol for persistent connection. Faster for multi-turn conversations. Disable to use CLI subprocess per request.").addToggle((toggle) => {
+      const acpSetting = new import_obsidian.Setting(advancedContainer).setName("Persistent connection").setDesc("Keep a live connection for faster follow-up messages (recommended)").addToggle((toggle) => {
         var _a4;
         toggle.setValue((_a4 = providerConfig.useAcp) != null ? _a4 : false);
         toggle.onChange(async (value) => {
@@ -670,48 +714,254 @@ var LLMSettingTab = class extends import_obsidian.PluginSettingTab {
           thinkingModeSetting.settingEl.style.display = value ? "" : "none";
         });
       });
-      settingsContainer.insertBefore(acpSetting.settingEl, thinkingModeSetting.settingEl);
+      advancedContainer.insertBefore(acpSetting.settingEl, thinkingModeSetting.settingEl);
     }
-    const timeoutSetting = new import_obsidian.Setting(settingsContainer).setName("Timeout Override (seconds)").setDesc(`Override the default timeout (current default: ${this.plugin.settings.defaultTimeout}s). Leave empty to use default.`);
-    const timeoutInput = timeoutSetting.controlEl.createEl("input", {
-      type: "number",
-      cls: "llm-timeout-input",
-      attr: {
-        placeholder: `Default (${this.plugin.settings.defaultTimeout}s)`,
-        min: "10",
-        max: "600",
-        step: "10"
-      }
+    new import_obsidian.Setting(advancedContainer).setName("Custom CLI command").setDesc(`Override the CLI binary (default: "${this.getDefaultCommand(provider)}")`).addText((text) => {
+      var _a4;
+      text.setPlaceholder(this.getDefaultCommand(provider));
+      text.setValue((_a4 = providerConfig.customCommand) != null ? _a4 : "");
+      text.onChange(async (value) => {
+        this.plugin.settings.providers[provider].customCommand = value || void 0;
+        await this.plugin.saveSettings();
+      });
     });
-    timeoutInput.value = (_c = (_b = providerConfig.timeout) == null ? void 0 : _b.toString()) != null ? _c : "";
-    timeoutInput.addEventListener("change", async () => {
-      const value = timeoutInput.value.trim();
-      if (value === "") {
-        this.plugin.settings.providers[provider].timeout = void 0;
-      } else {
-        const numValue = parseInt(value, 10);
-        if (!isNaN(numValue) && numValue >= 10 && numValue <= 600) {
-          this.plugin.settings.providers[provider].timeout = numValue;
-        }
-      }
-      await this.plugin.saveSettings();
-    });
-    const clearTimeoutBtn = timeoutSetting.controlEl.createEl("button", {
-      text: "Use Default",
-      cls: "llm-clear-btn"
-    });
-    clearTimeoutBtn.addEventListener("click", async () => {
-      this.plugin.settings.providers[provider].timeout = void 0;
-      timeoutInput.value = "";
-      await this.plugin.saveSettings();
+    new import_obsidian.Setting(advancedContainer).setName("Timeout").setDesc(`Seconds before a request is cancelled (default: ${this.plugin.settings.defaultTimeout}s)`).addSlider((slider) => {
+      var _a4;
+      slider.setLimits(10, 600, 10);
+      slider.setValue((_a4 = providerConfig.timeout) != null ? _a4 : this.plugin.settings.defaultTimeout);
+      slider.setDynamicTooltip();
+      slider.onChange(async (value) => {
+        this.plugin.settings.providers[provider].timeout = value;
+        await this.plugin.saveSettings();
+      });
     });
   }
-  /**
-   * Add model selection setting with dropdown + custom input
-   * Fetches available models dynamically for providers that support it
-   */
+  // ════════════════════════════════════════════
+  //  Local LLM Settings
+  // ════════════════════════════════════════════
+  addLocalProviderSettings(containerEl) {
+    var _a3;
+    const providerConfig = this.plugin.settings.providers.local;
+    const detailsEl = containerEl.createEl("details", {
+      cls: "llm-provider-details"
+    });
+    const summaryEl = detailsEl.createEl("summary");
+    const summaryContent = summaryEl.createDiv({ cls: "llm-provider-summary" });
+    summaryContent.createSpan({ text: "Local LLM", cls: "llm-provider-name" });
+    summaryContent.createSpan({
+      text: providerConfig.enabled ? "Enabled" : "Disabled",
+      cls: `llm-provider-badge ${providerConfig.enabled ? "llm-badge-enabled" : "llm-badge-disabled"}`
+    });
+    const settingsContainer = detailsEl.createDiv({ cls: "llm-provider-settings" });
+    settingsContainer.createEl("p", {
+      text: PROVIDER_DESCRIPTIONS.local,
+      cls: "setting-item-description llm-provider-desc"
+    });
+    new import_obsidian.Setting(settingsContainer).setName("Enable").addToggle((toggle) => {
+      toggle.setValue(providerConfig.enabled);
+      toggle.onChange(async (value) => {
+        this.plugin.settings.providers.local.enabled = value;
+        const badge = summaryContent.querySelector(".llm-provider-badge");
+        if (badge) {
+          badge.textContent = value ? "Enabled" : "Disabled";
+          badge.className = `llm-provider-badge ${value ? "llm-badge-enabled" : "llm-badge-disabled"}`;
+        }
+        await this.plugin.saveSettings();
+      });
+    });
+    new import_obsidian.Setting(settingsContainer).setName("Server software").setDesc("What's running your local models?").addDropdown((dropdown) => {
+      dropdown.addOption("ollama", "Ollama");
+      dropdown.addOption("openai-compatible", "LM Studio / vLLM / other");
+      dropdown.setValue(providerConfig.serverType || "ollama");
+      dropdown.onChange(async (value) => {
+        this.plugin.settings.providers.local.serverType = value;
+        if (value === "ollama" && (!providerConfig.serverUrl || providerConfig.serverUrl === "http://localhost:1234")) {
+          this.plugin.settings.providers.local.serverUrl = "http://localhost:11434";
+          serverUrlInput.value = "http://localhost:11434";
+        } else if (value === "openai-compatible" && (!providerConfig.serverUrl || providerConfig.serverUrl === "http://localhost:11434")) {
+          this.plugin.settings.providers.local.serverUrl = "http://localhost:1234";
+          serverUrlInput.value = "http://localhost:1234";
+        }
+        await this.plugin.saveSettings();
+      });
+    });
+    const serverUrlSetting = new import_obsidian.Setting(settingsContainer).setName("Server address").setDesc("URL where your local server is running");
+    const serverUrlInput = serverUrlSetting.controlEl.createEl("input", {
+      type: "text",
+      cls: "llm-file-input",
+      attr: { placeholder: "http://localhost:11434" }
+    });
+    serverUrlInput.value = providerConfig.serverUrl || "http://localhost:11434";
+    serverUrlInput.addEventListener("change", async () => {
+      this.plugin.settings.providers.local.serverUrl = serverUrlInput.value.trim();
+      await this.plugin.saveSettings();
+    });
+    const testSetting = new import_obsidian.Setting(settingsContainer).setName("Connection").setDesc("Check if your server is reachable and find available models");
+    const resultEl = testSetting.controlEl.createEl("span", {
+      cls: "llm-connection-result"
+    });
+    let modelDropdown = null;
+    testSetting.addButton((btn) => {
+      btn.setButtonText("Test connection");
+      btn.setCta();
+      btn.onClick(async () => {
+        var _a4;
+        resultEl.textContent = "Connecting...";
+        resultEl.className = "llm-connection-result";
+        const url2 = this.plugin.settings.providers.local.serverUrl || "http://localhost:11434";
+        const type = this.plugin.settings.providers.local.serverType || "ollama";
+        const result = await LocalLLMExecutor.testConnection(url2, type);
+        if (result.ok) {
+          resultEl.textContent = `Connected \u2014 ${((_a4 = result.models) == null ? void 0 : _a4.length) || 0} models found`;
+          resultEl.className = "llm-connection-result llm-connection-success";
+          if (modelDropdown) {
+            await this.refreshLocalModels(modelDropdown);
+          }
+        } else {
+          resultEl.textContent = result.error || "Could not connect";
+          resultEl.className = "llm-connection-result llm-connection-error";
+        }
+      });
+    });
+    const modelSetting = new import_obsidian.Setting(settingsContainer).setName("Model").setDesc("Choose a model from your server (test connection first to see available models)");
+    modelSetting.addDropdown((dd) => {
+      modelDropdown = dd;
+      dd.addOption("", "Select a model...");
+      this.refreshLocalModels(dd);
+      if (providerConfig.model) {
+        dd.addOption(providerConfig.model, providerConfig.model);
+        dd.setValue(providerConfig.model);
+      }
+      dd.onChange(async (value) => {
+        this.plugin.settings.providers.local.model = value || void 0;
+        await this.plugin.saveSettings();
+      });
+    });
+    modelSetting.addButton((btn) => {
+      btn.setIcon("refresh-cw");
+      btn.setTooltip("Refresh model list");
+      btn.onClick(async () => {
+        if (modelDropdown) {
+          await this.refreshLocalModels(modelDropdown);
+        }
+      });
+    });
+    const advancedDetails = settingsContainer.createEl("details", {
+      cls: "llm-advanced-toggle"
+    });
+    advancedDetails.createEl("summary", { text: "Advanced options" });
+    const advancedContainer = advancedDetails.createDiv({ cls: "llm-advanced-settings" });
+    const tempSetting = new import_obsidian.Setting(advancedContainer).setName("Creativity");
+    const tempValueDisplay = tempSetting.nameEl.createSpan({ cls: "llm-setting-value" });
+    const currentTemp = (_a3 = providerConfig.temperature) != null ? _a3 : 0.7;
+    tempValueDisplay.textContent = this.getTemperatureLabel(currentTemp);
+    tempSetting.setDesc("How creative vs. predictable the AI's responses are").addSlider((slider) => {
+      slider.setLimits(0, 200, 5);
+      slider.setValue(currentTemp * 100);
+      slider.onChange(async (value) => {
+        const temp = value / 100;
+        this.plugin.settings.providers.local.temperature = temp;
+        tempValueDisplay.textContent = this.getTemperatureLabel(temp);
+        await this.plugin.saveSettings();
+      });
+    });
+    new import_obsidian.Setting(advancedContainer).setName("Response length limit").setDesc("Maximum length of the AI's reply").addDropdown((dropdown) => {
+      dropdown.addOption("0", "No limit (server default)");
+      dropdown.addOption("512", "Short (~500 words)");
+      dropdown.addOption("2048", "Medium (~2000 words)");
+      dropdown.addOption("4096", "Long (~4000 words)");
+      dropdown.addOption("8192", "Very long");
+      dropdown.addOption("__custom__", "Custom...");
+      const currentVal = providerConfig.maxTokens || 0;
+      const presets = [0, 512, 2048, 4096, 8192];
+      if (presets.includes(currentVal)) {
+        dropdown.setValue(currentVal.toString());
+      } else {
+        dropdown.setValue("__custom__");
+      }
+      let customInput = null;
+      dropdown.onChange(async (value) => {
+        if (value === "__custom__") {
+          if (!customInput) {
+            customInput = dropdown.selectEl.parentElement.createEl("input", {
+              type: "number",
+              cls: "llm-timeout-input",
+              attr: { placeholder: "Tokens", min: "0", max: "128000", step: "256" }
+            });
+            customInput.style.marginLeft = "8px";
+            customInput.value = (providerConfig.maxTokens || 0).toString();
+            customInput.addEventListener("change", async () => {
+              const val = parseInt(customInput.value, 10);
+              this.plugin.settings.providers.local.maxTokens = isNaN(val) ? 0 : val;
+              await this.plugin.saveSettings();
+            });
+          }
+          customInput.style.display = "inline-block";
+        } else {
+          if (customInput) customInput.style.display = "none";
+          this.plugin.settings.providers.local.maxTokens = parseInt(value, 10);
+          await this.plugin.saveSettings();
+        }
+      });
+      if (!presets.includes(currentVal)) {
+        setTimeout(() => {
+          customInput = dropdown.selectEl.parentElement.createEl("input", {
+            type: "number",
+            cls: "llm-timeout-input",
+            attr: { placeholder: "Tokens", min: "0", max: "128000", step: "256" }
+          });
+          customInput.style.marginLeft = "8px";
+          customInput.value = currentVal.toString();
+          customInput.addEventListener("change", async () => {
+            const val = parseInt(customInput.value, 10);
+            this.plugin.settings.providers.local.maxTokens = isNaN(val) ? 0 : val;
+            await this.plugin.saveSettings();
+          });
+        }, 0);
+      }
+    });
+  }
+  // ════════════════════════════════════════════
+  //  Advanced Global Settings
+  // ════════════════════════════════════════════
+  addAdvancedSettings(containerEl) {
+    const advancedDetails = containerEl.createEl("details", {
+      cls: "llm-advanced-section"
+    });
+    advancedDetails.createEl("summary", {
+      text: "Advanced settings",
+      cls: "llm-section-summary"
+    });
+    const advancedContainer = advancedDetails.createDiv();
+    new import_obsidian.Setting(advancedContainer).setName("Default timeout").setDesc("How long to wait for a response before giving up (seconds)").addSlider((slider) => {
+      slider.setLimits(10, 600, 10);
+      slider.setValue(this.plugin.settings.defaultTimeout);
+      slider.setDynamicTooltip();
+      slider.onChange(async (value) => {
+        this.plugin.settings.defaultTimeout = value;
+        await this.plugin.saveSettings();
+      });
+    });
+    new import_obsidian.Setting(advancedContainer).setName("Allow file editing").setDesc("Let the AI create and modify files in your vault. Use with caution.").addToggle((toggle) => {
+      toggle.setValue(this.plugin.settings.allowFileWrites);
+      toggle.onChange(async (value) => {
+        this.plugin.settings.allowFileWrites = value;
+        await this.plugin.saveSettings();
+      });
+    });
+    new import_obsidian.Setting(advancedContainer).setName("Debug logging").setDesc("Show detailed logs in the developer console (for troubleshooting)").addToggle((toggle) => {
+      toggle.setValue(this.plugin.settings.debugMode);
+      toggle.onChange(async (value) => {
+        this.plugin.settings.debugMode = value;
+        await this.plugin.saveSettings();
+      });
+    });
+  }
+  // ════════════════════════════════════════════
+  //  Model Selection Dropdown
+  // ════════════════════════════════════════════
   addModelSetting(container, provider, currentValue) {
-    const setting = new import_obsidian.Setting(container).setName("Model").setDesc("Select a model or enter a custom model ID");
+    const setting = new import_obsidian.Setting(container).setName("Model").setDesc('Pick a model or choose "Custom" to enter any model ID');
     let dropdown = null;
     let customInput = null;
     let isCustomMode = false;
@@ -745,9 +995,7 @@ var LLMSettingTab = class extends import_obsidian.PluginSettingTab {
     customInput = setting.controlEl.createEl("input", {
       type: "text",
       cls: "llm-custom-model-input",
-      attr: {
-        placeholder: "Enter model ID..."
-      }
+      attr: { placeholder: "e.g. claude-opus-4-6" }
     });
     customInput.style.display = isCustomMode ? "inline-block" : "none";
     customInput.style.marginLeft = "8px";
@@ -761,9 +1009,6 @@ var LLMSettingTab = class extends import_obsidian.PluginSettingTab {
       await this.plugin.saveSettings();
     });
   }
-  /**
-   * Populate dropdown with model options
-   */
   populateModelDropdown(dropdown, models, currentValue, isCustomMode) {
     dropdown.selectEl.empty();
     models.forEach((option) => {
@@ -776,9 +1021,6 @@ var LLMSettingTab = class extends import_obsidian.PluginSettingTab {
       dropdown.setValue(currentValue);
     }
   }
-  /**
-   * Fetch models dynamically and update dropdown
-   */
   async fetchAndUpdateModels(dropdown, provider) {
     var _a3;
     try {
@@ -789,6 +1031,21 @@ var LLMSettingTab = class extends import_obsidian.PluginSettingTab {
       const isInList = models.some((m) => m.value === currentValue);
       const shouldUseCustom = isCustomMode || currentValue !== "" && !isInList;
       this.populateModelDropdown(dropdown, models, currentValue, shouldUseCustom);
+    } catch (e) {
+    }
+  }
+  async refreshLocalModels(dropdown) {
+    var _a3;
+    const config2 = this.plugin.settings.providers.local;
+    try {
+      const models = await fetchModelsForProvider("local", config2);
+      const currentValue = (_a3 = config2.model) != null ? _a3 : "";
+      dropdown.selectEl.empty();
+      models.forEach((m) => dropdown.addOption(m.value, m.label));
+      if (currentValue && !models.some((m) => m.value === currentValue)) {
+        dropdown.addOption(currentValue, currentValue);
+      }
+      dropdown.setValue(currentValue);
     } catch (e) {
     }
   }
@@ -806,140 +1063,12 @@ var LLMSettingTab = class extends import_obsidian.PluginSettingTab {
         return "";
     }
   }
-  /**
-   * Settings UI for the local LLM provider
-   */
-  addLocalProviderSettings(containerEl) {
-    const providerConfig = this.plugin.settings.providers.local;
-    const detailsEl = containerEl.createEl("details", {
-      cls: "llm-provider-details"
-    });
-    detailsEl.createEl("summary", { text: "Local LLM (Ollama, LM Studio, ...)" });
-    const settingsContainer = detailsEl.createDiv({ cls: "llm-provider-settings" });
-    new import_obsidian.Setting(settingsContainer).setName("Enabled").setDesc("Enable local LLM server as a provider").addToggle((toggle) => {
-      toggle.setValue(providerConfig.enabled);
-      toggle.onChange(async (value) => {
-        this.plugin.settings.providers.local.enabled = value;
-        await this.plugin.saveSettings();
-      });
-    });
-    new import_obsidian.Setting(settingsContainer).setName("Server type").setDesc("Select your local LLM server type").addDropdown((dropdown) => {
-      dropdown.addOption("ollama", "Ollama (localhost:11434)");
-      dropdown.addOption("openai-compatible", "OpenAI-compatible (LM Studio, vLLM, ...)");
-      dropdown.setValue(providerConfig.serverType || "ollama");
-      dropdown.onChange(async (value) => {
-        this.plugin.settings.providers.local.serverType = value;
-        if (value === "ollama" && (!providerConfig.serverUrl || providerConfig.serverUrl === "http://localhost:1234")) {
-          this.plugin.settings.providers.local.serverUrl = "http://localhost:11434";
-          serverUrlInput.value = "http://localhost:11434";
-        } else if (value === "openai-compatible" && (!providerConfig.serverUrl || providerConfig.serverUrl === "http://localhost:11434")) {
-          this.plugin.settings.providers.local.serverUrl = "http://localhost:1234";
-          serverUrlInput.value = "http://localhost:1234";
-        }
-        await this.plugin.saveSettings();
-      });
-    });
-    const serverUrlSetting = new import_obsidian.Setting(settingsContainer).setName("Server URL").setDesc("URL of your local LLM server");
-    const serverUrlInput = serverUrlSetting.controlEl.createEl("input", {
-      type: "text",
-      cls: "llm-file-input",
-      attr: { placeholder: "http://localhost:11434" }
-    });
-    serverUrlInput.value = providerConfig.serverUrl || "http://localhost:11434";
-    serverUrlInput.addEventListener("change", async () => {
-      this.plugin.settings.providers.local.serverUrl = serverUrlInput.value.trim();
-      await this.plugin.saveSettings();
-    });
-    const testSetting = new import_obsidian.Setting(settingsContainer).setName("Connection").setDesc("Test the connection and fetch available models");
-    const resultEl = testSetting.controlEl.createEl("span", {
-      cls: "llm-connection-result"
-    });
-    testSetting.addButton((btn) => {
-      btn.setButtonText("Test connection");
-      btn.setCta();
-      btn.onClick(async () => {
-        var _a3;
-        resultEl.textContent = "Connecting...";
-        resultEl.className = "llm-connection-result";
-        const url2 = this.plugin.settings.providers.local.serverUrl || "http://localhost:11434";
-        const type = this.plugin.settings.providers.local.serverType || "ollama";
-        const result = await LocalLLMExecutor.testConnection(url2, type);
-        if (result.ok) {
-          resultEl.textContent = `Connected (${((_a3 = result.models) == null ? void 0 : _a3.length) || 0} models)`;
-          resultEl.className = "llm-connection-result llm-connection-success";
-          if (modelDropdown) {
-            await this.refreshLocalModels(modelDropdown);
-          }
-        } else {
-          resultEl.textContent = result.error || "Connection failed";
-          resultEl.className = "llm-connection-result llm-connection-error";
-        }
-      });
-    });
-    let modelDropdown = null;
-    const modelSetting = new import_obsidian.Setting(settingsContainer).setName("Model").setDesc("Select a model from your server (test connection first)");
-    modelSetting.addDropdown((dd) => {
-      modelDropdown = dd;
-      dd.addOption("", "Select a model...");
-      this.refreshLocalModels(dd);
-      if (providerConfig.model) {
-        dd.addOption(providerConfig.model, providerConfig.model);
-        dd.setValue(providerConfig.model);
-      }
-      dd.onChange(async (value) => {
-        this.plugin.settings.providers.local.model = value || void 0;
-        await this.plugin.saveSettings();
-      });
-    });
-    modelSetting.addButton((btn) => {
-      btn.setIcon("refresh-cw");
-      btn.setTooltip("Refresh models");
-      btn.onClick(async () => {
-        if (modelDropdown) {
-          await this.refreshLocalModels(modelDropdown);
-        }
-      });
-    });
-    new import_obsidian.Setting(settingsContainer).setName("Temperature").setDesc("Controls randomness (0.0 = deterministic, 2.0 = very random)").addSlider((slider) => {
-      var _a3;
-      slider.setLimits(0, 200, 5);
-      slider.setValue(((_a3 = providerConfig.temperature) != null ? _a3 : 0.7) * 100);
-      slider.setDynamicTooltip();
-      slider.onChange(async (value) => {
-        this.plugin.settings.providers.local.temperature = value / 100;
-        await this.plugin.saveSettings();
-      });
-    });
-    const maxTokensSetting = new import_obsidian.Setting(settingsContainer).setName("Max tokens").setDesc("Maximum tokens in response (0 = server default)");
-    const maxTokensInput = maxTokensSetting.controlEl.createEl("input", {
-      type: "number",
-      cls: "llm-timeout-input",
-      attr: { placeholder: "0", min: "0", max: "128000", step: "256" }
-    });
-    maxTokensInput.value = (providerConfig.maxTokens || 0).toString();
-    maxTokensInput.addEventListener("change", async () => {
-      const val = parseInt(maxTokensInput.value, 10);
-      this.plugin.settings.providers.local.maxTokens = isNaN(val) ? 0 : val;
-      await this.plugin.saveSettings();
-    });
-  }
-  /**
-   * Refresh model dropdown from local server
-   */
-  async refreshLocalModels(dropdown) {
-    var _a3;
-    const config2 = this.plugin.settings.providers.local;
-    try {
-      const models = await fetchModelsForProvider("local", config2);
-      const currentValue = (_a3 = config2.model) != null ? _a3 : "";
-      dropdown.selectEl.empty();
-      models.forEach((m) => dropdown.addOption(m.value, m.label));
-      if (currentValue && !models.some((m) => m.value === currentValue)) {
-        dropdown.addOption(currentValue, currentValue);
-      }
-      dropdown.setValue(currentValue);
-    } catch (e) {
-    }
+  getTemperatureLabel(temp) {
+    if (temp <= 0.2) return ` (${temp.toFixed(1)} \u2014 precise)`;
+    if (temp <= 0.5) return ` (${temp.toFixed(1)} \u2014 focused)`;
+    if (temp <= 0.8) return ` (${temp.toFixed(1)} \u2014 balanced)`;
+    if (temp <= 1.2) return ` (${temp.toFixed(1)} \u2014 creative)`;
+    return ` (${temp.toFixed(1)} \u2014 very creative)`;
   }
 };
 
@@ -1741,7 +1870,8 @@ var PROVIDER_DISPLAY_NAMES2 = {
   claude: "Claude",
   opencode: "OpenCode",
   codex: "Codex",
-  gemini: "Gemini"
+  gemini: "Gemini",
+  local: "Local LLM"
 };
 var QuickPromptModal = class extends import_obsidian3.Modal {
   constructor(app, plugin, options = {}) {

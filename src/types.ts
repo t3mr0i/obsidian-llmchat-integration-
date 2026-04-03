@@ -57,42 +57,56 @@ export const ACP_SUPPORTED_PROVIDERS: LLMProvider[] = ["claude", "opencode", "ge
 export const PROVIDER_MODELS: Record<LLMProvider, { value: string; label: string }[]> = {
   claude: [
     { value: "", label: "Default (CLI default)" },
-    { value: "claude-opus-4-6", label: "Claude Opus 4.6 (latest, most intelligent)" },
-    { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6 (latest, balanced)" },
+    // Current generation
+    { value: "claude-opus-4-6", label: "Claude Opus 4.6 (flagship)" },
+    { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6 (balanced)" },
     { value: "claude-haiku-4-5", label: "Claude Haiku 4.5 (fast)" },
-    // Legacy - still available
-    { value: "claude-opus-4-5", label: "Claude Opus 4.5 (legacy)" },
-    { value: "claude-sonnet-4-5", label: "Claude Sonnet 4.5 (legacy)" },
-    { value: "claude-sonnet-4-0", label: "Claude Sonnet 4 (legacy)" },
+    // Previous generation
+    { value: "claude-sonnet-4-5", label: "Claude Sonnet 4.5" },
+    { value: "claude-opus-4-5", label: "Claude Opus 4.5" },
+    { value: "claude-opus-4-1", label: "Claude Opus 4.1" },
+    { value: "claude-sonnet-4-0", label: "Claude Sonnet 4" },
+    { value: "claude-opus-4-0", label: "Claude Opus 4" },
   ],
   gemini: [
     { value: "", label: "Default (CLI default)" },
-    { value: "gemini-3-pro-preview", label: "Gemini 3 Pro (preview)" },
-    { value: "gemini-3-flash-preview", label: "Gemini 3 Flash (preview, fast)" },
-    { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+    // Latest
+    { value: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro (flagship, preview)" },
+    { value: "gemini-3-flash-preview", label: "Gemini 3 Flash (fast, preview)" },
+    { value: "gemini-3.1-flash-lite-preview", label: "Gemini 3.1 Flash Lite (budget, preview)" },
+    // Production
+    { value: "gemini-2.5-pro", label: "Gemini 2.5 Pro (reasoning)" },
     { value: "gemini-2.5-flash", label: "Gemini 2.5 Flash (fast)" },
+    { value: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite (budget)" },
+    // Specialized
+    { value: "gemini-3.1-flash-live-preview", label: "Gemini 3.1 Flash Live (realtime)" },
+    { value: "deep-research-pro-preview-12-2025", label: "Deep Research Pro (autonomous)" },
   ],
   opencode: [
     { value: "", label: "Default (CLI default)" },
-    { value: "anthropic/claude-opus-4-6", label: "Claude Opus 4.6 (latest)" },
-    { value: "anthropic/claude-sonnet-4-6", label: "Claude Sonnet 4.6 (latest, balanced)" },
+    // Anthropic
+    { value: "anthropic/claude-opus-4-6", label: "Claude Opus 4.6 (flagship)" },
+    { value: "anthropic/claude-sonnet-4-6", label: "Claude Sonnet 4.6 (balanced)" },
     { value: "anthropic/claude-haiku-4-5", label: "Claude Haiku 4.5 (fast)" },
-    { value: "openai/gpt-5.4", label: "GPT-5.4" },
+    // OpenAI
+    { value: "openai/gpt-5.4", label: "GPT-5.4 (flagship)" },
     { value: "openai/gpt-5.4-mini", label: "GPT-5.4 Mini (fast)" },
-    { value: "openai/gpt-5.4-nano", label: "GPT-5.4 Nano (cheapest)" },
-    // Legacy Copilot entries
+    { value: "openai/gpt-5.4-nano", label: "GPT-5.4 Nano (budget)" },
+    { value: "openai/o3", label: "o3 (reasoning)" },
+    { value: "openai/o4-mini", label: "o4-mini (reasoning, fast)" },
+    // Copilot
     { value: "github-copilot/gpt-5", label: "GPT-5 (Copilot)" },
-    { value: "github-copilot/gpt-5-mini", label: "GPT-5 Mini (Copilot, fast)" },
+    { value: "github-copilot/gpt-5-mini", label: "GPT-5 Mini (Copilot)" },
   ],
   codex: [
     { value: "", label: "Default (CLI default)" },
     { value: "gpt-5.4", label: "GPT-5.4 (flagship)" },
     { value: "gpt-5.4-mini", label: "GPT-5.4 Mini (fast)" },
-    { value: "gpt-5.4-nano", label: "GPT-5.4 Nano (cheapest)" },
-    // Legacy
-    { value: "o3", label: "o3 (reasoning, legacy)" },
-    { value: "o4-mini", label: "o4-mini (reasoning, legacy)" },
-    { value: "gpt-5", label: "GPT-5 (legacy)" },
+    { value: "gpt-5.4-nano", label: "GPT-5.4 Nano (budget)" },
+    { value: "o3", label: "o3 (reasoning)" },
+    { value: "o4-mini", label: "o4-mini (reasoning, fast)" },
+    { value: "gpt-5", label: "GPT-5" },
+    { value: "gpt-4o", label: "GPT-4o (legacy)" },
   ],
   local: [
     { value: "", label: "Fetch models from server..." },
