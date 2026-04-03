@@ -4,7 +4,8 @@ import { DEFAULT_SETTINGS } from "./src/types";
 import { LLMSettingTab } from "./src/settings/SettingsTab";
 import { QuickPromptModal } from "./src/modals";
 import { ChatView, CHAT_VIEW_TYPE } from "./src/views";
-import { LLMExecutor, detectAvailableProviders } from "./src/executor/LLMExecutor";
+import { LLMExecutor } from "./src/executor/LLMExecutor";
+import { autoDetectProviders, applyDetectionResults } from "./src/utils/autoDetect";
 
 export default class LLMPlugin extends Plugin {
   settings: LLMPluginSettings;
@@ -13,6 +14,9 @@ export default class LLMPlugin extends Plugin {
 
   async onload() {
     await this.loadSettings();
+
+    // Auto-detect providers in the background (don't block startup)
+    this.autoDetect();
 
     // Initialize executor
     this.executor = new LLMExecutor(this.settings);
@@ -152,20 +156,71 @@ export default class LLMPlugin extends Plugin {
     // Command: Detect Available Providers
     this.addCommand({
       id: "detect-providers",
-      name: "Detect Available Providers",
+      name: "Scan for AI providers",
       callback: async () => {
-        new Notice("Detecting available LLM providers...");
-        const available = await detectAvailableProviders();
-        if (available.length === 0) {
-          new Notice("No LLM CLI tools detected. Please install claude, opencode, codex, or gemini CLI.");
+        new Notice("Scanning for AI providers...");
+        const result = await autoDetectProviders();
+        if (result.detected.length === 0) {
+          new Notice("No AI providers found. Install a CLI tool (claude, codex, gemini) or start a local server (Ollama, LM Studio).");
         } else {
-          new Notice(`Available providers: ${available.join(", ")}`);
+          const names = result.detected.map((d) => d.name).join(", ");
+          const changed = applyDetectionResults(this.settings, result);
+          if (changed) {
+            await this.saveSettings();
+            new Notice(`Found: ${names}. Settings updated automatically.`);
+          } else {
+            new Notice(`Found: ${names}`);
+          }
         }
       },
     });
 
     // Add settings tab
     this.addSettingTab(new LLMSettingTab(this.app, this));
+  }
+
+  /**
+   * Auto-detect available providers on startup.
+   * If local software is installed with models but server not running, start it automatically.
+   */
+  private async autoDetect() {
+    try {
+      const result = await autoDetectProviders();
+
+      // If local software has models but server isn't running → start it
+      for (const sw of result.localSoftware) {
+        if (sw.installed && sw.hasModels && !sw.serverRunning && sw.canAutoStart) {
+          const { startLocalServer } = await import("./src/utils/autoDetect");
+          const startResult = await startLocalServer(sw.name);
+          if (startResult.ok) {
+            // Re-probe to get the server's model list
+            const { LocalLLMExecutor } = await import("./src/executor/LocalLLMExecutor");
+            const conn = await LocalLLMExecutor.testConnection(sw.url, sw.type);
+            if (conn.ok && conn.models && conn.models.length > 0) {
+              result.detected.push({
+                provider: "local",
+                name: `Local LLM (${sw.name})`,
+                serverName: sw.name,
+                serverUrl: sw.url,
+                serverType: sw.type,
+                models: conn.models,
+              });
+            }
+          }
+        }
+      }
+
+      if (result.detected.length > 0) {
+        const changed = applyDetectionResults(this.settings, result);
+        if (changed) {
+          await this.saveSettings();
+          const names = result.detected.map((d) => d.name).join(", ");
+          new Notice(`AI providers detected: ${names}`);
+        }
+      }
+    } catch {
+      // Silent failure — auto-detect is best-effort
+    }
   }
 
   onunload() {

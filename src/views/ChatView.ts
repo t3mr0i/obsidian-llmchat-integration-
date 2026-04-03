@@ -261,10 +261,13 @@ export class ChatView extends ItemView {
   private renderInput(container: HTMLElement) {
     const inputContainer = container.createDiv({ cls: "llm-chat-input-container" });
 
+    // Quick action buttons
+    this.renderQuickActions(inputContainer);
+
     this.inputEl = inputContainer.createEl("textarea", {
       cls: "llm-chat-input",
       attr: {
-        placeholder: "Type your message... (Enter to send, Shift+Enter for newline)",
+        placeholder: "Ask anything about your notes... (Enter to send)",
         rows: "3",
       },
     });
@@ -292,6 +295,63 @@ export class ChatView extends ItemView {
     });
     this.cancelBtn.style.display = "none";
     this.cancelBtn.addEventListener("click", () => this.cancelRequest());
+  }
+
+  /**
+   * Quick action buttons above the input — common tasks with one click
+   */
+  private renderQuickActions(container: HTMLElement) {
+    const actions = container.createDiv({ cls: "llm-quick-actions" });
+
+    const quickActions = [
+      { label: "Summarize", icon: "file-text", prompt: "Summarize the current note concisely. Keep the key points and structure." },
+      { label: "Explain", icon: "help-circle", prompt: "Explain the content of the current note in simple terms. Assume I'm not an expert on this topic." },
+      { label: "Continue", icon: "pen-line", prompt: "Continue writing from where the current note left off. Match the style and tone." },
+      { label: "Action items", icon: "list-checks", prompt: "Extract all action items, tasks, and to-dos from the current note as a checklist." },
+      { label: "Questions", icon: "message-circle-question", prompt: "What are the most important questions raised by this note? List them as bullet points." },
+    ];
+
+    for (const action of quickActions) {
+      const btn = actions.createEl("button", {
+        cls: "llm-quick-action-btn",
+        attr: { "aria-label": action.label },
+      });
+      setIcon(btn, action.icon);
+      btn.createSpan({ text: action.label });
+
+      btn.addEventListener("click", () => {
+        if (this.isLoading || !this.inputEl) return;
+        const noteContent = this.getActiveNoteContent();
+        const noteTitle = this.getActiveNoteTitle();
+        if (noteContent) {
+          this.inputEl.value = `[Note: ${noteTitle || "Untitled"}]\n${noteContent}\n\n---\n${action.prompt}`;
+        } else {
+          this.inputEl.value = action.prompt;
+          new Notice("No active note found — sending prompt without context");
+        }
+        this.sendMessage();
+      });
+    }
+  }
+
+  /**
+   * Get the content of the currently active note (the one visible in the editor)
+   */
+  private getActiveNoteContent(): string | null {
+    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!activeView?.file) return null;
+
+    const editor = activeView.editor;
+    return editor.getValue();
+  }
+
+  /**
+   * Get the title of the currently active note
+   */
+  private getActiveNoteTitle(): string | null {
+    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!activeView?.file) return null;
+    return activeView.file.basename;
   }
 
   /**
@@ -453,20 +513,59 @@ export class ChatView extends ItemView {
    */
   private async getSystemPrompt(): Promise<string> {
     const filePath = this.plugin.settings.systemPromptFile;
-    if (!filePath) return "";
 
-    const file = this.app.vault.getAbstractFileByPath(filePath);
-    if (!(file instanceof TFile)) {
-      new Notice(`System prompt file not found: ${filePath}`);
-      return "";
+    // If a custom system prompt file is set, use it
+    if (filePath) {
+      const file = this.app.vault.getAbstractFileByPath(filePath);
+      if (!(file instanceof TFile)) {
+        new Notice(`System prompt file not found: ${filePath}`);
+        return "";
+      }
+      try {
+        return await this.app.vault.cachedRead(file);
+      } catch (error) {
+        new Notice(`Error reading system prompt file: ${error}`);
+        return "";
+      }
     }
 
-    try {
-      return await this.app.vault.cachedRead(file);
-    } catch (error) {
-      new Notice(`Error reading system prompt file: ${error}`);
-      return "";
+    // Auto-generate a smart default system prompt
+    return this.buildDefaultSystemPrompt();
+  }
+
+  /**
+   * Generate a default system prompt with Obsidian context
+   */
+  private buildDefaultSystemPrompt(): string {
+    const parts: string[] = [];
+    parts.push(
+      "You are an AI assistant inside Obsidian, a knowledge management app. " +
+      "The user is working with markdown notes in their vault."
+    );
+
+    // Vault info
+    const vaultName = this.app.vault.getName();
+    if (vaultName) {
+      parts.push(`The vault is called "${vaultName}".`);
     }
+
+    // Active note context
+    const noteTitle = this.getActiveNoteTitle();
+    if (noteTitle) {
+      parts.push(`The user currently has the note "${noteTitle}" open.`);
+    }
+
+    // Formatting guidelines
+    parts.push(
+      "Guidelines:\n" +
+      "- Use [[Note Name]] wiki-link syntax when referencing notes (renders as clickable links)\n" +
+      "- Use standard markdown formatting (headings, lists, bold, code blocks)\n" +
+      "- Use - [ ] for task items\n" +
+      "- Keep responses concise and well-structured\n" +
+      "- When asked about note content, focus on what's relevant"
+    );
+
+    return parts.join("\n\n");
   }
 
   /**
@@ -659,7 +758,13 @@ export class ChatView extends ItemView {
         // Add current prompt
         chatMessages.push({ role: "user", content: prompt });
 
-        response = await this.localExecutor.execute(chatMessages, onStream, onProgress);
+        // Local executor sends incremental deltas, so accumulate them
+        const onLocalStream = (chunk: string) => {
+          streamedContent += chunk;
+          this.updateStreamingMessage(streamedContent);
+        };
+
+        response = await this.localExecutor.execute(chatMessages, onLocalStream, onProgress);
       } else if (useAcp) {
         // Use ACP executor for persistent connection
         // Connect if not already connected or provider changed
@@ -957,23 +1062,10 @@ export class ChatView extends ItemView {
 
     const contextParts: string[] = [];
 
-    // Add system prompt if set
+    // System prompt (custom file or auto-generated default)
     if (systemPrompt) {
       contextParts.push(`System: ${systemPrompt}`);
     }
-
-    // Add vault path and formatting hints
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const vaultPath = (this.app.vault.adapter as any).basePath;
-    if (vaultPath) {
-      contextParts.push(`Obsidian Vault Path: ${vaultPath}`);
-    }
-
-    // Add formatting hints for Obsidian
-    contextParts.push(
-      "Formatting: When referencing Obsidian notes, use wiki links like [[Note Name]] or [[path/to/Note]] without backticks - they will render as clickable links. " +
-      "You can use interactive elements: checkboxes (- [ ] item) and HTML buttons (<button>Label</button>) - when the user interacts with them, you'll be notified."
-    );
 
     // Add today's daily note context
     if (dailyNoteContext) {

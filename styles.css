@@ -1016,6 +1016,96 @@
 }
 
 /* ============================================
+   Setup Cards (auto-detect flow)
+   ============================================ */
+.llm-setup-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.llm-setup-card {
+  padding: 12px 14px;
+  border: 1px solid var(--llm-accent, #fdc300);
+  border-radius: 6px;
+  background: var(--llm-accent-subtle, rgba(253, 195, 0, 0.06));
+}
+
+.llm-setup-card strong {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.llm-setup-status {
+  font-size: 0.9em;
+  margin-bottom: 8px;
+}
+
+.llm-setup-warning {
+  color: var(--text-warning, #e5a100);
+}
+
+.llm-setup-btn {
+  padding: 6px 14px;
+  border-radius: 5px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+  cursor: pointer;
+  font-weight: 600;
+  margin-right: 8px;
+  margin-top: 4px;
+}
+
+.llm-setup-btn:hover {
+  background: var(--background-modifier-hover);
+}
+
+.llm-setup-btn[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.llm-setup-btn-accent {
+  background: var(--llm-accent, #fdc300);
+  color: var(--llm-navy, #05164d);
+  border-color: var(--llm-accent, #fdc300);
+}
+
+.llm-setup-btn-accent:hover {
+  opacity: 0.9;
+}
+
+.llm-setup-pull {
+  margin-top: 8px;
+}
+
+.llm-setup-pull > span {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.9em;
+}
+
+.llm-setup-progress {
+  font-size: 0.85em;
+  color: var(--text-muted);
+  font-family: var(--font-monospace);
+  margin: 4px 0;
+  min-height: 1.2em;
+  word-break: break-all;
+}
+
+.llm-setup-success {
+  color: var(--llm-accent, #fdc300) !important;
+  font-weight: 600;
+}
+
+.llm-setup-error {
+  color: var(--text-error) !important;
+  font-weight: 600;
+}
+
+/* ============================================
    Local LLM Settings
    ============================================ */
 .llm-connection-result {
@@ -1032,4 +1122,46 @@
 .llm-connection-error {
   color: var(--text-error);
   font-weight: 600;
+}
+
+/* ============================================
+   Quick Actions
+   ============================================ */
+.llm-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.llm-quick-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 14px;
+  border: 1px solid var(--llm-border, var(--background-modifier-border));
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  font-size: 0.8em;
+  font-family: var(--llm-font);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.llm-quick-action-btn:hover {
+  border-color: var(--llm-accent);
+  color: var(--text-normal);
+  background: var(--llm-accent-subtle);
+}
+
+.llm-quick-action-btn:active {
+  transform: scale(0.97);
+}
+
+.llm-quick-action-btn svg {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
 }

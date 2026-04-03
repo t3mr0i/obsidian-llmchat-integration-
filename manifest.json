@@ -1,6 +1,6 @@
 {
   "id": "obsidian-llm",
-  "name": "LLM Integration",
+  "name": "AI Chat Integration",
   "version": "0.3.0",
   "minAppVersion": "1.0.0",
   "description": "Chat with AI models directly inside Obsidian — supports Claude, GPT, Gemini, and local models via Ollama",

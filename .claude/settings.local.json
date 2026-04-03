@@ -11,7 +11,9 @@
       "WebFetch(domain:ai.google.dev)",
       "WebFetch(domain:ollama.com)",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "WebFetch(domain:openai.com)"
+      "WebFetch(domain:openai.com)",
+      "Bash(gh release:*)",
+      "Bash(node:*)"
     ]
   }
 }

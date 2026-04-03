@@ -1,5 +1,6 @@
 import { spawn, ChildProcess } from "child_process";
 import type { LLMProvider, CLIProvider, LLMResponse, ProviderConfig, LLMPluginSettings, ProgressEvent } from "../types";
+import { getShellEnv } from "../utils/shellPath";
 
 /**
  * Token usage information extracted from CLI responses
@@ -408,10 +409,7 @@ export class LLMExecutor {
 
       const child = spawn(cmd, args, {
         cwd: cwd || undefined,
-        env: {
-          ...process.env,
-          ...config.envVars,
-        },
+        env: getShellEnv(config.envVars),
         shell: false,
         stdio: useStdin ? ["pipe", "pipe", "pipe"] : ["ignore", "pipe", "pipe"],
       });
@@ -1079,6 +1077,7 @@ export async function detectProvider(provider: LLMProvider): Promise<boolean> {
     const [cmd, ...args] = commands[provider];
     const child = spawn(cmd, args, {
       stdio: ["ignore", "pipe", "pipe"],
+      env: getShellEnv(),
       shell: false,
     });
 

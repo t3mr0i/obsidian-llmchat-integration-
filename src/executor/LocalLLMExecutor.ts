@@ -1,3 +1,4 @@
+import http from "http";
 import type {
   LLMResponse,
   LLMPluginSettings,
@@ -14,8 +15,110 @@ type StreamCallback = (chunk: string) => void;
 type ProgressCallback = (event: ProgressEvent) => void;
 
 /**
+ * Normalize URL: replace "localhost" with "127.0.0.1" to avoid
+ * DNS resolution issues in Electron/Obsidian on macOS.
+ */
+function normalizeUrl(url: string): string {
+  return url.replace(/\/\/localhost([:/])/, "//127.0.0.1$1");
+}
+
+/**
+ * Make an HTTP request using Node's http module (bypasses Electron fetch issues).
+ * Returns { statusCode, body } or throws on connection error.
+ */
+function httpRequest(
+  url: string,
+  options: { method: string; body?: string; timeout?: number }
+): Promise<{ statusCode: number; body: string; rawResponse: http.IncomingMessage }> {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const req = http.request(
+      {
+        hostname: parsed.hostname,
+        port: parsed.port || 80,
+        path: parsed.pathname + parsed.search,
+        method: options.method,
+        headers: options.body
+          ? { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(options.body) }
+          : undefined,
+        timeout: options.timeout || 10000,
+      },
+      (res) => {
+        let body = "";
+        res.on("data", (chunk: Buffer) => { body += chunk.toString(); });
+        res.on("end", () => resolve({ statusCode: res.statusCode || 0, body, rawResponse: res }));
+        res.on("error", reject);
+      }
+    );
+
+    req.on("error", reject);
+    req.on("timeout", () => {
+      req.destroy();
+      reject(new Error("Connection timed out"));
+    });
+
+    if (options.body) req.write(options.body);
+    req.end();
+  });
+}
+
+/**
+ * Make a streaming HTTP request. Calls onChunk for each data chunk.
+ */
+function httpStreamRequest(
+  url: string,
+  body: string,
+  onChunk: (chunk: string) => void,
+  abortSignal?: AbortSignal
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const req = http.request(
+      {
+        hostname: parsed.hostname,
+        port: parsed.port || 80,
+        path: parsed.pathname + parsed.search,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(body),
+        },
+        timeout: 120000,
+      },
+      (res) => {
+        if (res.statusCode && res.statusCode >= 400) {
+          let errBody = "";
+          res.on("data", (chunk: Buffer) => { errBody += chunk.toString(); });
+          res.on("end", () => reject(new Error(`HTTP ${res.statusCode}: ${errBody}`)));
+          return;
+        }
+        res.on("data", (chunk: Buffer) => onChunk(chunk.toString()));
+        res.on("end", resolve);
+        res.on("error", reject);
+      }
+    );
+
+    if (abortSignal) {
+      abortSignal.addEventListener("abort", () => {
+        req.destroy();
+        reject(new Error("Request cancelled"));
+      });
+    }
+
+    req.on("error", reject);
+    req.on("timeout", () => {
+      req.destroy();
+      reject(new Error("Connection timed out"));
+    });
+
+    req.write(body);
+    req.end();
+  });
+}
+
+/**
  * Executor for local LLM servers (Ollama, LM Studio, etc.)
- * Uses the OpenAI-compatible /v1/chat/completions API
+ * Uses Node's http module to avoid Electron fetch issues with localhost.
  */
 export class LocalLLMExecutor {
   private settings: LLMPluginSettings;
@@ -29,16 +132,13 @@ export class LocalLLMExecutor {
     this.settings = settings;
   }
 
-  /**
-   * Execute a chat completion against the local server
-   */
   async execute(
     messages: ChatMessage[],
     onStream?: StreamCallback,
     onProgress?: ProgressCallback
   ): Promise<LLMResponse> {
     const config = this.settings.providers.local;
-    const serverUrl = config.serverUrl || "http://localhost:11434";
+    const serverUrl = normalizeUrl(config.serverUrl || "http://127.0.0.1:11434");
     const model = config.model || "";
 
     if (!model) {
@@ -70,35 +170,51 @@ export class LocalLLMExecutor {
     }
 
     try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-        signal: this.abortController.signal,
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text().catch(() => "");
-        return {
-          content: "",
-          provider: "local",
-          durationMs: Date.now() - startTime,
-          error: this.parseError(response.status, errorText, serverUrl),
-        };
-      }
-
       onProgress?.({ type: "thinking", content: "Generating..." });
 
-      const content = await this.readStream(response, onStream, onProgress);
+      let fullContent = "";
+      let buffer = "";
+
+      await httpStreamRequest(
+        endpoint,
+        JSON.stringify(body),
+        (chunk) => {
+          buffer += chunk;
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed === "data: [DONE]") continue;
+
+            const data = trimmed.startsWith("data: ")
+              ? trimmed.slice(6)
+              : trimmed;
+
+            try {
+              const parsed = JSON.parse(data);
+              const delta = this.extractDelta(parsed);
+              if (delta) {
+                fullContent += delta;
+                onStream?.(delta);
+                onProgress?.({ type: "text", content: delta });
+              }
+            } catch {
+              // Skip malformed JSON
+            }
+          }
+        },
+        this.abortController.signal
+      );
 
       return {
-        content,
+        content: fullContent,
         provider: "local",
         durationMs: Date.now() - startTime,
       };
     } catch (err: unknown) {
       const error = err as Error;
-      if (error.name === "AbortError") {
+      if (error.message === "Request cancelled") {
         return {
           content: "",
           provider: "local",
@@ -117,64 +233,6 @@ export class LocalLLMExecutor {
     }
   }
 
-  /**
-   * Read SSE stream from the server
-   */
-  private async readStream(
-    response: Response,
-    onStream?: StreamCallback,
-    onProgress?: ProgressCallback
-  ): Promise<string> {
-    const reader = response.body?.getReader();
-    if (!reader) {
-      throw new Error("No response body");
-    }
-
-    const decoder = new TextDecoder();
-    let fullContent = "";
-    let buffer = "";
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed || trimmed === "data: [DONE]") continue;
-
-          const data = trimmed.startsWith("data: ")
-            ? trimmed.slice(6)
-            : trimmed;
-
-          try {
-            const parsed = JSON.parse(data);
-            const delta = this.extractDelta(parsed);
-            if (delta) {
-              fullContent += delta;
-              onStream?.(delta);
-              onProgress?.({ type: "text", content: delta });
-            }
-          } catch {
-            // Skip malformed JSON lines
-          }
-        }
-      }
-    } finally {
-      reader.releaseLock();
-    }
-
-    return fullContent;
-  }
-
-  /**
-   * Extract text delta from a streaming chunk
-   * Handles both OpenAI format and Ollama format
-   */
   private extractDelta(chunk: Record<string, unknown>): string | null {
     // OpenAI format: { choices: [{ delta: { content: "..." } }] }
     const choices = chunk.choices as Array<{ delta?: { content?: string } }> | undefined;
@@ -191,55 +249,43 @@ export class LocalLLMExecutor {
     return null;
   }
 
-  /**
-   * Get chat completions endpoint URL
-   */
   private getChatEndpoint(serverUrl: string, serverType?: LocalServerType): string {
     const base = serverUrl.replace(/\/$/, "");
-    if (serverType === "ollama") {
-      return `${base}/v1/chat/completions`;
-    }
     return `${base}/v1/chat/completions`;
   }
 
-  /**
-   * Cancel the current request
-   */
   cancel(): void {
     this.abortController?.abort();
   }
 
   /**
-   * Test connection to the server
+   * Test connection using Node http (not fetch).
    */
   static async testConnection(
     serverUrl: string,
     serverType: LocalServerType
   ): Promise<{ ok: boolean; error?: string; models?: string[] }> {
     try {
-      const base = serverUrl.replace(/\/$/, "");
+      const base = normalizeUrl(serverUrl).replace(/\/$/, "");
       const url =
         serverType === "ollama"
           ? `${base}/api/tags`
           : `${base}/v1/models`;
 
-      const response = await fetch(url, {
-        method: "GET",
-        signal: AbortSignal.timeout(5000),
-      });
+      const result = await httpRequest(url, { method: "GET", timeout: 10000 });
 
-      if (!response.ok) {
-        return { ok: false, error: `Server returned ${response.status}` };
+      if (result.statusCode !== 200) {
+        return { ok: false, error: `Server returned ${result.statusCode}` };
       }
 
-      const data = await response.json();
+      const data = JSON.parse(result.body);
       const models = LocalLLMExecutor.parseModelList(data, serverType);
 
       return { ok: true, models };
     } catch (err: unknown) {
       const error = err as Error;
-      if (error.name === "TimeoutError" || error.name === "AbortError") {
-        return { ok: false, error: "Connection timed out (5s)" };
+      if (error.message === "Connection timed out") {
+        return { ok: false, error: "Connection timed out (10s)" };
       }
       return {
         ok: false,
@@ -249,28 +295,25 @@ export class LocalLLMExecutor {
   }
 
   /**
-   * Fetch available models from the server
+   * Fetch available models using Node http.
    */
   static async fetchModels(
     serverUrl: string,
     serverType: LocalServerType
   ): Promise<{ value: string; label: string }[]> {
-    const base = serverUrl.replace(/\/$/, "");
+    const base = normalizeUrl(serverUrl).replace(/\/$/, "");
     const url =
       serverType === "ollama"
         ? `${base}/api/tags`
         : `${base}/v1/models`;
 
-    const response = await fetch(url, {
-      method: "GET",
-      signal: AbortSignal.timeout(5000),
-    });
+    const result = await httpRequest(url, { method: "GET", timeout: 10000 });
 
-    if (!response.ok) {
-      throw new Error(`Server returned ${response.status}`);
+    if (result.statusCode !== 200) {
+      throw new Error(`Server returned ${result.statusCode}`);
     }
 
-    const data = await response.json();
+    const data = JSON.parse(result.body);
     const modelIds = LocalLLMExecutor.parseModelList(data, serverType);
 
     return modelIds.map((id) => ({
@@ -279,42 +322,29 @@ export class LocalLLMExecutor {
     }));
   }
 
-  /**
-   * Parse model list from server response
-   */
   private static parseModelList(
     data: Record<string, unknown>,
     serverType: LocalServerType
   ): string[] {
     if (serverType === "ollama") {
-      // Ollama: { models: [{ name: "llama3:latest", ... }] }
       const models = data.models as Array<{ name?: string }> | undefined;
       return models?.map((m) => m.name || "").filter(Boolean) || [];
     }
-    // OpenAI-compatible: { data: [{ id: "model-name" }] }
     const list = data.data as Array<{ id?: string }> | undefined;
     return list?.map((m) => m.id || "").filter(Boolean) || [];
   }
 
-  private parseError(status: number, body: string, serverUrl: string): string {
-    if (status === 404) {
-      return `Model not found on server. Check that the model is pulled/available at ${serverUrl}.`;
-    }
-    if (status === 500) {
-      return `Server error from ${serverUrl}. Check server logs for details.`;
-    }
-    try {
-      const parsed = JSON.parse(body);
-      return (parsed.error?.message as string) || (parsed.error as string) || body;
-    } catch {
-      return `Server error (${status}): ${body.slice(0, 200)}`;
-    }
-  }
-
   private parseConnectionError(error: Error, serverUrl: string): string {
     const msg = error.message.toLowerCase();
-    if (msg.includes("fetch") || msg.includes("econnrefused") || msg.includes("networkerror")) {
+    if (msg.includes("econnrefused") || msg.includes("network")) {
       return `Cannot connect to ${serverUrl}. Make sure your local LLM server is running.`;
+    }
+    if (msg.includes("timed out")) {
+      return `Connection to ${serverUrl} timed out.`;
+    }
+    if (msg.startsWith("http ")) {
+      // HTTP error from stream
+      return `Server error: ${error.message}`;
     }
     return `Connection error: ${error.message}`;
   }

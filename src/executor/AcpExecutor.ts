@@ -23,6 +23,7 @@ import {
 } from "@agentclientprotocol/sdk";
 import type { LLMPluginSettings, LLMProvider, ProgressEvent } from "../types";
 import { setAcpModels, clearAcpModels } from "../utils/modelFetcher";
+import { getShellEnv } from "../utils/shellPath";
 
 export interface ThinkingOption {
   id: string;
@@ -241,7 +242,7 @@ export class AcpExecutor {
     this.process = spawn(acpCommand.cmd, acpCommand.args, {
       cwd,
       stdio: ["pipe", "pipe", "pipe"],
-      env: { ...process.env, ...acpCommand.env },
+      env: getShellEnv(acpCommand.env),
       shell: true,
     });
 

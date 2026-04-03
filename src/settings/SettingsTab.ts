@@ -1,9 +1,16 @@
-import { App, DropdownComponent, FuzzySuggestModal, PluginSettingTab, Setting, TFile } from "obsidian";
+import { App, DropdownComponent, FuzzySuggestModal, Notice, PluginSettingTab, Setting, TFile } from "obsidian";
 import type LLMPlugin from "../../main";
 import type { LLMProvider, LocalServerType } from "../types";
 import { PROVIDER_MODELS, ACP_SUPPORTED_PROVIDERS } from "../types";
 import { fetchModelsForProvider, type ModelOption } from "../utils/modelFetcher";
 import { LocalLLMExecutor } from "../executor/LocalLLMExecutor";
+import {
+  autoDetectProviders,
+  applyDetectionResults,
+  startLocalServer,
+  pullModel,
+  type LocalSoftwareStatus,
+} from "../utils/autoDetect";
 
 /**
  * Modal for selecting a markdown file from the vault
@@ -202,9 +209,57 @@ export class LLMSettingTab extends PluginSettingTab {
   // ════════════════════════════════════════════
   private addProvidersSection(containerEl: HTMLElement): void {
     containerEl.createEl("h3", { text: "AI Providers" });
-    containerEl.createEl("p", {
-      text: "Enable the providers you want to use. Cloud providers need their CLI tool installed; Local LLM connects to a server on your machine.",
-      cls: "setting-item-description",
+
+    // Auto-detect button
+    const scanSetting = new Setting(containerEl)
+      .setName("Auto-detect providers")
+      .setDesc("Scan your system for installed CLI tools and local AI servers");
+
+    // Container for setup cards (inserted after scan button)
+    const setupContainer = containerEl.createDiv({ cls: "llm-setup-container" });
+
+    scanSetting.addButton((btn) => {
+      btn.setButtonText("Scan now");
+      btn.setCta();
+      btn.onClick(async () => {
+        btn.setButtonText("Scanning...");
+        btn.setDisabled(true);
+        setupContainer.empty();
+
+        try {
+          const result = await autoDetectProviders();
+
+          // Show setup cards for installed-but-not-ready software
+          const needsSetup = result.localSoftware.filter(
+            (s) => s.installed && (!s.serverRunning || !s.hasModels)
+          );
+
+          if (needsSetup.length > 0) {
+            for (const sw of needsSetup) {
+              this.addSetupCard(setupContainer, sw);
+            }
+          }
+
+          if (result.detected.length > 0) {
+            const changed = applyDetectionResults(this.plugin.settings, result);
+            const names = result.detected.map((d) => d.name).join(", ");
+            if (changed) {
+              await this.plugin.saveSettings();
+              new Notice(`Found: ${names}. Settings updated.`);
+            } else {
+              new Notice(`Found: ${names}`);
+            }
+            this.display();
+            return;
+          } else if (needsSetup.length === 0) {
+            new Notice("No AI providers found. Install a CLI tool or a local AI server like Ollama.");
+          }
+        } catch {
+          new Notice("Scan failed. Please try again.");
+        }
+        btn.setButtonText("Scan now");
+        btn.setDisabled(false);
+      });
     });
 
     const providers: LLMProvider[] = ["claude", "opencode", "codex", "gemini", "local"];
@@ -215,6 +270,146 @@ export class LLMSettingTab extends PluginSettingTab {
         this.addCloudProviderSettings(containerEl, provider);
       }
     });
+  }
+
+  /**
+   * Setup card for installed software that needs server start or model download.
+   * Priority: 1) Use existing models  2) Start server  3) Download only as last resort
+   */
+  private addSetupCard(container: HTMLElement, sw: LocalSoftwareStatus): void {
+    const card = container.createDiv({ cls: "llm-setup-card" });
+    card.createEl("strong", { text: sw.name });
+
+    const statusEl = card.createDiv({ cls: "llm-setup-status" });
+    const actionsEl = card.createDiv({ cls: "llm-setup-actions" });
+
+    // Case 1: Server not running, but has local models → just start the server
+    if (!sw.serverRunning && sw.hasModels && sw.canAutoStart) {
+      statusEl.createSpan({
+        text: `Installed with ${sw.models.length} model${sw.models.length > 1 ? "s" : ""} — server not running`,
+        cls: "llm-setup-warning",
+      });
+
+      this.addStartServerButton(actionsEl, sw);
+      return;
+    }
+
+    // Case 2: Server not running, no models detected via CLI → start server first, then check
+    if (!sw.serverRunning && !sw.hasModels && sw.canAutoStart) {
+      statusEl.createSpan({ text: "Installed but not running", cls: "llm-setup-warning" });
+
+      this.addStartServerButton(actionsEl, sw);
+      return;
+    }
+
+    // Case 3: Server running but no models
+    if (sw.serverRunning && !sw.hasModels) {
+      statusEl.createSpan({
+        text: "Server is running but has no models",
+        cls: "llm-setup-warning",
+      });
+
+      if (sw.canPullModels && sw.defaultModel) {
+        this.showModelPull(actionsEl, sw);
+      }
+    }
+  }
+
+  /**
+   * Button to start a local server. After starting, auto-configures with existing models.
+   * Only offers model download if truly no models exist.
+   */
+  private addStartServerButton(container: HTMLElement, sw: LocalSoftwareStatus): void {
+    const startBtn = container.createEl("button", {
+      text: `Start ${sw.name}`,
+      cls: "llm-setup-btn llm-setup-btn-accent",
+    });
+
+    startBtn.addEventListener("click", async () => {
+      startBtn.textContent = "Starting...";
+      startBtn.setAttribute("disabled", "true");
+
+      const result = await startLocalServer(sw.name);
+      if (!result.ok) {
+        startBtn.textContent = `Failed: ${result.error || "unknown error"}`;
+        startBtn.addClass("llm-setup-error");
+        return;
+      }
+
+      startBtn.textContent = "Running!";
+      startBtn.addClass("llm-setup-success");
+
+      // Check what models are available now
+      try {
+        const conn = await LocalLLMExecutor.testConnection(sw.url, sw.type);
+        if (conn.ok && conn.models && conn.models.length > 0) {
+          // Has models → use the first one, done!
+          this.configureLocalProvider(sw, conn.models[0]);
+          new Notice(`${sw.name} ready — using ${conn.models[0]}`);
+          this.display();
+          return;
+        }
+      } catch { /* no models available */ }
+
+      // Server running but truly no models — offer download
+      if (sw.canPullModels && sw.defaultModel) {
+        this.showModelPull(container, sw);
+      }
+    });
+  }
+
+  /**
+   * Show model download UI. Only shown when server has zero models.
+   * Recommends Qwen 3 as default.
+   */
+  private showModelPull(container: HTMLElement, sw: LocalSoftwareStatus): void {
+    const pullContainer = container.createDiv({ cls: "llm-setup-pull" });
+    pullContainer.createSpan({
+      text: `No models on this server yet. We recommend Qwen 3 (${sw.defaultModel}) — fast, multilingual, and runs well on most hardware.`,
+    });
+
+    const progressEl = pullContainer.createDiv({ cls: "llm-setup-progress" });
+
+    const pullBtn = pullContainer.createEl("button", {
+      text: `Download ${sw.defaultModel}`,
+      cls: "llm-setup-btn llm-setup-btn-accent",
+    });
+
+    pullBtn.addEventListener("click", async () => {
+      pullBtn.textContent = "Downloading...";
+      pullBtn.setAttribute("disabled", "true");
+      progressEl.textContent = "Starting download...";
+
+      const result = await pullModel(sw.name, sw.defaultModel!, (line) => {
+        progressEl.textContent = line;
+      });
+
+      if (result.ok) {
+        progressEl.textContent = "Download complete!";
+        progressEl.addClass("llm-setup-success");
+
+        this.configureLocalProvider(sw, sw.defaultModel!);
+        new Notice(`${sw.name} is ready with ${sw.defaultModel}!`);
+        this.display();
+      } else {
+        progressEl.textContent = `Download failed: ${result.error}`;
+        progressEl.addClass("llm-setup-error");
+        pullBtn.textContent = "Retry";
+        pullBtn.removeAttribute("disabled");
+      }
+    });
+  }
+
+  /**
+   * Configure the local provider with a detected server + model
+   */
+  private async configureLocalProvider(sw: LocalSoftwareStatus, model: string): Promise<void> {
+    this.plugin.settings.providers.local.enabled = true;
+    this.plugin.settings.providers.local.serverUrl = sw.url;
+    this.plugin.settings.providers.local.serverType = sw.type;
+    this.plugin.settings.providers.local.model = model;
+    this.plugin.settings.defaultProvider = "local";
+    await this.plugin.saveSettings();
   }
 
   // ════════════════════════════════════════════
@@ -401,12 +596,12 @@ export class LLMSettingTab extends PluginSettingTab {
         dropdown.setValue(providerConfig.serverType || "ollama");
         dropdown.onChange(async (value) => {
           this.plugin.settings.providers.local.serverType = value as LocalServerType;
-          if (value === "ollama" && (!providerConfig.serverUrl || providerConfig.serverUrl === "http://localhost:1234")) {
-            this.plugin.settings.providers.local.serverUrl = "http://localhost:11434";
-            serverUrlInput.value = "http://localhost:11434";
-          } else if (value === "openai-compatible" && (!providerConfig.serverUrl || providerConfig.serverUrl === "http://localhost:11434")) {
-            this.plugin.settings.providers.local.serverUrl = "http://localhost:1234";
-            serverUrlInput.value = "http://localhost:1234";
+          if (value === "ollama" && (!providerConfig.serverUrl || providerConfig.serverUrl === "http://127.0.0.1:1234")) {
+            this.plugin.settings.providers.local.serverUrl = "http://127.0.0.1:11434";
+            serverUrlInput.value = "http://127.0.0.1:11434";
+          } else if (value === "openai-compatible" && (!providerConfig.serverUrl || providerConfig.serverUrl === "http://127.0.0.1:11434")) {
+            this.plugin.settings.providers.local.serverUrl = "http://127.0.0.1:1234";
+            serverUrlInput.value = "http://127.0.0.1:1234";
           }
           await this.plugin.saveSettings();
         });
@@ -420,9 +615,9 @@ export class LLMSettingTab extends PluginSettingTab {
     const serverUrlInput = serverUrlSetting.controlEl.createEl("input", {
       type: "text",
       cls: "llm-file-input",
-      attr: { placeholder: "http://localhost:11434" },
+      attr: { placeholder: "http://127.0.0.1:11434" },
     });
-    serverUrlInput.value = providerConfig.serverUrl || "http://localhost:11434";
+    serverUrlInput.value = providerConfig.serverUrl || "http://127.0.0.1:11434";
     serverUrlInput.addEventListener("change", async () => {
       this.plugin.settings.providers.local.serverUrl = serverUrlInput.value.trim();
       await this.plugin.saveSettings();
@@ -446,7 +641,7 @@ export class LLMSettingTab extends PluginSettingTab {
         resultEl.textContent = "Connecting...";
         resultEl.className = "llm-connection-result";
 
-        const url = this.plugin.settings.providers.local.serverUrl || "http://localhost:11434";
+        const url = this.plugin.settings.providers.local.serverUrl || "http://127.0.0.1:11434";
         const type = this.plugin.settings.providers.local.serverType || "ollama";
 
         const result = await LocalLLMExecutor.testConnection(url, type);

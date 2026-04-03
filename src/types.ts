@@ -35,7 +35,7 @@ export interface ProviderConfig {
   useAcp?: boolean;
   /** Thinking mode level for ACP (e.g., "none", "low", "medium", "high") - agent-specific */
   thinkingMode?: string;
-  /** Local LLM: Server URL (e.g., http://localhost:11434) */
+  /** Local LLM: Server URL (e.g., http://127.0.0.1:11434) */
   serverUrl?: string;
   /** Local LLM: Server type for API compatibility */
   serverType?: LocalServerType;
@@ -162,7 +162,7 @@ export const DEFAULT_PROVIDER_CONFIGS: Record<LLMProvider, ProviderConfig> = {
   },
   local: {
     enabled: false,
-    serverUrl: "http://localhost:11434",
+    serverUrl: "http://127.0.0.1:11434",
     serverType: "ollama",
     temperature: 0.7,
     maxTokens: 0,
