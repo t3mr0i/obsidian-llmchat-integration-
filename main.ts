@@ -241,6 +241,17 @@ export default class LLMPlugin extends Plugin {
     if (this.settings.defaultTimeout === undefined) {
       this.settings.defaultTimeout = 120;
     }
+
+    // Migration: ensure local provider config exists
+    if (!this.settings.providers.local) {
+      this.settings.providers.local = {
+        enabled: false,
+        serverUrl: "http://localhost:11434",
+        serverType: "ollama",
+        temperature: 0.7,
+        maxTokens: 0,
+      };
+    }
   }
 
   async saveSettings() {

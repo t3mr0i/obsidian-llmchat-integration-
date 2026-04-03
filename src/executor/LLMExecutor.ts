@@ -1,5 +1,5 @@
 import { spawn, ChildProcess } from "child_process";
-import type { LLMProvider, LLMResponse, ProviderConfig, LLMPluginSettings, ProgressEvent } from "../types";
+import type { LLMProvider, CLIProvider, LLMResponse, ProviderConfig, LLMPluginSettings, ProgressEvent } from "../types";
 
 /**
  * Token usage information extracted from CLI responses
@@ -22,7 +22,7 @@ interface ParsedResponse {
  * Default CLI commands for each provider
  * Use streaming JSON for Claude to get progress events
  */
-const DEFAULT_COMMANDS: Record<LLMProvider, string[]> = {
+const DEFAULT_COMMANDS: Record<CLIProvider, string[]> = {
   claude: ["claude", "--verbose", "--output-format", "stream-json"],
   gemini: ["gemini", "--output-format", "json"],
   codex: ["codex", "exec", "--skip-git-repo-check"],
@@ -32,7 +32,7 @@ const DEFAULT_COMMANDS: Record<LLMProvider, string[]> = {
 /**
  * Parser functions for each provider's output format
  */
-const PARSERS: Record<LLMProvider, (output: string) => ParsedResponse> = {
+const PARSERS: Record<CLIProvider, (output: string) => ParsedResponse> = {
   claude: parseClaudeOutput,
   gemini: parseGeminiOutput,
   codex: parseCodexOutput,
@@ -311,7 +311,11 @@ export class LLMExecutor {
     onProgress?: ProgressCallback,
     cwd?: string
   ): Promise<LLMResponse> {
-    const selectedProvider = provider || this.settings.defaultProvider;
+    const rawProvider = provider || this.settings.defaultProvider;
+    if (rawProvider === "local") {
+      throw new Error("Local LLM provider uses LocalLLMExecutor, not CLI executor");
+    }
+    const selectedProvider: CLIProvider = rawProvider;
     const providerConfig = this.settings.providers[selectedProvider];
 
     // Reset streaming state for OpenCode
@@ -375,7 +379,7 @@ export class LLMExecutor {
    * Run the CLI command for a provider
    */
   private runCLI(
-    provider: LLMProvider,
+    provider: CLIProvider,
     config: ProviderConfig,
     prompt: string,
     onStream?: StreamCallback,
@@ -524,7 +528,7 @@ export class LLMExecutor {
    * Build the CLI command array for a provider
    */
   private buildCommand(
-    provider: LLMProvider,
+    provider: CLIProvider,
     config: ProviderConfig
   ): string[] {
     if (config.customCommand) {
@@ -594,7 +598,7 @@ export class LLMExecutor {
   /**
    * Parse error messages from CLI stderr and provide helpful user-facing messages
    */
-  private parseErrorMessage(provider: LLMProvider, stderr: string, exitCode: number): string {
+  private parseErrorMessage(provider: CLIProvider, stderr: string, exitCode: number): string {
     const stderrLower = stderr.toLowerCase();
 
     // Model not found errors (fixed: "modelnot found" typo removed)
@@ -1062,7 +1066,9 @@ export class LLMExecutor {
  * Check if a CLI tool is available on the system
  */
 export async function detectProvider(provider: LLMProvider): Promise<boolean> {
-  const commands: Record<LLMProvider, string[]> = {
+  if (provider === "local") return true; // Local LLM uses HTTP, not CLI
+
+  const commands: Record<CLIProvider, string[]> = {
     claude: ["claude", "--version"],
     gemini: ["gemini", "--version"],
     codex: ["codex", "--version"],

@@ -1,8 +1,9 @@
 import { App, DropdownComponent, FuzzySuggestModal, PluginSettingTab, Setting, TFile } from "obsidian";
 import type LLMPlugin from "../../main";
-import type { LLMProvider } from "../types";
+import type { LLMProvider, LocalServerType } from "../types";
 import { PROVIDER_MODELS, ACP_SUPPORTED_PROVIDERS } from "../types";
 import { fetchModelsForProvider, type ModelOption } from "../utils/modelFetcher";
+import { LocalLLMExecutor } from "../executor/LocalLLMExecutor";
 
 /**
  * Modal for selecting a markdown file from the vault
@@ -34,6 +35,7 @@ const PROVIDER_DISPLAY_NAMES: Record<LLMProvider, string> = {
   opencode: "OpenCode",
   codex: "Codex (OpenAI)",
   gemini: "Gemini (Google)",
+  local: "Local LLM",
 };
 
 export class LLMSettingTab extends PluginSettingTab {
@@ -55,7 +57,7 @@ export class LLMSettingTab extends PluginSettingTab {
       .setName("Default Provider")
       .setDesc("Which LLM provider to use by default")
       .addDropdown((dropdown) => {
-        const providers: LLMProvider[] = ["claude", "opencode", "codex", "gemini"];
+        const providers: LLMProvider[] = ["claude", "opencode", "codex", "gemini", "local"];
         providers.forEach((provider) => {
           dropdown.addOption(provider, PROVIDER_DISPLAY_NAMES[provider]);
         });
@@ -206,6 +208,11 @@ export class LLMSettingTab extends PluginSettingTab {
   }
 
   private addProviderSettings(containerEl: HTMLElement, provider: LLMProvider): void {
+    if (provider === "local") {
+      this.addLocalProviderSettings(containerEl);
+      return;
+    }
+
     const providerConfig = this.plugin.settings.providers[provider];
     const displayName = PROVIDER_DISPLAY_NAMES[provider];
 
@@ -468,6 +475,194 @@ export class LLMSettingTab extends PluginSettingTab {
         return "codex";
       case "gemini":
         return "gemini";
+      case "local":
+        return "";
+    }
+  }
+
+  /**
+   * Settings UI for the local LLM provider
+   */
+  private addLocalProviderSettings(containerEl: HTMLElement): void {
+    const providerConfig = this.plugin.settings.providers.local;
+
+    const detailsEl = containerEl.createEl("details", {
+      cls: "llm-provider-details",
+    });
+    detailsEl.createEl("summary", { text: "Local LLM (Ollama, LM Studio, ...)" });
+
+    const settingsContainer = detailsEl.createDiv({ cls: "llm-provider-settings" });
+
+    // Enable toggle
+    new Setting(settingsContainer)
+      .setName("Enabled")
+      .setDesc("Enable local LLM server as a provider")
+      .addToggle((toggle) => {
+        toggle.setValue(providerConfig.enabled);
+        toggle.onChange(async (value) => {
+          this.plugin.settings.providers.local.enabled = value;
+          await this.plugin.saveSettings();
+        });
+      });
+
+    // Server type
+    new Setting(settingsContainer)
+      .setName("Server type")
+      .setDesc("Select your local LLM server type")
+      .addDropdown((dropdown) => {
+        dropdown.addOption("ollama", "Ollama (localhost:11434)");
+        dropdown.addOption("openai-compatible", "OpenAI-compatible (LM Studio, vLLM, ...)");
+        dropdown.setValue(providerConfig.serverType || "ollama");
+        dropdown.onChange(async (value) => {
+          this.plugin.settings.providers.local.serverType = value as LocalServerType;
+          // Update default URL based on type
+          if (value === "ollama" && (!providerConfig.serverUrl || providerConfig.serverUrl === "http://localhost:1234")) {
+            this.plugin.settings.providers.local.serverUrl = "http://localhost:11434";
+            serverUrlInput.value = "http://localhost:11434";
+          } else if (value === "openai-compatible" && (!providerConfig.serverUrl || providerConfig.serverUrl === "http://localhost:11434")) {
+            this.plugin.settings.providers.local.serverUrl = "http://localhost:1234";
+            serverUrlInput.value = "http://localhost:1234";
+          }
+          await this.plugin.saveSettings();
+        });
+      });
+
+    // Server URL
+    const serverUrlSetting = new Setting(settingsContainer)
+      .setName("Server URL")
+      .setDesc("URL of your local LLM server");
+
+    const serverUrlInput = serverUrlSetting.controlEl.createEl("input", {
+      type: "text",
+      cls: "llm-file-input",
+      attr: { placeholder: "http://localhost:11434" },
+    });
+    serverUrlInput.value = providerConfig.serverUrl || "http://localhost:11434";
+    serverUrlInput.addEventListener("change", async () => {
+      this.plugin.settings.providers.local.serverUrl = serverUrlInput.value.trim();
+      await this.plugin.saveSettings();
+    });
+
+    // Connection test + model fetch
+    const testSetting = new Setting(settingsContainer)
+      .setName("Connection")
+      .setDesc("Test the connection and fetch available models");
+
+    const resultEl = testSetting.controlEl.createEl("span", {
+      cls: "llm-connection-result",
+    });
+
+    testSetting.addButton((btn) => {
+      btn.setButtonText("Test connection");
+      btn.setCta();
+      btn.onClick(async () => {
+        resultEl.textContent = "Connecting...";
+        resultEl.className = "llm-connection-result";
+
+        const url = this.plugin.settings.providers.local.serverUrl || "http://localhost:11434";
+        const type = this.plugin.settings.providers.local.serverType || "ollama";
+
+        const result = await LocalLLMExecutor.testConnection(url, type);
+
+        if (result.ok) {
+          resultEl.textContent = `Connected (${result.models?.length || 0} models)`;
+          resultEl.className = "llm-connection-result llm-connection-success";
+          // Refresh model dropdown
+          if (modelDropdown) {
+            await this.refreshLocalModels(modelDropdown);
+          }
+        } else {
+          resultEl.textContent = result.error || "Connection failed";
+          resultEl.className = "llm-connection-result llm-connection-error";
+        }
+      });
+    });
+
+    // Model dropdown
+    let modelDropdown: DropdownComponent | null = null;
+
+    const modelSetting = new Setting(settingsContainer)
+      .setName("Model")
+      .setDesc("Select a model from your server (test connection first)");
+
+    modelSetting.addDropdown((dd) => {
+      modelDropdown = dd;
+      dd.addOption("", "Select a model...");
+
+      // Try to populate from server
+      this.refreshLocalModels(dd);
+
+      if (providerConfig.model) {
+        dd.addOption(providerConfig.model, providerConfig.model);
+        dd.setValue(providerConfig.model);
+      }
+
+      dd.onChange(async (value) => {
+        this.plugin.settings.providers.local.model = value || undefined;
+        await this.plugin.saveSettings();
+      });
+    });
+
+    modelSetting.addButton((btn) => {
+      btn.setIcon("refresh-cw");
+      btn.setTooltip("Refresh models");
+      btn.onClick(async () => {
+        if (modelDropdown) {
+          await this.refreshLocalModels(modelDropdown);
+        }
+      });
+    });
+
+    // Temperature
+    new Setting(settingsContainer)
+      .setName("Temperature")
+      .setDesc("Controls randomness (0.0 = deterministic, 2.0 = very random)")
+      .addSlider((slider) => {
+        slider.setLimits(0, 200, 5);
+        slider.setValue((providerConfig.temperature ?? 0.7) * 100);
+        slider.setDynamicTooltip();
+        slider.onChange(async (value) => {
+          this.plugin.settings.providers.local.temperature = value / 100;
+          await this.plugin.saveSettings();
+        });
+      });
+
+    // Max tokens
+    const maxTokensSetting = new Setting(settingsContainer)
+      .setName("Max tokens")
+      .setDesc("Maximum tokens in response (0 = server default)");
+
+    const maxTokensInput = maxTokensSetting.controlEl.createEl("input", {
+      type: "number",
+      cls: "llm-timeout-input",
+      attr: { placeholder: "0", min: "0", max: "128000", step: "256" },
+    });
+    maxTokensInput.value = (providerConfig.maxTokens || 0).toString();
+    maxTokensInput.addEventListener("change", async () => {
+      const val = parseInt(maxTokensInput.value, 10);
+      this.plugin.settings.providers.local.maxTokens = isNaN(val) ? 0 : val;
+      await this.plugin.saveSettings();
+    });
+  }
+
+  /**
+   * Refresh model dropdown from local server
+   */
+  private async refreshLocalModels(dropdown: DropdownComponent): Promise<void> {
+    const config = this.plugin.settings.providers.local;
+    try {
+      const models = await fetchModelsForProvider("local", config);
+      const currentValue = config.model ?? "";
+
+      dropdown.selectEl.empty();
+      models.forEach((m) => dropdown.addOption(m.value, m.label));
+
+      if (currentValue && !models.some((m) => m.value === currentValue)) {
+        dropdown.addOption(currentValue, currentValue);
+      }
+      dropdown.setValue(currentValue);
+    } catch {
+      // Keep existing options
     }
   }
 }

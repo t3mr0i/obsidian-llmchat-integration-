@@ -3,8 +3,9 @@
  */
 import { exec } from "child_process";
 import { promisify } from "util";
-import type { LLMProvider } from "../types";
+import type { LLMProvider, ProviderConfig } from "../types";
 import { PROVIDER_MODELS } from "../types";
+import { LocalLLMExecutor } from "../executor/LocalLLMExecutor";
 
 const execAsync = promisify(exec);
 
@@ -111,10 +112,30 @@ async function fetchCodexModels(): Promise<ModelOption[]> {
 }
 
 /**
+ * Get models from a local LLM server
+ */
+async function fetchLocalModels(config?: ProviderConfig): Promise<ModelOption[]> {
+  const serverUrl = config?.serverUrl || "http://localhost:11434";
+  const serverType = config?.serverType || "ollama";
+  try {
+    const models = await LocalLLMExecutor.fetchModels(serverUrl, serverType);
+    if (models.length === 0) {
+      return [{ value: "", label: "No models found on server" }];
+    }
+    return models;
+  } catch {
+    return [{ value: "", label: "Cannot reach server — check settings" }];
+  }
+}
+
+/**
  * Fetch available models for a provider
  * Prefers ACP models if available, otherwise uses CLI/static models
  */
-export async function fetchModelsForProvider(provider: LLMProvider): Promise<ModelOption[]> {
+export async function fetchModelsForProvider(
+  provider: LLMProvider,
+  providerConfig?: ProviderConfig
+): Promise<ModelOption[]> {
   // Prefer ACP models if available (more accurate when connected)
   const acpModels = acpModelCache.get(provider);
   if (acpModels && acpModels.length > 1) {
@@ -140,6 +161,9 @@ export async function fetchModelsForProvider(provider: LLMProvider): Promise<Mod
       break;
     case "codex":
       models = await fetchCodexModels();
+      break;
+    case "local":
+      models = await fetchLocalModels(providerConfig);
       break;
     default:
       models = [{ value: "", label: "Default" }];

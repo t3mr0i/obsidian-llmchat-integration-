@@ -910,3 +910,22 @@
 .llm-chat-messages::-webkit-scrollbar-thumb:hover {
   background-color: var(--lh-gold);
 }
+
+/* ============================================
+   Local LLM Settings
+   ============================================ */
+.llm-connection-result {
+  font-size: 0.85em;
+  margin-right: 8px;
+  font-family: var(--lh-font);
+}
+
+.llm-connection-success {
+  color: var(--lh-gold);
+  font-weight: 600;
+}
+
+.llm-connection-error {
+  color: var(--text-error);
+  font-weight: 600;
+}

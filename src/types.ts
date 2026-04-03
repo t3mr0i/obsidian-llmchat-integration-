@@ -1,7 +1,17 @@
 /**
- * Supported LLM providers - CLI tools that can be invoked
+ * Supported LLM providers - CLI tools and local servers
  */
-export type LLMProvider = "claude" | "opencode" | "codex" | "gemini";
+export type LLMProvider = "claude" | "opencode" | "codex" | "gemini" | "local";
+
+/**
+ * Providers that use CLI subprocess execution (excludes HTTP-based providers)
+ */
+export type CLIProvider = Exclude<LLMProvider, "local">;
+
+/**
+ * Local LLM server types
+ */
+export type LocalServerType = "ollama" | "openai-compatible";
 
 /**
  * Configuration for a specific LLM provider
@@ -25,6 +35,14 @@ export interface ProviderConfig {
   useAcp?: boolean;
   /** Thinking mode level for ACP (e.g., "none", "low", "medium", "high") - agent-specific */
   thinkingMode?: string;
+  /** Local LLM: Server URL (e.g., http://localhost:11434) */
+  serverUrl?: string;
+  /** Local LLM: Server type for API compatibility */
+  serverType?: LocalServerType;
+  /** Local LLM: Temperature (0.0 - 2.0) */
+  temperature?: number;
+  /** Local LLM: Max tokens for response (0 = unlimited) */
+  maxTokens?: number;
 }
 
 /**
@@ -76,6 +94,9 @@ export const PROVIDER_MODELS: Record<LLMProvider, { value: string; label: string
     { value: "o4-mini", label: "o4-mini (reasoning, legacy)" },
     { value: "gpt-5", label: "GPT-5 (legacy)" },
   ],
+  local: [
+    { value: "", label: "Fetch models from server..." },
+  ],
 };
 
 /**
@@ -124,6 +145,13 @@ export const DEFAULT_PROVIDER_CONFIGS: Record<LLMProvider, ProviderConfig> = {
   gemini: {
     enabled: false,
     useAcp: true,
+  },
+  local: {
+    enabled: false,
+    serverUrl: "http://localhost:11434",
+    serverType: "ollama",
+    temperature: 0.7,
+    maxTokens: 0,
   },
 };
 

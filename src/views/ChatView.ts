@@ -14,6 +14,7 @@ import type { LLMProvider, ConversationMessage, ProgressEvent } from "../types";
 import { ACP_SUPPORTED_PROVIDERS } from "../types";
 import { LLMExecutor } from "../executor/LLMExecutor";
 import { AcpExecutor } from "../executor/AcpExecutor";
+import { LocalLLMExecutor } from "../executor/LocalLLMExecutor";
 
 export const CHAT_VIEW_TYPE = "llm-chat-view";
 
@@ -22,12 +23,14 @@ const PROVIDER_DISPLAY_NAMES: Record<LLMProvider, string> = {
   opencode: "OpenCode",
   codex: "Codex",
   gemini: "Gemini",
+  local: "Local LLM",
 };
 
 export class ChatView extends ItemView {
   plugin: LLMPlugin;
   private executor: LLMExecutor;
   private acpExecutor: AcpExecutor;
+  private localExecutor: LocalLLMExecutor;
   private messages: ConversationMessage[] = [];
   private currentProvider: LLMProvider;
   private isLoading = false;
@@ -49,6 +52,7 @@ export class ChatView extends ItemView {
     this.plugin = plugin;
     this.executor = new LLMExecutor(plugin.settings);
     this.acpExecutor = new AcpExecutor(plugin.settings);
+    this.localExecutor = new LocalLLMExecutor(plugin.settings);
     this.currentProvider = plugin.settings.defaultProvider;
   }
 
@@ -101,7 +105,7 @@ export class ChatView extends ItemView {
 
     const dropdown = new DropdownComponent(providerSelector);
 
-    const providers: LLMProvider[] = ["claude", "opencode", "codex", "gemini"];
+    const providers: LLMProvider[] = ["claude", "opencode", "codex", "gemini", "local"];
     providers.forEach((provider) => {
       if (this.plugin.settings.providers[provider].enabled) {
         dropdown.addOption(provider, PROVIDER_DISPLAY_NAMES[provider]);
@@ -295,6 +299,7 @@ export class ChatView extends ItemView {
    */
   private cancelRequest() {
     this.executor.cancel();
+    this.localExecutor.cancel();
     this.isLoading = false;
     this.updateButtonStates();
     this.clearProgress();
@@ -617,7 +622,45 @@ export class ChatView extends ItemView {
 
       let response: { content: string; provider: LLMProvider; durationMs: number; error?: string };
 
-      if (useAcp) {
+      if (this.currentProvider === "local") {
+        // Use local HTTP executor
+        this.localExecutor.updateSettings(this.plugin.settings);
+
+        // Build messages array for chat completions API
+        const chatMessages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [];
+
+        // Add system prompt if available
+        const systemPrompt = await this.getSystemPrompt();
+        const includeContext = this.includeContextToggle?.checked ?? false;
+        const systemParts: string[] = [];
+        if (systemPrompt) systemParts.push(systemPrompt);
+        if (includeContext) {
+          const openFiles = this.getOpenFilesContext();
+          if (openFiles) systemParts.push(openFiles);
+          const dailyNote = await this.getDailyNoteContext();
+          if (dailyNote) systemParts.push(dailyNote);
+        }
+        if (systemParts.length > 0) {
+          chatMessages.push({ role: "system", content: systemParts.join("\n\n") });
+        }
+
+        // Add conversation history
+        if (this.plugin.settings.conversationHistory.enabled) {
+          const maxMessages = this.plugin.settings.conversationHistory.maxMessages;
+          const historyStart = Math.max(0, this.messages.length - 1 - maxMessages);
+          for (let i = historyStart; i < this.messages.length - 1; i++) {
+            chatMessages.push({
+              role: this.messages[i].role as "user" | "assistant",
+              content: this.messages[i].content,
+            });
+          }
+        }
+
+        // Add current prompt
+        chatMessages.push({ role: "user", content: prompt });
+
+        response = await this.localExecutor.execute(chatMessages, onStream, onProgress);
+      } else if (useAcp) {
         // Use ACP executor for persistent connection
         // Connect if not already connected or provider changed
         if (!this.acpExecutor.isConnected() || this.acpExecutor.getProvider() !== this.currentProvider) {
