@@ -1,10 +1,9 @@
-/* LLM Plugin Styles — Lufthansa Theme */
+/* LLM Plugin Styles */
 
 /* ============================================
-   Lufthansa Design System
-   Dark Blue: #05164d  |  Mid Blue: #1a3c8a
-   Gold: #fdc300       |  Gold Hover: #e5b000
-   Font: Helvetica Neue (closest to LH Text)
+   Design Tokens
+   Navy: #05164d  |  Blue: #1a3c8a
+   Accent: #fdc300  |  Accent Hover: #e5b000
    ============================================ */
 
 /* Color palette — scoped to plugin containers */
@@ -12,17 +11,17 @@
 .llm-chat-modal,
 .llm-quick-prompt-modal,
 .llm-provider-details {
-  --lh-navy: #05164d;
-  --lh-navy-light: #0a2266;
-  --lh-blue: #1a3c8a;
-  --lh-blue-light: #2a5cba;
-  --lh-gold: #fdc300;
-  --lh-gold-dim: #e5b000;
-  --lh-gold-subtle: rgba(253, 195, 0, 0.12);
-  --lh-warm-white: #fafaf7;
-  --lh-cool-gray: #e8eaef;
-  --lh-font: "Helvetica Neue", Helvetica, Arial, sans-serif;
-  font-family: var(--lh-font);
+  --llm-navy: #05164d;
+  --llm-navy-light: #0a2266;
+  --llm-blue: #1a3c8a;
+  --llm-blue-light: #2a5cba;
+  --llm-accent: #fdc300;
+  --llm-accent-dim: #e5b000;
+  --llm-accent-subtle: rgba(253, 195, 0, 0.12);
+  --llm-bg-warm: #fafaf7;
+  --llm-border: #e8eaef;
+  --llm-font: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-family: var(--llm-font);
   letter-spacing: 0.01em;
 }
 
@@ -30,9 +29,9 @@
 .theme-dark .llm-chat-view,
 .theme-dark .llm-chat-modal,
 .theme-dark .llm-quick-prompt-modal {
-  --lh-warm-white: #1a1d24;
-  --lh-cool-gray: #252830;
-  --lh-gold-subtle: rgba(253, 195, 0, 0.08);
+  --llm-bg-warm: #1a1d24;
+  --llm-border: #252830;
+  --llm-accent-subtle: rgba(253, 195, 0, 0.08);
 }
 
 /* ============================================
@@ -40,22 +39,22 @@
    ============================================ */
 .llm-provider-details {
   margin: 10px 0;
-  border: 1px solid var(--lh-cool-gray, var(--background-modifier-border));
+  border: 1px solid var(--llm-border, var(--background-modifier-border));
   border-radius: 6px;
   padding: 10px;
-  border-left: 3px solid var(--lh-gold);
+  border-left: 3px solid var(--llm-accent);
 }
 
 .llm-provider-details summary {
   cursor: pointer;
   font-weight: 600;
   padding: 5px;
-  font-family: var(--lh-font);
+  font-family: var(--llm-font);
 }
 
 .llm-provider-details[open] summary {
   margin-bottom: 10px;
-  border-bottom: 1px solid var(--lh-cool-gray, var(--background-modifier-border));
+  border-bottom: 1px solid var(--llm-border, var(--background-modifier-border));
   padding-bottom: 10px;
 }
 
@@ -78,12 +77,12 @@
   align-items: center;
   margin-bottom: 15px;
   padding-bottom: 10px;
-  border-bottom: 2px solid var(--lh-gold, var(--background-modifier-border));
+  border-bottom: 2px solid var(--llm-accent, var(--background-modifier-border));
 }
 
 .llm-chat-header h2 {
   margin: 0;
-  font-family: var(--lh-font);
+  font-family: var(--llm-font);
   font-weight: 700;
   letter-spacing: 0.02em;
 }
@@ -102,7 +101,7 @@
   overflow-y: auto;
   margin-bottom: 15px;
   padding: 10px;
-  background-color: var(--lh-warm-white, var(--background-secondary));
+  background-color: var(--llm-bg-warm, var(--background-secondary));
   border-radius: 6px;
 }
 
@@ -113,9 +112,9 @@
   transition: box-shadow 0.15s ease;
 }
 
-/* User messages — Lufthansa Navy */
+/* User messages */
 .llm-message-user {
-  background: linear-gradient(135deg, var(--lh-navy) 0%, var(--lh-navy-light) 100%);
+  background: linear-gradient(135deg, var(--llm-navy) 0%, var(--llm-navy-light) 100%);
   color: #ffffff;
   margin-left: 50px;
   border-radius: 6px 6px 2px 6px;
@@ -124,11 +123,11 @@
 
 /* Assistant messages — clean with gold accent */
 .llm-message-assistant {
-  background-color: var(--lh-warm-white, var(--background-primary));
+  background-color: var(--llm-bg-warm, var(--background-primary));
   color: var(--text-normal);
   margin-right: 50px;
-  border: 1px solid var(--lh-cool-gray, var(--background-modifier-border));
-  border-left: 3px solid var(--lh-gold);
+  border: 1px solid var(--llm-border, var(--background-modifier-border));
+  border-left: 3px solid var(--llm-accent);
   border-radius: 6px 6px 6px 2px;
 }
 
@@ -177,29 +176,29 @@
   min-height: 60px;
   padding: 10px 12px;
   border-radius: 6px;
-  border: 1px solid var(--lh-cool-gray, var(--background-modifier-border));
+  border: 1px solid var(--llm-border, var(--background-modifier-border));
   background-color: var(--background-primary);
-  font-family: var(--lh-font);
+  font-family: var(--llm-font);
   font-size: 0.95em;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .llm-chat-input:focus {
-  border-color: var(--lh-gold);
-  box-shadow: 0 0 0 2px var(--lh-gold-subtle);
+  border-color: var(--llm-accent);
+  box-shadow: 0 0 0 2px var(--llm-accent-subtle);
   outline: none;
 }
 
-/* Send button — Lufthansa Gold CTA */
+/* Send button — accent CTA */
 .llm-chat-send {
   padding: 10px 22px;
-  background: linear-gradient(180deg, var(--lh-gold) 0%, var(--lh-gold-dim) 100%);
-  color: var(--lh-navy);
+  background: linear-gradient(180deg, var(--llm-accent) 0%, var(--llm-accent-dim) 100%);
+  color: var(--llm-navy);
   border: none;
   border-radius: 6px;
   cursor: pointer;
   font-weight: 700;
-  font-family: var(--lh-font);
+  font-family: var(--llm-font);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   font-size: 0.82em;
@@ -232,7 +231,7 @@
   border-radius: 6px;
   cursor: pointer;
   font-weight: 600;
-  font-family: var(--lh-font);
+  font-family: var(--llm-font);
 }
 
 .llm-chat-cancel:hover {
@@ -243,15 +242,15 @@
    Code in Messages
    ============================================ */
 .llm-message-content code {
-  background-color: var(--lh-gold-subtle, var(--background-modifier-code));
+  background-color: var(--llm-accent-subtle, var(--background-modifier-code));
   padding: 2px 5px;
   border-radius: 3px;
   font-size: 0.9em;
 }
 
 .llm-message-content pre {
-  background-color: var(--lh-navy, var(--background-modifier-code));
-  color: var(--lh-cool-gray, #e0e0e0);
+  background-color: var(--llm-navy, var(--background-modifier-code));
+  color: var(--llm-border, #e0e0e0);
   padding: 12px 14px;
   border-radius: 5px;
   overflow-x: auto;
@@ -279,8 +278,8 @@
 .llm-loading-spinner {
   width: 16px;
   height: 16px;
-  border: 2px solid var(--lh-blue, var(--background-modifier-border));
-  border-top-color: var(--lh-gold);
+  border: 2px solid var(--llm-blue, var(--background-modifier-border));
+  border-top-color: var(--llm-accent);
   border-radius: 50%;
   animation: llm-spin 0.8s linear infinite;
 }
@@ -303,14 +302,14 @@
   margin-bottom: 15px;
   padding: 10px;
   border-radius: 6px;
-  border: 1px solid var(--lh-cool-gray, var(--background-modifier-border));
+  border: 1px solid var(--llm-border, var(--background-modifier-border));
   resize: vertical;
-  font-family: var(--lh-font);
+  font-family: var(--llm-font);
 }
 
 .llm-quick-prompt-input:focus {
-  border-color: var(--lh-gold);
-  box-shadow: 0 0 0 2px var(--lh-gold-subtle);
+  border-color: var(--llm-accent);
+  box-shadow: 0 0 0 2px var(--llm-accent-subtle);
   outline: none;
 }
 
@@ -333,7 +332,7 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  font-family: var(--lh-font);
+  font-family: var(--llm-font);
 }
 
 .llm-status-indicator {
@@ -344,12 +343,12 @@
 }
 
 .llm-status-indicator.active {
-  background-color: var(--lh-gold);
+  background-color: var(--llm-accent);
   box-shadow: 0 0 4px rgba(253, 195, 0, 0.5);
 }
 
 .llm-status-indicator.connecting {
-  background-color: var(--lh-gold);
+  background-color: var(--llm-accent);
   animation: llm-status-pulse 1s ease-in-out infinite;
 }
 
@@ -388,7 +387,7 @@
 
 .llm-empty-state h3 {
   margin-bottom: 10px;
-  font-family: var(--lh-font);
+  font-family: var(--llm-font);
   font-weight: 700;
 }
 
@@ -404,7 +403,7 @@
 
 .llm-quick-prompt-header h2 {
   margin: 0;
-  font-family: var(--lh-font);
+  font-family: var(--llm-font);
 }
 
 .llm-quick-prompt-input-container {
@@ -426,9 +425,9 @@
 .llm-quick-prompt-response {
   margin-top: 15px;
   padding: 15px;
-  background-color: var(--lh-warm-white, var(--background-secondary));
+  background-color: var(--llm-bg-warm, var(--background-secondary));
   border-radius: 6px;
-  border-left: 3px solid var(--lh-gold);
+  border-left: 3px solid var(--llm-accent);
   white-space: pre-wrap;
   word-wrap: break-word;
   max-height: 300px;
@@ -439,14 +438,14 @@
   padding: 8px 16px;
   border-radius: 5px;
   cursor: pointer;
-  border: 1px solid var(--lh-cool-gray, var(--background-modifier-border));
+  border: 1px solid var(--llm-border, var(--background-modifier-border));
   background-color: var(--background-secondary);
-  font-family: var(--lh-font);
+  font-family: var(--llm-font);
 }
 
 .llm-quick-prompt-action:hover {
-  background-color: var(--lh-gold-subtle);
-  border-color: var(--lh-gold);
+  background-color: var(--llm-accent-subtle);
+  border-color: var(--llm-accent);
 }
 
 /* ============================================
@@ -455,11 +454,11 @@
 .llm-clear-btn {
   padding: 5px 10px;
   background: transparent;
-  border: 1px solid var(--lh-cool-gray, var(--background-modifier-border));
+  border: 1px solid var(--llm-border, var(--background-modifier-border));
   border-radius: 5px;
   cursor: pointer;
   color: var(--text-muted);
-  font-family: var(--lh-font);
+  font-family: var(--llm-font);
   transition: all 0.15s ease;
 }
 
@@ -482,7 +481,7 @@
   flex-shrink: 0;
   margin-bottom: 12px;
   padding-bottom: 12px;
-  border-bottom: 2px solid var(--lh-gold, var(--background-modifier-border));
+  border-bottom: 2px solid var(--llm-accent, var(--background-modifier-border));
 }
 
 .llm-chat-controls {
@@ -509,7 +508,7 @@
 
 .llm-toggle-label input[type="checkbox"] {
   margin: 0;
-  accent-color: var(--lh-gold);
+  accent-color: var(--llm-accent);
 }
 
 .llm-icon-btn {
@@ -532,7 +531,7 @@
   flex: 1;
   overflow-y: auto;
   padding: 12px;
-  background-color: var(--lh-warm-white, var(--background-primary-alt));
+  background-color: var(--llm-bg-warm, var(--background-primary-alt));
   border-radius: 6px;
   margin-bottom: 12px;
   max-height: none;
@@ -565,7 +564,7 @@
 }
 
 .llm-chat-view .llm-message-user {
-  background: linear-gradient(135deg, var(--lh-navy) 0%, var(--lh-navy-light) 100%);
+  background: linear-gradient(135deg, var(--llm-navy) 0%, var(--llm-navy-light) 100%);
   color: #ffffff;
   margin-left: 40px;
   border-radius: 6px 6px 2px 6px;
@@ -576,12 +575,12 @@
 }
 
 .llm-chat-view .llm-message-assistant {
-  background: var(--lh-warm-white, var(--background-secondary));
+  background: var(--llm-bg-warm, var(--background-secondary));
   color: var(--text-normal);
   margin-right: 40px;
   border-radius: 6px 6px 6px 2px;
-  border: 1px solid var(--lh-cool-gray, var(--background-modifier-border));
-  border-left: 3px solid var(--lh-gold);
+  border: 1px solid var(--llm-border, var(--background-modifier-border));
+  border-left: 3px solid var(--llm-accent);
 }
 
 .llm-message-role {
@@ -625,8 +624,8 @@
 }
 
 .llm-action-btn:hover {
-  color: var(--lh-gold);
-  background-color: var(--lh-gold-subtle);
+  color: var(--llm-accent);
+  background-color: var(--llm-accent-subtle);
 }
 
 .llm-action-btn svg {
@@ -661,12 +660,12 @@
   flex: 1;
   padding: 6px 10px;
   border-radius: 4px;
-  border: 1px solid var(--lh-cool-gray, var(--background-modifier-border));
+  border: 1px solid var(--llm-border, var(--background-modifier-border));
   background-color: var(--background-primary);
   color: var(--text-muted);
   font-size: 0.9em;
   margin-right: 8px;
-  font-family: var(--lh-font);
+  font-family: var(--llm-font);
 }
 
 .llm-browse-btn {
@@ -678,10 +677,10 @@
   width: 80px;
   padding: 6px 10px;
   border-radius: 4px;
-  border: 1px solid var(--lh-cool-gray, var(--background-modifier-border));
+  border: 1px solid var(--llm-border, var(--background-modifier-border));
   background-color: var(--background-primary);
   margin-right: 8px;
-  font-family: var(--lh-font);
+  font-family: var(--llm-font);
 }
 
 /* ============================================
@@ -709,17 +708,17 @@
 }
 
 .llm-tool-complete {
-  color: var(--lh-gold);
+  color: var(--llm-accent);
   flex-shrink: 0;
 }
 
 .llm-tool-active {
-  color: var(--lh-blue-light, var(--text-accent));
+  color: var(--llm-blue-light, var(--text-accent));
   flex-shrink: 0;
 }
 
 .llm-tool-name {
-  color: var(--lh-blue-light, var(--text-accent));
+  color: var(--llm-blue-light, var(--text-accent));
   font-weight: 500;
 }
 
@@ -735,12 +734,12 @@
 
 .llm-tool-history {
   font-family: var(--font-monospace);
-  color: var(--lh-blue-light, var(--text-accent));
+  color: var(--llm-blue-light, var(--text-accent));
 }
 
 /* Clickable file links */
 .llm-file-link {
-  color: var(--lh-blue-light, var(--text-accent));
+  color: var(--llm-blue-light, var(--text-accent));
   text-decoration: underline;
   cursor: pointer;
   font-family: var(--font-monospace);
@@ -748,7 +747,7 @@
 }
 
 .llm-file-link:hover {
-  color: var(--lh-gold);
+  color: var(--llm-accent);
 }
 
 .llm-progress {
@@ -762,7 +761,7 @@
 }
 
 .llm-progress-tool {
-  background-color: var(--lh-gold-subtle, var(--background-modifier-info));
+  background-color: var(--llm-accent-subtle, var(--background-modifier-info));
   color: var(--text-normal);
   border: 1px solid rgba(253, 195, 0, 0.25);
 }
@@ -770,13 +769,13 @@
 .llm-progress-thinking {
   background-color: var(--background-modifier-message);
   color: var(--text-muted);
-  border: 1px solid var(--lh-cool-gray, var(--background-modifier-border));
+  border: 1px solid var(--llm-border, var(--background-modifier-border));
 }
 
 .llm-progress-status {
   background-color: var(--background-secondary);
   color: var(--text-muted);
-  border: 1px solid var(--lh-cool-gray, var(--background-modifier-border));
+  border: 1px solid var(--llm-border, var(--background-modifier-border));
 }
 
 .llm-progress-icon {
@@ -820,7 +819,7 @@
 .llm-message-content h6 {
   margin: 0.5em 0 0.3em 0;
   font-weight: 700;
-  font-family: var(--lh-font);
+  font-family: var(--llm-font);
 }
 
 .llm-message-content h1 { font-size: 1.4em; }
@@ -838,19 +837,19 @@
 }
 
 .llm-message-content blockquote {
-  border-left: 3px solid var(--lh-gold);
+  border-left: 3px solid var(--llm-accent);
   margin: 0.5em 0;
   padding-left: 10px;
   color: var(--text-muted);
 }
 
 .llm-message-content a {
-  color: var(--lh-blue-light, var(--text-accent));
+  color: var(--llm-blue-light, var(--text-accent));
   text-decoration: none;
 }
 
 .llm-message-content a:hover {
-  color: var(--lh-gold);
+  color: var(--llm-accent);
   text-decoration: underline;
 }
 
@@ -870,24 +869,24 @@
 
 .llm-message-content th,
 .llm-message-content td {
-  border: 1px solid var(--lh-cool-gray, var(--background-modifier-border));
+  border: 1px solid var(--llm-border, var(--background-modifier-border));
   padding: 6px 10px;
   text-align: left;
 }
 
 .llm-message-content th {
-  background-color: var(--lh-navy);
+  background-color: var(--llm-navy);
   color: #ffffff;
   font-weight: 600;
 }
 
 .theme-dark .llm-message-content th {
-  background-color: var(--lh-navy-light);
+  background-color: var(--llm-navy-light);
 }
 
 .llm-message-content hr {
   border: none;
-  border-top: 1px solid var(--lh-cool-gray, var(--background-modifier-border));
+  border-top: 1px solid var(--llm-border, var(--background-modifier-border));
   margin: 1em 0;
 }
 
@@ -903,12 +902,12 @@
 }
 
 .llm-chat-messages::-webkit-scrollbar-thumb {
-  background-color: var(--lh-blue);
+  background-color: var(--llm-blue);
   border-radius: 3px;
 }
 
 .llm-chat-messages::-webkit-scrollbar-thumb:hover {
-  background-color: var(--lh-gold);
+  background-color: var(--llm-accent);
 }
 
 /* ============================================
@@ -917,7 +916,7 @@
 .llm-settings h3 {
   margin-top: 24px;
   margin-bottom: 8px;
-  font-family: var(--lh-font, inherit);
+  font-family: var(--llm-font, inherit);
   border-bottom: 1px solid var(--background-modifier-border);
   padding-bottom: 6px;
 }
@@ -930,7 +929,7 @@
 
 .llm-provider-name {
   font-weight: 600;
-  font-family: var(--lh-font, inherit);
+  font-family: var(--llm-font, inherit);
 }
 
 .llm-provider-badge {
@@ -944,7 +943,7 @@
 
 .llm-badge-enabled {
   background-color: rgba(253, 195, 0, 0.15);
-  color: var(--lh-gold, #fdc300);
+  color: var(--llm-accent, #fdc300);
 }
 
 .llm-badge-disabled {
@@ -970,7 +969,7 @@
   color: var(--text-muted);
   cursor: pointer;
   padding: 4px 0;
-  font-family: var(--lh-font, inherit);
+  font-family: var(--llm-font, inherit);
 }
 
 .llm-advanced-toggle summary:hover {
@@ -998,7 +997,7 @@
   cursor: pointer;
   font-weight: 600;
   font-size: 1em;
-  font-family: var(--lh-font, inherit);
+  font-family: var(--llm-font, inherit);
   padding: 4px;
 }
 
@@ -1022,11 +1021,11 @@
 .llm-connection-result {
   font-size: 0.85em;
   margin-right: 8px;
-  font-family: var(--lh-font, inherit);
+  font-family: var(--llm-font, inherit);
 }
 
 .llm-connection-success {
-  color: var(--lh-gold, #fdc300);
+  color: var(--llm-accent, #fdc300);
   font-weight: 600;
 }
 
