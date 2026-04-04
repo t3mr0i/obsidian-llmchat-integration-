@@ -174,9 +174,11 @@ export class VaultSearch {
   /**
    * Split markdown content into chunks by headings.
    */
+  private static readonly MAX_CHUNK_CHARS = 2000;
+
   private splitByHeadings(content: string): { heading: string; text: string }[] {
     const lines = content.split("\n");
-    const chunks: { heading: string; text: string }[] = [];
+    const rawChunks: { heading: string; text: string }[] = [];
     let currentHeading = "";
     let currentLines: string[] = [];
 
@@ -197,7 +199,7 @@ export class VaultSearch {
 
       if (headingMatch) {
         if (currentLines.length > 0) {
-          chunks.push({ heading: currentHeading, text: currentLines.join("\n") });
+          rawChunks.push({ heading: currentHeading, text: currentLines.join("\n") });
         }
         currentHeading = headingMatch[2].trim();
         currentLines = [line];
@@ -207,7 +209,32 @@ export class VaultSearch {
     }
 
     if (currentLines.length > 0) {
-      chunks.push({ heading: currentHeading, text: currentLines.join("\n") });
+      rawChunks.push({ heading: currentHeading, text: currentLines.join("\n") });
+    }
+
+    // Split oversized chunks at paragraph boundaries
+    const chunks: { heading: string; text: string }[] = [];
+    for (const chunk of rawChunks) {
+      if (chunk.text.length <= VaultSearch.MAX_CHUNK_CHARS) {
+        chunks.push(chunk);
+        continue;
+      }
+
+      // Split at double-newlines (paragraph breaks)
+      const paragraphs = chunk.text.split(/\n\n+/);
+      let buf = "";
+      let partNum = 0;
+      for (const para of paragraphs) {
+        if (buf.length + para.length > VaultSearch.MAX_CHUNK_CHARS && buf.length > 0) {
+          chunks.push({ heading: chunk.heading + (partNum > 0 ? ` (${partNum + 1})` : ""), text: buf.trim() });
+          partNum++;
+          buf = "";
+        }
+        buf += (buf ? "\n\n" : "") + para;
+      }
+      if (buf.trim()) {
+        chunks.push({ heading: chunk.heading + (partNum > 0 ? ` (${partNum + 1})` : ""), text: buf.trim() });
+      }
     }
 
     return chunks;

@@ -11,7 +11,7 @@ import {
 import type LLMPlugin from "../../main";
 import type { ChatSession } from "../../main";
 import type { LLMProvider, ConversationMessage, ProgressEvent } from "../types";
-import { ACP_SUPPORTED_PROVIDERS, PROVIDER_MODELS } from "../types";
+import { ACP_SUPPORTED_PROVIDERS } from "../types";
 import { fetchModelsForProvider } from "../utils/modelFetcher";
 import { LLMExecutor } from "../executor/LLMExecutor";
 import { AcpExecutor } from "../executor/AcpExecutor";
@@ -49,7 +49,6 @@ export class ChatView extends ItemView {
   private markdownComponents: Component[] = [];
   private toolHistory: string[] = [];
   private recentStatuses: string[] = [];
-  private hasActiveSession = false; // Track if we have an active Claude session
   private acpConnectionPromise: Promise<void> | null = null; // Track in-flight ACP connection
   private vaultSearch: VaultSearch;
 
@@ -163,9 +162,14 @@ export class ChatView extends ItemView {
     // Provider dropdown
     this.providerSelectEl = selectorRow.createEl("select", { cls: "llm-provider-select" });
     const allProviders: LLMProvider[] = ["claude", "opencode", "codex", "gemini", "local"];
-    for (const p of allProviders) {
-      const config = this.plugin.settings.providers[p];
-      if (!config?.enabled) continue;
+    const enabledProviders = allProviders.filter((p) => this.plugin.settings.providers[p]?.enabled);
+
+    // If current provider is not enabled, switch to first enabled one
+    if (enabledProviders.length > 0 && !enabledProviders.includes(this.currentProvider)) {
+      this.currentProvider = enabledProviders[0];
+    }
+
+    for (const p of enabledProviders) {
       const opt = this.providerSelectEl.createEl("option", {
         value: p,
         text: PROVIDER_DISPLAY_NAMES[p],
@@ -182,14 +186,28 @@ export class ChatView extends ItemView {
 
     // Model dropdown
     this.modelSelectEl = selectorRow.createEl("select", { cls: "llm-model-select" });
+    this.modelSelectEl.addEventListener("change", async () => {
+      const newModel = this.modelSelectEl!.value;
+      this.plugin.settings.providers[this.currentProvider].model = newModel || undefined;
+      await this.plugin.saveSettings();
+      this.plugin.updateStatusBar(this.currentProvider);
+    });
     this.refreshModelSelect();
+
+    // Export conversation button
+    const exportBtn = selectorRow.createEl("button", {
+      cls: "llm-export-btn clickable-icon",
+      attr: { "aria-label": "Save conversation as note" },
+    });
+    setIcon(exportBtn, "download");
+    exportBtn.addEventListener("click", () => this.exportConversation());
 
     // Update status bar to show initial provider
     this.plugin.updateStatusBar(this.currentProvider);
   }
 
   /**
-   * Refresh the model dropdown for the current provider
+   * Refresh the model dropdown options for the current provider
    */
   private async refreshModelSelect() {
     if (!this.modelSelectEl) return;
@@ -216,21 +234,6 @@ export class ChatView extends ItemView {
       this.modelSelectEl.empty();
       this.modelSelectEl.createEl("option", { value: "", text: "Default" });
     }
-
-    this.modelSelectEl.addEventListener("change", async () => {
-      const newModel = this.modelSelectEl!.value;
-      this.plugin.settings.providers[this.currentProvider].model = newModel || undefined;
-      await this.plugin.saveSettings();
-      this.plugin.updateStatusBar(this.currentProvider);
-    });
-
-    // Export conversation button
-    const exportBtn = selectorRow.createEl("button", {
-      cls: "llm-export-btn clickable-icon",
-      attr: { "aria-label": "Save conversation as note" },
-    });
-    setIcon(exportBtn, "download");
-    exportBtn.addEventListener("click", () => this.exportConversation());
   }
 
   /**
@@ -464,7 +467,7 @@ export class ChatView extends ItemView {
         contentEl.querySelectorAll("a.internal-link").forEach((link) => {
           link.addEventListener("click", (e) => {
             e.preventDefault();
-            const href = link.getAttribute("data-href");
+            const href = (link as HTMLElement).dataset.href;
             if (href) {
               this.app.workspace.openLinkText(href, sourcePath);
             }
@@ -508,8 +511,137 @@ export class ChatView extends ItemView {
     };
     this.inputEl.addEventListener("input", autoGrow);
 
-    // Enter to send, Shift+Enter for newline (common chat pattern)
+    // [[Note]] suggest dropdown
+    const suggestContainer = inputContainer.createDiv({ cls: "llm-note-suggest" });
+    suggestContainer.style.display = "none";
+    let suggestItems: TFile[] = [];
+    let suggestIdx = -1;
+    let suggestStart = -1; // cursor position where [[ started
+
+    const closeSuggest = () => {
+      suggestContainer.style.display = "none";
+      suggestContainer.empty();
+      suggestItems = [];
+      suggestIdx = -1;
+      suggestStart = -1;
+    };
+
+    const updateSuggest = () => {
+      if (!this.inputEl) return;
+      const val = this.inputEl.value;
+      const cursor = this.inputEl.selectionStart;
+
+      // Find the last [[ before cursor that hasn't been closed with ]]
+      const before = val.slice(0, cursor);
+      const openIdx = before.lastIndexOf("[[");
+      if (openIdx < 0 || before.indexOf("]]", openIdx) >= 0) {
+        closeSuggest();
+        return;
+      }
+
+      suggestStart = openIdx;
+      const query = before.slice(openIdx + 2).toLowerCase();
+      const allFiles = this.app.vault.getMarkdownFiles();
+
+      // Filter and sort by relevance
+      suggestItems = allFiles
+        .filter((f) => f.basename.toLowerCase().includes(query) || f.path.toLowerCase().includes(query))
+        .sort((a, b) => {
+          // Prioritize basename matches
+          const aBase = a.basename.toLowerCase().startsWith(query) ? 0 : 1;
+          const bBase = b.basename.toLowerCase().startsWith(query) ? 0 : 1;
+          return aBase - bBase || a.basename.localeCompare(b.basename);
+        })
+        .slice(0, 8);
+
+      if (suggestItems.length === 0) {
+        closeSuggest();
+        return;
+      }
+
+      suggestContainer.empty();
+      suggestContainer.style.display = "block";
+      suggestIdx = 0;
+
+      suggestItems.forEach((file, i) => {
+        const item = suggestContainer.createDiv({
+          cls: `llm-suggest-item ${i === suggestIdx ? "llm-suggest-active" : ""}`,
+          text: file.basename,
+        });
+        if (file.parent && file.parent.path !== "/") {
+          item.createSpan({ cls: "llm-suggest-path", text: ` — ${file.parent.path}` });
+        }
+        item.addEventListener("mousedown", (e) => {
+          e.preventDefault(); // prevent textarea blur
+          acceptSuggest(i);
+        });
+      });
+    };
+
+    const renderSuggestHighlight = () => {
+      suggestContainer.querySelectorAll(".llm-suggest-item").forEach((el, i) => {
+        el.toggleClass("llm-suggest-active", i === suggestIdx);
+      });
+    };
+
+    const acceptSuggest = (idx: number) => {
+      if (!this.inputEl || idx < 0 || idx >= suggestItems.length) return;
+      const file = suggestItems[idx];
+      const val = this.inputEl.value;
+      const cursor = this.inputEl.selectionStart;
+      // Replace [[query with [[filename]]
+      const before = val.slice(0, suggestStart);
+      const after = val.slice(cursor);
+      const insert = `[[${file.basename}]]`;
+      this.inputEl.value = before + insert + after;
+      const newCursor = before.length + insert.length;
+      this.inputEl.setSelectionRange(newCursor, newCursor);
+      this.inputEl.focus();
+      closeSuggest();
+      autoGrow();
+    };
+
+    this.inputEl.addEventListener("input", updateSuggest);
+    this.inputEl.addEventListener("blur", () => {
+      // Delay to allow mousedown on suggest items
+      setTimeout(closeSuggest, 200);
+    });
+
+    // Enter to send, Shift+Enter for newline, arrows for suggest navigation
     this.inputEl.addEventListener("keydown", (e) => {
+      // Handle suggest navigation
+      if (suggestContainer.style.display !== "none" && suggestItems.length > 0) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          suggestIdx = (suggestIdx + 1) % suggestItems.length;
+          renderSuggestHighlight();
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          suggestIdx = (suggestIdx - 1 + suggestItems.length) % suggestItems.length;
+          renderSuggestHighlight();
+          return;
+        }
+        if (e.key === "Enter" || e.key === "Tab") {
+          e.preventDefault();
+          e.stopPropagation();
+          acceptSuggest(suggestIdx);
+          return;
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          closeSuggest();
+          return;
+        }
+      }
+
+      if (e.key === "Escape" && this.isLoading) {
+        e.preventDefault();
+        this.cancelRequest();
+        return;
+      }
+
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         e.stopPropagation();
@@ -969,10 +1101,12 @@ export class ChatView extends ItemView {
         // Build messages array for chat completions API
         const chatMessages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [];
 
-        // Add system prompt + relevant vault context (RAG)
+        // Add system prompt + relevant vault context (RAG) + referenced notes
         const systemPrompt = await this.getSystemPrompt();
         const systemParts: string[] = [];
         if (systemPrompt) systemParts.push(systemPrompt);
+        const referencedNotes = await this.resolveNoteReferences(prompt);
+        if (referencedNotes) systemParts.push(referencedNotes);
         const vaultContext = await this.vaultSearch.buildContext(prompt, this.getContextBudget());
         if (vaultContext) systemParts.push(vaultContext);
         const dailyNote = await this.getDailyNoteContext();
@@ -1304,16 +1438,57 @@ export class ChatView extends ItemView {
     this.recentStatuses = [];
   }
 
+  /**
+   * Resolve [[Note]] references in a prompt — read referenced notes and
+   * return their content as a context block.
+   */
+  private async resolveNoteReferences(prompt: string): Promise<string> {
+    const wikiLinkRegex = /\[\[([^\]]+)\]\]/g;
+    const matches = [...prompt.matchAll(wikiLinkRegex)];
+    if (matches.length === 0) return "";
+
+    const parts: string[] = [];
+    const seen = new Set<string>();
+
+    for (const match of matches) {
+      const linkText = match[1];
+      if (seen.has(linkText)) continue;
+      seen.add(linkText);
+
+      // Resolve the link to a file
+      const file = this.app.metadataCache.getFirstLinkpathDest(linkText, "");
+      if (!(file instanceof TFile)) continue;
+
+      try {
+        const content = await this.app.vault.cachedRead(file);
+        if (content.trim()) {
+          parts.push(`=== Referenced note: ${file.basename} (${file.path}) ===\n${content}`);
+        }
+      } catch {
+        // Skip unreadable files
+      }
+    }
+
+    if (parts.length === 0) return "";
+    return parts.join("\n\n");
+  }
+
   private async buildContextPrompt(currentPrompt: string): Promise<string> {
     const systemPrompt = await this.getSystemPrompt();
     const vaultContext = await this.vaultSearch.buildContext(currentPrompt, this.getContextBudget());
     const dailyNoteContext = await this.getDailyNoteContext();
+    const referencedNotes = await this.resolveNoteReferences(currentPrompt);
 
     const contextParts: string[] = [];
 
     // System prompt (custom file or auto-generated default)
     if (systemPrompt) {
       contextParts.push(`System: ${systemPrompt}`);
+    }
+
+    // Add explicitly referenced notes (via [[Note]] syntax)
+    if (referencedNotes) {
+      contextParts.push(referencedNotes);
     }
 
     // Add today's daily note context

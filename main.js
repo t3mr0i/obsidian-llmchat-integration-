@@ -20525,7 +20525,7 @@ var SPACE_OR_PUNCTUATION = /[\n\r\p{Z}\p{P}]+/u;
 
 // src/utils/vaultSearch.ts
 var import_obsidian4 = require("obsidian");
-var VaultSearch = class {
+var _VaultSearch = class _VaultSearch {
   constructor(app) {
     this.indexed = false;
     this.indexing = false;
@@ -20643,13 +20643,10 @@ var VaultSearch = class {
       });
     }
   }
-  /**
-   * Split markdown content into chunks by headings.
-   */
   splitByHeadings(content) {
     var _a3;
     const lines = content.split("\n");
-    const chunks = [];
+    const rawChunks = [];
     let currentHeading = "";
     let currentLines = [];
     let startIdx = 0;
@@ -20666,7 +20663,7 @@ var VaultSearch = class {
       const headingMatch = line.match(/^(#{1,3})\s+(.+)/);
       if (headingMatch) {
         if (currentLines.length > 0) {
-          chunks.push({ heading: currentHeading, text: currentLines.join("\n") });
+          rawChunks.push({ heading: currentHeading, text: currentLines.join("\n") });
         }
         currentHeading = headingMatch[2].trim();
         currentLines = [line];
@@ -20675,7 +20672,28 @@ var VaultSearch = class {
       }
     }
     if (currentLines.length > 0) {
-      chunks.push({ heading: currentHeading, text: currentLines.join("\n") });
+      rawChunks.push({ heading: currentHeading, text: currentLines.join("\n") });
+    }
+    const chunks = [];
+    for (const chunk of rawChunks) {
+      if (chunk.text.length <= _VaultSearch.MAX_CHUNK_CHARS) {
+        chunks.push(chunk);
+        continue;
+      }
+      const paragraphs = chunk.text.split(/\n\n+/);
+      let buf = "";
+      let partNum = 0;
+      for (const para of paragraphs) {
+        if (buf.length + para.length > _VaultSearch.MAX_CHUNK_CHARS && buf.length > 0) {
+          chunks.push({ heading: chunk.heading + (partNum > 0 ? ` (${partNum + 1})` : ""), text: buf.trim() });
+          partNum++;
+          buf = "";
+        }
+        buf += (buf ? "\n\n" : "") + para;
+      }
+      if (buf.trim()) {
+        chunks.push({ heading: chunk.heading + (partNum > 0 ? ` (${partNum + 1})` : ""), text: buf.trim() });
+      }
     }
     return chunks;
   }
@@ -20779,6 +20797,11 @@ ${activeContent}
     return this.index.documentCount;
   }
 };
+/**
+ * Split markdown content into chunks by headings.
+ */
+_VaultSearch.MAX_CHUNK_CHARS = 2e3;
+var VaultSearch = _VaultSearch;
 
 // src/views/ChatView.ts
 var CHAT_VIEW_TYPE = "llm-chat-view";
@@ -20807,8 +20830,6 @@ var ChatView = class _ChatView extends import_obsidian5.ItemView {
     this.markdownComponents = [];
     this.toolHistory = [];
     this.recentStatuses = [];
-    this.hasActiveSession = false;
-    // Track if we have an active Claude session
     this.acpConnectionPromise = null;
     this.providerSelectEl = null;
     this.modelSelectEl = null;
@@ -20886,12 +20907,17 @@ var ChatView = class _ChatView extends import_obsidian5.ItemView {
       this.createNewChat();
     }
     this.renderTabs();
-    const selectorRow2 = header.createDiv({ cls: "llm-selector-row" });
-    this.providerSelectEl = selectorRow2.createEl("select", { cls: "llm-provider-select" });
+    const selectorRow = header.createDiv({ cls: "llm-selector-row" });
+    this.providerSelectEl = selectorRow.createEl("select", { cls: "llm-provider-select" });
     const allProviders = ["claude", "opencode", "codex", "gemini", "local"];
-    for (const p of allProviders) {
-      const config2 = this.plugin.settings.providers[p];
-      if (!(config2 == null ? void 0 : config2.enabled)) continue;
+    const enabledProviders = allProviders.filter((p) => {
+      var _a3;
+      return (_a3 = this.plugin.settings.providers[p]) == null ? void 0 : _a3.enabled;
+    });
+    if (enabledProviders.length > 0 && !enabledProviders.includes(this.currentProvider)) {
+      this.currentProvider = enabledProviders[0];
+    }
+    for (const p of enabledProviders) {
       const opt = this.providerSelectEl.createEl("option", {
         value: p,
         text: PROVIDER_DISPLAY_NAMES3[p]
@@ -20905,12 +20931,24 @@ var ChatView = class _ChatView extends import_obsidian5.ItemView {
       this.refreshModelSelect();
       this.connectAcpIfEnabled();
     });
-    this.modelSelectEl = selectorRow2.createEl("select", { cls: "llm-model-select" });
+    this.modelSelectEl = selectorRow.createEl("select", { cls: "llm-model-select" });
+    this.modelSelectEl.addEventListener("change", async () => {
+      const newModel = this.modelSelectEl.value;
+      this.plugin.settings.providers[this.currentProvider].model = newModel || void 0;
+      await this.plugin.saveSettings();
+      this.plugin.updateStatusBar(this.currentProvider);
+    });
     this.refreshModelSelect();
+    const exportBtn = selectorRow.createEl("button", {
+      cls: "llm-export-btn clickable-icon",
+      attr: { "aria-label": "Save conversation as note" }
+    });
+    (0, import_obsidian5.setIcon)(exportBtn, "download");
+    exportBtn.addEventListener("click", () => this.exportConversation());
     this.plugin.updateStatusBar(this.currentProvider);
   }
   /**
-   * Refresh the model dropdown for the current provider
+   * Refresh the model dropdown options for the current provider
    */
   async refreshModelSelect() {
     if (!this.modelSelectEl) return;
@@ -20932,18 +20970,6 @@ var ChatView = class _ChatView extends import_obsidian5.ItemView {
       this.modelSelectEl.empty();
       this.modelSelectEl.createEl("option", { value: "", text: "Default" });
     }
-    this.modelSelectEl.addEventListener("change", async () => {
-      const newModel = this.modelSelectEl.value;
-      this.plugin.settings.providers[this.currentProvider].model = newModel || void 0;
-      await this.plugin.saveSettings();
-      this.plugin.updateStatusBar(this.currentProvider);
-    });
-    const exportBtn = selectorRow.createEl("button", {
-      cls: "llm-export-btn clickable-icon",
-      attr: { "aria-label": "Save conversation as note" }
-    });
-    (0, import_obsidian5.setIcon)(exportBtn, "download");
-    exportBtn.addEventListener("click", () => this.exportConversation());
   }
   /**
    * Export the entire conversation as a markdown note
@@ -21137,7 +21163,7 @@ var ChatView = class _ChatView extends import_obsidian5.ItemView {
         contentEl.querySelectorAll("a.internal-link").forEach((link) => {
           link.addEventListener("click", (e) => {
             e.preventDefault();
-            const href = link.getAttribute("data-href");
+            const href = link.dataset.href;
             if (href) {
               this.app.workspace.openLinkText(href, sourcePath);
             }
@@ -21167,7 +21193,112 @@ var ChatView = class _ChatView extends import_obsidian5.ItemView {
       this.inputEl.style.height = Math.min(this.inputEl.scrollHeight, 200) + "px";
     };
     this.inputEl.addEventListener("input", autoGrow);
+    const suggestContainer = inputContainer.createDiv({ cls: "llm-note-suggest" });
+    suggestContainer.style.display = "none";
+    let suggestItems = [];
+    let suggestIdx = -1;
+    let suggestStart = -1;
+    const closeSuggest = () => {
+      suggestContainer.style.display = "none";
+      suggestContainer.empty();
+      suggestItems = [];
+      suggestIdx = -1;
+      suggestStart = -1;
+    };
+    const updateSuggest = () => {
+      if (!this.inputEl) return;
+      const val = this.inputEl.value;
+      const cursor = this.inputEl.selectionStart;
+      const before = val.slice(0, cursor);
+      const openIdx = before.lastIndexOf("[[");
+      if (openIdx < 0 || before.indexOf("]]", openIdx) >= 0) {
+        closeSuggest();
+        return;
+      }
+      suggestStart = openIdx;
+      const query = before.slice(openIdx + 2).toLowerCase();
+      const allFiles = this.app.vault.getMarkdownFiles();
+      suggestItems = allFiles.filter((f) => f.basename.toLowerCase().includes(query) || f.path.toLowerCase().includes(query)).sort((a, b) => {
+        const aBase = a.basename.toLowerCase().startsWith(query) ? 0 : 1;
+        const bBase = b.basename.toLowerCase().startsWith(query) ? 0 : 1;
+        return aBase - bBase || a.basename.localeCompare(b.basename);
+      }).slice(0, 8);
+      if (suggestItems.length === 0) {
+        closeSuggest();
+        return;
+      }
+      suggestContainer.empty();
+      suggestContainer.style.display = "block";
+      suggestIdx = 0;
+      suggestItems.forEach((file2, i) => {
+        const item = suggestContainer.createDiv({
+          cls: `llm-suggest-item ${i === suggestIdx ? "llm-suggest-active" : ""}`,
+          text: file2.basename
+        });
+        if (file2.parent && file2.parent.path !== "/") {
+          item.createSpan({ cls: "llm-suggest-path", text: ` \u2014 ${file2.parent.path}` });
+        }
+        item.addEventListener("mousedown", (e) => {
+          e.preventDefault();
+          acceptSuggest(i);
+        });
+      });
+    };
+    const renderSuggestHighlight = () => {
+      suggestContainer.querySelectorAll(".llm-suggest-item").forEach((el, i) => {
+        el.toggleClass("llm-suggest-active", i === suggestIdx);
+      });
+    };
+    const acceptSuggest = (idx) => {
+      if (!this.inputEl || idx < 0 || idx >= suggestItems.length) return;
+      const file2 = suggestItems[idx];
+      const val = this.inputEl.value;
+      const cursor = this.inputEl.selectionStart;
+      const before = val.slice(0, suggestStart);
+      const after = val.slice(cursor);
+      const insert = `[[${file2.basename}]]`;
+      this.inputEl.value = before + insert + after;
+      const newCursor = before.length + insert.length;
+      this.inputEl.setSelectionRange(newCursor, newCursor);
+      this.inputEl.focus();
+      closeSuggest();
+      autoGrow();
+    };
+    this.inputEl.addEventListener("input", updateSuggest);
+    this.inputEl.addEventListener("blur", () => {
+      setTimeout(closeSuggest, 200);
+    });
     this.inputEl.addEventListener("keydown", (e) => {
+      if (suggestContainer.style.display !== "none" && suggestItems.length > 0) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          suggestIdx = (suggestIdx + 1) % suggestItems.length;
+          renderSuggestHighlight();
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          suggestIdx = (suggestIdx - 1 + suggestItems.length) % suggestItems.length;
+          renderSuggestHighlight();
+          return;
+        }
+        if (e.key === "Enter" || e.key === "Tab") {
+          e.preventDefault();
+          e.stopPropagation();
+          acceptSuggest(suggestIdx);
+          return;
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          closeSuggest();
+          return;
+        }
+      }
+      if (e.key === "Escape" && this.isLoading) {
+        e.preventDefault();
+        this.cancelRequest();
+        return;
+      }
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         e.stopPropagation();
@@ -21536,6 +21667,8 @@ ${trimmedContent}
         const systemPrompt = await this.getSystemPrompt();
         const systemParts = [];
         if (systemPrompt) systemParts.push(systemPrompt);
+        const referencedNotes = await this.resolveNoteReferences(prompt);
+        if (referencedNotes) systemParts.push(referencedNotes);
         const vaultContext = await this.vaultSearch.buildContext(prompt, this.getContextBudget());
         if (vaultContext) systemParts.push(vaultContext);
         const dailyNote = await this.getDailyNoteContext();
@@ -21787,13 +21920,45 @@ ${trimmedContent}
     this.toolHistory = [];
     this.recentStatuses = [];
   }
+  /**
+   * Resolve [[Note]] references in a prompt — read referenced notes and
+   * return their content as a context block.
+   */
+  async resolveNoteReferences(prompt) {
+    const wikiLinkRegex = /\[\[([^\]]+)\]\]/g;
+    const matches = [...prompt.matchAll(wikiLinkRegex)];
+    if (matches.length === 0) return "";
+    const parts = [];
+    const seen = /* @__PURE__ */ new Set();
+    for (const match of matches) {
+      const linkText = match[1];
+      if (seen.has(linkText)) continue;
+      seen.add(linkText);
+      const file2 = this.app.metadataCache.getFirstLinkpathDest(linkText, "");
+      if (!(file2 instanceof import_obsidian5.TFile)) continue;
+      try {
+        const content = await this.app.vault.cachedRead(file2);
+        if (content.trim()) {
+          parts.push(`=== Referenced note: ${file2.basename} (${file2.path}) ===
+${content}`);
+        }
+      } catch (e) {
+      }
+    }
+    if (parts.length === 0) return "";
+    return parts.join("\n\n");
+  }
   async buildContextPrompt(currentPrompt) {
     const systemPrompt = await this.getSystemPrompt();
     const vaultContext = await this.vaultSearch.buildContext(currentPrompt, this.getContextBudget());
     const dailyNoteContext = await this.getDailyNoteContext();
+    const referencedNotes = await this.resolveNoteReferences(currentPrompt);
     const contextParts = [];
     if (systemPrompt) {
       contextParts.push(`System: ${systemPrompt}`);
+    }
+    if (referencedNotes) {
+      contextParts.push(referencedNotes);
     }
     if (dailyNoteContext) {
       contextParts.push(dailyNoteContext);
