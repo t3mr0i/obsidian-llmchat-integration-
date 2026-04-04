@@ -160,11 +160,6 @@
 /* ============================================
    Chat Input
    ============================================ */
-.llm-chat-input {
-  user-select: text;
-  -webkit-user-select: text;
-}
-
 .llm-chat-input-container {
   display: flex;
   gap: 10px;
@@ -181,6 +176,8 @@
   font-family: var(--llm-font);
   font-size: 0.95em;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .llm-chat-input:focus {
@@ -484,48 +481,6 @@
   border-bottom: 2px solid var(--llm-accent, var(--background-modifier-border));
 }
 
-.llm-chat-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: center;
-  font-size: 0.85em;
-}
-
-.llm-context-toggle {
-  display: flex;
-  align-items: center;
-}
-
-.llm-toggle-label {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  cursor: pointer;
-  color: var(--text-muted);
-  font-size: 0.9em;
-}
-
-.llm-toggle-label input[type="checkbox"] {
-  margin: 0;
-  accent-color: var(--llm-accent);
-}
-
-.llm-icon-btn {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 6px;
-  color: var(--text-muted);
-  border-radius: 4px;
-  margin-left: auto;
-  transition: all 0.15s ease;
-}
-
-.llm-icon-btn:hover {
-  color: var(--text-error);
-  background-color: var(--background-modifier-hover);
-}
 
 .llm-chat-view .llm-chat-messages {
   flex: 1;
@@ -646,14 +601,6 @@
   margin-top: 8px;
 }
 
-/* Loading indicator styled as message */
-.llm-loading-content {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: var(--text-muted);
-  font-style: italic;
-}
 
 /* ============================================
    Settings Inputs
@@ -734,10 +681,6 @@
   font-size: 0.9em;
 }
 
-.llm-tool-history {
-  font-family: var(--font-monospace);
-  color: var(--llm-blue-light, var(--text-accent));
-}
 
 /* Clickable file links */
 .llm-file-link {

@@ -332,8 +332,9 @@ export default class LLMPlugin extends Plugin {
 
   async saveChatSessions(sessions: ChatSession[]) {
     this.chatSessions = sessions;
-    const merged = await this.mergeBeforeSave();
-    await this.saveData(merged);
+    // Skip full merge for session saves — sessions are only modified locally,
+    // so a lightweight save is sufficient and avoids extra disk reads.
+    await this.saveData({ ...this.settings, _chatSessions: this.chatSessions });
   }
 
   /**

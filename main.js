@@ -20529,14 +20529,21 @@ var _VaultSearch = class _VaultSearch {
   constructor(app) {
     this.indexed = false;
     this.indexing = false;
-    /** Track mtime per file to skip unchanged files on full re-index */
-    this.fileMtimes = /* @__PURE__ */ new Map();
+    /** Track chunk count per file for efficient removal */
+    this.fileChunkCounts = /* @__PURE__ */ new Map();
+    /** Store chunk content separately to avoid doubling RAM in MiniSearch */
+    this.chunkContent = /* @__PURE__ */ new Map();
     /** Vault event refs for cleanup */
     this.eventRefs = [];
+    /** Debounce timers for modify events */
+    this.modifyTimers = /* @__PURE__ */ new Map();
+    /** Pending index promise for callers to await */
+    this.indexPromise = null;
     this.app = app;
     this.index = new MiniSearch({
       fields: ["title", "heading", "content", "tags"],
-      storeFields: ["path", "title", "heading", "content"],
+      // Don't store content in MiniSearch — we keep it in chunkContent Map
+      storeFields: ["path", "title", "heading"],
       searchOptions: {
         boost: { title: 3, heading: 2, tags: 2, content: 1 },
         fuzzy: 0.2,
@@ -20546,38 +20553,61 @@ var _VaultSearch = class _VaultSearch {
   }
   /**
    * Build the full index and start listening for vault changes.
+   * Non-blocking: indexes in batches via requestIdleCallback.
    */
   async ensureIndex() {
-    if (this.indexing) return;
     if (this.indexed) return;
+    if (this.indexPromise) return this.indexPromise;
+    this.indexPromise = this.doBatchIndex();
+    return this.indexPromise;
+  }
+  async doBatchIndex() {
     this.indexing = true;
     try {
       const files = this.app.vault.getMarkdownFiles();
-      for (const file2 of files) {
-        await this.indexFile(file2);
+      const BATCH_SIZE = 50;
+      for (let i = 0; i < files.length; i += BATCH_SIZE) {
+        const batch = files.slice(i, i + BATCH_SIZE);
+        for (const file2 of batch) {
+          await this.indexFile(file2);
+        }
+        if (i + BATCH_SIZE < files.length) {
+          await this.yieldToMain();
+        }
       }
       this.indexed = true;
       this.registerVaultEvents();
     } finally {
       this.indexing = false;
+      this.indexPromise = null;
     }
+  }
+  /**
+   * Yield control back to the main thread to prevent UI freezing.
+   */
+  yieldToMain() {
+    return new Promise((resolve) => {
+      if (typeof requestIdleCallback !== "undefined") {
+        requestIdleCallback(() => resolve(), { timeout: 100 });
+      } else {
+        setTimeout(resolve, 0);
+      }
+    });
   }
   /**
    * Listen for vault file changes and update the index incrementally.
    */
   registerVaultEvents() {
+    const isMd = (file2) => file2 instanceof Object && "extension" in file2 && file2.extension === "md";
     this.eventRefs.push(
       this.app.vault.on("modify", (file2) => {
-        if (file2 instanceof Object && "extension" in file2 && file2.extension === "md") {
-          this.reindexFile(file2);
-        }
+        if (!isMd(file2)) return;
+        this.debouncedReindex(file2);
       })
     );
     this.eventRefs.push(
       this.app.vault.on("create", (file2) => {
-        if (file2 instanceof Object && "extension" in file2 && file2.extension === "md") {
-          this.indexFile(file2);
-        }
+        if (isMd(file2)) this.indexFile(file2);
       })
     );
     this.eventRefs.push(
@@ -20588,29 +20618,46 @@ var _VaultSearch = class _VaultSearch {
     this.eventRefs.push(
       this.app.vault.on("rename", (file2, oldPath) => {
         this.removeFile(oldPath);
-        if (file2 instanceof Object && "extension" in file2 && file2.extension === "md") {
-          this.indexFile(file2);
-        }
+        if (isMd(file2)) this.indexFile(file2);
       })
     );
   }
   /**
+   * Debounce re-indexing to avoid thrashing on rapid saves (e.g., auto-save).
+   */
+  debouncedReindex(file2) {
+    const existing = this.modifyTimers.get(file2.path);
+    if (existing) clearTimeout(existing);
+    this.modifyTimers.set(
+      file2.path,
+      setTimeout(() => {
+        this.modifyTimers.delete(file2.path);
+        this.reindexFile(file2);
+      }, _VaultSearch.MODIFY_DEBOUNCE_MS)
+    );
+  }
+  /**
    * Remove all chunks belonging to a file path.
+   * Uses tracked chunk count instead of guessing up to 100.
    */
   removeFile(path) {
-    this.fileMtimes.delete(path);
-    const toRemove = Array.from({ length: 100 }, (_, i) => `${path}#${i}`);
-    for (const id of toRemove) {
+    var _a3;
+    const count = (_a3 = this.fileChunkCounts.get(path)) != null ? _a3 : 0;
+    for (let i = 0; i < count; i++) {
+      const id = `${path}#${i}`;
       try {
         this.index.discard(id);
       } catch (e) {
-        break;
       }
+      this.chunkContent.delete(id);
+    }
+    this.fileChunkCounts.delete(path);
+    const timer = this.modifyTimers.get(path);
+    if (timer) {
+      clearTimeout(timer);
+      this.modifyTimers.delete(path);
     }
   }
-  /**
-   * Re-index a single file (remove old chunks, add new ones).
-   */
   async reindexFile(file2) {
     this.removeFile(file2.path);
     await this.indexFile(file2);
@@ -20626,23 +20673,31 @@ var _VaultSearch = class _VaultSearch {
       return;
     }
     if (!content.trim()) return;
-    this.fileMtimes.set(file2.path, file2.stat.mtime);
     const title = file2.basename;
     const tags = this.extractTags(content);
     const chunks = this.splitByHeadings(content);
+    let chunkCount = 0;
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
       if (!chunk.text.trim()) continue;
+      const id = `${file2.path}#${i}`;
       this.index.add({
-        id: `${file2.path}#${i}`,
+        id,
         path: file2.path,
         title,
         heading: chunk.heading,
         content: chunk.text,
         tags
       });
+      this.chunkContent.set(id, chunk.text);
+      chunkCount = i + 1;
     }
+    this.fileChunkCounts.set(file2.path, chunkCount);
   }
+  /**
+   * Split markdown content into chunks by headings.
+   * Oversized sections are split at paragraph boundaries.
+   */
   splitByHeadings(content) {
     var _a3;
     const lines = content.split("\n");
@@ -20660,7 +20715,7 @@ var _VaultSearch = class _VaultSearch {
     }
     for (let i = startIdx; i < lines.length; i++) {
       const line = lines[i];
-      const headingMatch = line.match(/^(#{1,3})\s+(.+)/);
+      const headingMatch = /^(#{1,3})\s+(.+)/.exec(line);
       if (headingMatch) {
         if (currentLines.length > 0) {
           rawChunks.push({ heading: currentHeading, text: currentLines.join("\n") });
@@ -20685,14 +20740,16 @@ var _VaultSearch = class _VaultSearch {
       let partNum = 0;
       for (const para of paragraphs) {
         if (buf.length + para.length > _VaultSearch.MAX_CHUNK_CHARS && buf.length > 0) {
-          chunks.push({ heading: chunk.heading + (partNum > 0 ? ` (${partNum + 1})` : ""), text: buf.trim() });
+          const suffix = partNum > 0 ? ` (${partNum + 1})` : "";
+          chunks.push({ heading: chunk.heading + suffix, text: buf.trim() });
           partNum++;
           buf = "";
         }
         buf += (buf ? "\n\n" : "") + para;
       }
       if (buf.trim()) {
-        chunks.push({ heading: chunk.heading + (partNum > 0 ? ` (${partNum + 1})` : ""), text: buf.trim() });
+        const suffix = partNum > 0 ? ` (${partNum + 1})` : "";
+        chunks.push({ heading: chunk.heading + suffix, text: buf.trim() });
       }
     }
     return chunks;
@@ -20702,9 +20759,9 @@ var _VaultSearch = class _VaultSearch {
    */
   extractTags(content) {
     const tags = [];
-    const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
+    const fmMatch = /^---\n([\s\S]*?)\n---/.exec(content);
     if (fmMatch) {
-      const tagLine = fmMatch[1].match(/tags:\s*\[?([^\]\n]+)/);
+      const tagLine = /tags:\s*\[?([^\]\n]+)/.exec(fmMatch[1]);
       if (tagLine) {
         tags.push(...tagLine[1].split(",").map((t) => t.trim().replace(/^#/, "")));
       }
@@ -20733,19 +20790,23 @@ var _VaultSearch = class _VaultSearch {
    */
   async search(query, maxResults = 15) {
     await this.ensureIndex();
-    const results = this.index.search(query, { limit: maxResults + 10 });
+    const results = this.index.search(query).slice(0, maxResults + 10);
     const activeNote = this.getActiveNoteContext();
     const activePath = activeNote == null ? void 0 : activeNote.path;
     const activeResults = results.filter((r) => r.path === activePath);
     const otherResults = results.filter((r) => r.path !== activePath);
     const combined = [...activeResults, ...otherResults].slice(0, maxResults);
-    return combined.map((r) => ({
-      path: r.path,
-      title: r.title,
-      heading: r.heading,
-      content: r.content,
-      score: r.score
-    }));
+    return combined.map((r) => {
+      var _a3, _b;
+      return {
+        path: r.path,
+        title: r.title,
+        heading: (_a3 = r.heading) != null ? _a3 : "",
+        // Retrieve content from our Map (not stored in MiniSearch)
+        content: (_b = this.chunkContent.get(r.id)) != null ? _b : "",
+        score: r.score
+      };
+    });
   }
   /**
    * Build a context string from search results.
@@ -20756,7 +20817,7 @@ var _VaultSearch = class _VaultSearch {
     const parts = [];
     let totalLength = 0;
     const activeNote = this.getActiveNoteContext();
-    if (activeNote && activeNote.content.trim()) {
+    if (activeNote == null ? void 0 : activeNote.content.trim()) {
       const activeBudget = Math.floor(maxChars * 0.3);
       const activeContent = activeNote.content.length > activeBudget ? activeNote.content.slice(0, activeBudget) + "\n[... rest of active note omitted]" : activeNote.content;
       const activeBlock = `=== Active note: ${activeNote.title} (${activeNote.path}) ===
@@ -20785,22 +20846,26 @@ ${activeContent}
     return parts.join("\n");
   }
   /**
-   * Clean up event listeners.
+   * Clean up event listeners and timers.
    */
   destroy() {
     for (const ref of this.eventRefs) {
       this.app.vault.offref(ref);
     }
     this.eventRefs = [];
+    for (const timer of this.modifyTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.modifyTimers.clear();
+    this.chunkContent.clear();
+    this.fileChunkCounts.clear();
   }
   get documentCount() {
     return this.index.documentCount;
   }
 };
-/**
- * Split markdown content into chunks by headings.
- */
 _VaultSearch.MAX_CHUNK_CHARS = 2e3;
+_VaultSearch.MODIFY_DEBOUNCE_MS = 1e3;
 var VaultSearch = _VaultSearch;
 
 // src/views/ChatView.ts
@@ -20812,7 +20877,7 @@ var PROVIDER_DISPLAY_NAMES3 = {
   gemini: "Gemini",
   local: "Local LLM"
 };
-var ChatView = class _ChatView extends import_obsidian5.ItemView {
+var ChatView = class extends import_obsidian5.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.messages = [];
@@ -20833,6 +20898,8 @@ var ChatView = class _ChatView extends import_obsidian5.ItemView {
     this.acpConnectionPromise = null;
     this.providerSelectEl = null;
     this.modelSelectEl = null;
+    /** Number of messages already rendered in the DOM */
+    this.renderedCount = 0;
     this.plugin = plugin;
     this.executor = new LLMExecutor(plugin.settings);
     this.acpExecutor = new AcpExecutor(plugin.settings);
@@ -21027,7 +21094,7 @@ var ChatView = class _ChatView extends import_obsidian5.ItemView {
     this.activeChatId = id;
     this.messages = target.messages;
     this.renderTabs();
-    this.renderMessagesContent();
+    this.renderMessagesContent(true);
   }
   renderTabs() {
     if (!this.tabBar) return;
@@ -21089,7 +21156,7 @@ var ChatView = class _ChatView extends import_obsidian5.ItemView {
       if (current) current.messages = this.messages;
       this.createNewChat();
       this.renderTabs();
-      this.renderMessagesContent();
+      this.renderMessagesContent(true);
       this.persistSessions();
       (_a3 = this.inputEl) == null ? void 0 : _a3.focus();
     });
@@ -21098,12 +21165,20 @@ var ChatView = class _ChatView extends import_obsidian5.ItemView {
     this.messagesContainer = container.createDiv({ cls: "llm-chat-messages" });
     this.renderMessagesContent();
   }
-  async renderMessagesContent() {
+  /**
+   * Render messages — incrementally appends only new messages
+   * instead of rebuilding the entire DOM on every call.
+   * Pass force=true (or call after tab switch) for full rebuild.
+   */
+  async renderMessagesContent(force = false) {
     var _a3;
     if (!this.messagesContainer) return;
-    this.markdownComponents.forEach((c) => c.unload());
-    this.markdownComponents = [];
-    this.messagesContainer.empty();
+    if (force || this.renderedCount > this.messages.length) {
+      this.markdownComponents.forEach((c) => c.unload());
+      this.markdownComponents = [];
+      this.messagesContainer.empty();
+      this.renderedCount = 0;
+    }
     if (this.messages.length === 0) {
       const emptyState = this.messagesContainer.createDiv({
         cls: "llm-empty-state"
@@ -21115,65 +21190,77 @@ var ChatView = class _ChatView extends import_obsidian5.ItemView {
       });
       return;
     }
+    (_a3 = this.messagesContainer.querySelector(".llm-empty-state")) == null ? void 0 : _a3.remove();
+    const startIdx = this.renderedCount;
+    for (let i = startIdx; i < this.messages.length; i++) {
+      await this.renderSingleMessage(this.messages[i]);
+    }
+    this.renderedCount = this.messages.length;
+    this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+  }
+  /**
+   * Render a single message and append it to the messages container.
+   */
+  async renderSingleMessage(msg) {
+    var _a3;
+    if (!this.messagesContainer) return;
     const activeFile = this.app.workspace.getActiveFile();
     const sourcePath = (_a3 = activeFile == null ? void 0 : activeFile.path) != null ? _a3 : "";
-    for (const msg of this.messages) {
-      const msgEl = this.messagesContainer.createDiv({
-        cls: `llm-message llm-message-${msg.role}`
-      });
-      const headerEl = msgEl.createDiv({ cls: "llm-message-header" });
-      headerEl.createSpan({
-        text: msg.role === "user" ? "You" : PROVIDER_DISPLAY_NAMES3[msg.provider],
-        cls: "llm-message-role"
-      });
-      headerEl.createSpan({
-        text: new Date(msg.timestamp).toLocaleTimeString(),
-        cls: "llm-message-time"
-      });
-      const actionsEl = headerEl.createDiv({ cls: "llm-message-actions" });
-      const copyBtn = actionsEl.createEl("button", {
+    const msgEl = this.messagesContainer.createDiv({
+      cls: `llm-message llm-message-${msg.role}`
+    });
+    const headerEl = msgEl.createDiv({ cls: "llm-message-header" });
+    headerEl.createSpan({
+      text: msg.role === "user" ? "You" : PROVIDER_DISPLAY_NAMES3[msg.provider],
+      cls: "llm-message-role"
+    });
+    headerEl.createSpan({
+      text: new Date(msg.timestamp).toLocaleTimeString(),
+      cls: "llm-message-time"
+    });
+    const actionsEl = headerEl.createDiv({ cls: "llm-message-actions" });
+    const copyBtn = actionsEl.createEl("button", {
+      cls: "llm-action-btn",
+      attr: { "aria-label": "Copy to clipboard" }
+    });
+    (0, import_obsidian5.setIcon)(copyBtn, "copy");
+    copyBtn.addEventListener("click", () => {
+      navigator.clipboard.writeText(msg.content);
+      new import_obsidian5.Notice("Copied to clipboard");
+    });
+    if (msg.role === "assistant") {
+      const createNoteBtn = actionsEl.createEl("button", {
         cls: "llm-action-btn",
-        attr: { "aria-label": "Copy to clipboard" }
+        attr: { "aria-label": "Create note from response" }
       });
-      (0, import_obsidian5.setIcon)(copyBtn, "copy");
-      copyBtn.addEventListener("click", () => {
-        navigator.clipboard.writeText(msg.content);
-        new import_obsidian5.Notice("Copied to clipboard");
+      (0, import_obsidian5.setIcon)(createNoteBtn, "file-plus");
+      createNoteBtn.addEventListener("click", () => this.createNoteFromMessage(msg));
+    }
+    const contentEl = msgEl.createDiv({ cls: "llm-message-content" });
+    if (msg.role === "assistant") {
+      const component = new import_obsidian5.Component();
+      component.load();
+      this.markdownComponents.push(component);
+      await import_obsidian5.MarkdownRenderer.render(
+        this.app,
+        msg.content,
+        contentEl,
+        sourcePath,
+        component
+      );
+      contentEl.querySelectorAll("a.internal-link").forEach((link) => {
+        link.addEventListener("click", (e) => {
+          e.preventDefault();
+          const href = link.dataset.href;
+          if (href) {
+            this.app.workspace.openLinkText(href, sourcePath);
+          }
+        });
       });
-      if (msg.role === "assistant") {
-        const createNoteBtn = actionsEl.createEl("button", {
-          cls: "llm-action-btn",
-          attr: { "aria-label": "Create note from response" }
-        });
-        (0, import_obsidian5.setIcon)(createNoteBtn, "file-plus");
-        createNoteBtn.addEventListener("click", () => this.createNoteFromMessage(msg));
-      }
-      const contentEl = msgEl.createDiv({ cls: "llm-message-content" });
-      if (msg.role === "assistant") {
-        const component = new import_obsidian5.Component();
-        component.load();
-        this.markdownComponents.push(component);
-        await import_obsidian5.MarkdownRenderer.render(
-          this.app,
-          msg.content,
-          contentEl,
-          sourcePath,
-          component
-        );
-        contentEl.querySelectorAll("a.internal-link").forEach((link) => {
-          link.addEventListener("click", (e) => {
-            e.preventDefault();
-            const href = link.dataset.href;
-            if (href) {
-              this.app.workspace.openLinkText(href, sourcePath);
-            }
-          });
-        });
-        this.attachCheckboxHandlers(contentEl, msg);
-        this.attachButtonHandlers(contentEl);
-      } else {
-        contentEl.setText(msg.content);
-      }
+      this.attachCheckboxHandlers(contentEl, msg);
+      this.attachButtonHandlers(contentEl);
+    } else {
+      contentEl.setText(msg.content);
     }
     this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
   }
@@ -21398,114 +21485,6 @@ ${action.prompt}`;
     }
   }
   /**
-   * Truncate long content while preserving structure.
-   * Keeps all headings and the first lines of each section,
-   * so the AI always sees the full document outline.
-   */
-  static smartTruncate(content, maxChars) {
-    if (content.length <= maxChars) return content;
-    const lines = content.split("\n");
-    const result = [];
-    let currentLength = 0;
-    let skipping = false;
-    let skippedSections = 0;
-    const reserveForSuffix = 120;
-    const limit = maxChars - reserveForSuffix;
-    for (const line of lines) {
-      const isHeading = /^#{1,6}\s/.test(line);
-      if (isHeading) {
-        skipping = false;
-        result.push(line);
-        currentLength += line.length + 1;
-      } else if (!skipping && currentLength + line.length + 1 <= limit) {
-        result.push(line);
-        currentLength += line.length + 1;
-      } else if (!skipping) {
-        skipping = true;
-        skippedSections++;
-        result.push("[...]");
-        currentLength += 6;
-      }
-    }
-    result.push(`
-(${skippedSections} sections shortened \u2014 ${content.length} chars total)`);
-    return result.join("\n");
-  }
-  /**
-   * Get today's daily note content if the Daily Notes plugin is enabled
-   */
-  async getDailyNoteContext() {
-    var _a3, _b;
-    const internalPlugins = this.app.internalPlugins;
-    const dailyNotesPlugin = (_a3 = internalPlugins == null ? void 0 : internalPlugins.plugins) == null ? void 0 : _a3["daily-notes"];
-    if (!(dailyNotesPlugin == null ? void 0 : dailyNotesPlugin.enabled)) {
-      return "";
-    }
-    const settings = ((_b = dailyNotesPlugin.instance) == null ? void 0 : _b.options) || {};
-    const folder = settings.folder || "";
-    const format = settings.format || "YYYY-MM-DD";
-    const today = /* @__PURE__ */ new Date();
-    const dateStr = this.formatDate(today, format);
-    const fileName = `${dateStr}.md`;
-    const filePath = folder ? `${folder}/${fileName}` : fileName;
-    const file2 = this.app.vault.getAbstractFileByPath(filePath);
-    if (!(file2 instanceof import_obsidian5.TFile)) {
-      return "";
-    }
-    try {
-      const content = await this.app.vault.cachedRead(file2);
-      const trimmedContent = _ChatView.smartTruncate(content, 4e3);
-      return `=== Today's Daily Note (${filePath}) ===
-${trimmedContent}
-=== End Daily Note ===
-`;
-    } catch (e) {
-      return "";
-    }
-  }
-  /**
-   * Format a date according to a moment.js-style format string
-   * Supports common tokens: YYYY, YY, MM, M, DD, D, ddd, dddd
-   */
-  formatDate(date5, format) {
-    const year = date5.getFullYear();
-    const month = date5.getMonth() + 1;
-    const day = date5.getDate();
-    const dayOfWeek = date5.getDay();
-    const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-    const dayNamesShort = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const monthNames = [
-      "January",
-      "February",
-      "March",
-      "April",
-      "May",
-      "June",
-      "July",
-      "August",
-      "September",
-      "October",
-      "November",
-      "December"
-    ];
-    const monthNamesShort = [
-      "Jan",
-      "Feb",
-      "Mar",
-      "Apr",
-      "May",
-      "Jun",
-      "Jul",
-      "Aug",
-      "Sep",
-      "Oct",
-      "Nov",
-      "Dec"
-    ];
-    const quarterNum = Math.ceil(month / 3);
-    return format.replace(/YYYY/g, String(year)).replace(/YY/g, String(year).slice(-2)).replace(/MMMM/g, monthNames[month - 1]).replace(/MMM/g, monthNamesShort[month - 1]).replace(/MM/g, String(month).padStart(2, "0")).replace(/M/g, String(month)).replace(/DD/g, String(day).padStart(2, "0")).replace(/D/g, String(day)).replace(/dddd/g, dayNames[dayOfWeek]).replace(/ddd/g, dayNamesShort[dayOfWeek]).replace(/Q/g, String(quarterNum));
-  }
-  /**
    * Read the system prompt from the configured file
    */
   async getSystemPrompt() {
@@ -21565,6 +21544,9 @@ ${trimmedContent}
     );
     return parts.join("\n\n");
   }
+  getVaultPath() {
+    return this.app.vault.adapter.basePath;
+  }
   /**
    * Eagerly connect to ACP if enabled for the current provider.
    * This is called when the view opens and when the provider changes.
@@ -21600,7 +21582,7 @@ ${trimmedContent}
    * Separated to allow tracking the promise.
    */
   async doConnectAcp(targetProvider) {
-    const vaultPath = this.app.vault.adapter.basePath;
+    const vaultPath = this.getVaultPath();
     this.setLoading(true);
     this.plugin.updateStatusBar(targetProvider, void 0, "connecting");
     this.handleProgressEvent({ type: "status", message: `Connecting to ${targetProvider} ACP...` });
@@ -21657,24 +21639,16 @@ ${trimmedContent}
       const onProgress = (event) => {
         this.handleProgressEvent(event);
       };
-      const vaultPath = this.app.vault.adapter.basePath;
+      const vaultPath = this.getVaultPath();
       const providerConfig = this.plugin.settings.providers[this.currentProvider];
       const useAcp = providerConfig.useAcp && ACP_SUPPORTED_PROVIDERS.includes(this.currentProvider);
       let response;
       if (this.currentProvider === "local") {
         this.localExecutor.updateSettings(this.plugin.settings);
         const chatMessages = [];
-        const systemPrompt = await this.getSystemPrompt();
-        const systemParts = [];
-        if (systemPrompt) systemParts.push(systemPrompt);
-        const referencedNotes = await this.resolveNoteReferences(prompt);
-        if (referencedNotes) systemParts.push(referencedNotes);
-        const vaultContext = await this.vaultSearch.buildContext(prompt, this.getContextBudget());
-        if (vaultContext) systemParts.push(vaultContext);
-        const dailyNote = await this.getDailyNoteContext();
-        if (dailyNote) systemParts.push(dailyNote);
-        if (systemParts.length > 0) {
-          chatMessages.push({ role: "system", content: systemParts.join("\n\n") });
+        const systemContext = await this.buildSystemContext(prompt);
+        if (systemContext) {
+          chatMessages.push({ role: "system", content: systemContext });
         }
         if (this.plugin.settings.conversationHistory.enabled) {
           const maxMessages = this.plugin.settings.conversationHistory.maxMessages;
@@ -21727,7 +21701,7 @@ ${trimmedContent}
       if (response.error) {
         if (this.inputEl) this.inputEl.value = savedInput;
         this.messages.pop();
-        await this.renderMessagesContent();
+        await this.renderMessagesContent(true);
         this.showError(response.error);
       } else {
         this.removeStreamingMessage();
@@ -21745,7 +21719,7 @@ ${trimmedContent}
     } catch (error48) {
       if (this.inputEl) this.inputEl.value = savedInput;
       this.messages.pop();
-      await this.renderMessagesContent();
+      await this.renderMessagesContent(true);
       this.showError(error48 instanceof Error ? error48.message : String(error48));
     } finally {
       this.setLoading(false);
@@ -21842,8 +21816,9 @@ ${trimmedContent}
       attr: { href: "#" }
     });
     link.addEventListener("click", (e) => {
+      var _a3;
       e.preventDefault();
-      const vaultPath = this.app.vault.adapter.basePath;
+      const vaultPath = (_a3 = this.getVaultPath()) != null ? _a3 : "";
       let relativePath = filePath;
       if (filePath.startsWith("/") && vaultPath && filePath.startsWith(vaultPath)) {
         relativePath = filePath.slice(vaultPath.length + 1);
@@ -21948,23 +21923,26 @@ ${content}`);
     if (parts.length === 0) return "";
     return parts.join("\n\n");
   }
+  /**
+   * Gather system context: system prompt, referenced notes, vault RAG.
+   */
+  async buildSystemContext(prompt) {
+    const [systemPrompt, referencedNotes, vaultContext] = await Promise.all([
+      this.getSystemPrompt(),
+      this.resolveNoteReferences(prompt),
+      this.vaultSearch.buildContext(prompt, this.getContextBudget())
+    ]);
+    const parts = [];
+    if (systemPrompt) parts.push(systemPrompt);
+    if (referencedNotes) parts.push(referencedNotes);
+    if (vaultContext) parts.push(vaultContext);
+    return parts.join("\n\n");
+  }
   async buildContextPrompt(currentPrompt) {
-    const systemPrompt = await this.getSystemPrompt();
-    const vaultContext = await this.vaultSearch.buildContext(currentPrompt, this.getContextBudget());
-    const dailyNoteContext = await this.getDailyNoteContext();
-    const referencedNotes = await this.resolveNoteReferences(currentPrompt);
+    const systemContext = await this.buildSystemContext(currentPrompt);
     const contextParts = [];
-    if (systemPrompt) {
-      contextParts.push(`System: ${systemPrompt}`);
-    }
-    if (referencedNotes) {
-      contextParts.push(referencedNotes);
-    }
-    if (dailyNoteContext) {
-      contextParts.push(dailyNoteContext);
-    }
-    if (vaultContext) {
-      contextParts.push(vaultContext);
+    if (systemContext) {
+      contextParts.push(`System: ${systemContext}`);
     }
     if (this.plugin.settings.conversationHistory.enabled && this.messages.length > 1) {
       const maxMessages = this.plugin.settings.conversationHistory.maxMessages;
@@ -22452,8 +22430,7 @@ Your request:`,
   }
   async saveChatSessions(sessions) {
     this.chatSessions = sessions;
-    const merged = await this.mergeBeforeSave();
-    await this.saveData(merged);
+    await this.saveData({ ...this.settings, _chatSessions: this.chatSessions });
   }
   /**
    * Load current data.json and merge with in-memory state.

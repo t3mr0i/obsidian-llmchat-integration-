@@ -25,25 +25,37 @@ interface NoteChunk {
  * Uses MiniSearch (BM25-based) to index all markdown notes,
  * split into heading-level chunks for precise retrieval.
  *
- * - Incremental updates via vault events (create/modify/delete)
- * - Active note always prioritized in results
- * - Dynamic context budget based on provider
+ * Performance optimizations:
+ * - Batch indexing via requestIdleCallback (non-blocking)
+ * - Debounced file re-indexing (avoids thrashing on auto-save)
+ * - Chunk count tracking per file (no 100-iteration removal loops)
+ * - Content stored in separate Map (not duplicated in MiniSearch index)
  */
 export class VaultSearch {
-  private index: MiniSearch<NoteChunk>;
-  private app: App;
+  private readonly index: MiniSearch<NoteChunk>;
+  private readonly app: App;
   private indexed = false;
   private indexing = false;
-  /** Track mtime per file to skip unchanged files on full re-index */
-  private fileMtimes = new Map<string, number>();
+  /** Track chunk count per file for efficient removal */
+  private readonly fileChunkCounts = new Map<string, number>();
+  /** Store chunk content separately to avoid doubling RAM in MiniSearch */
+  private readonly chunkContent = new Map<string, string>();
   /** Vault event refs for cleanup */
   private eventRefs: EventRef[] = [];
+  /** Debounce timers for modify events */
+  private modifyTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  /** Pending index promise for callers to await */
+  private indexPromise: Promise<void> | null = null;
+
+  private static readonly MAX_CHUNK_CHARS = 2000;
+  private static readonly MODIFY_DEBOUNCE_MS = 1000;
 
   constructor(app: App) {
     this.app = app;
     this.index = new MiniSearch<NoteChunk>({
       fields: ["title", "heading", "content", "tags"],
-      storeFields: ["path", "title", "heading", "content"],
+      // Don't store content in MiniSearch — we keep it in chunkContent Map
+      storeFields: ["path", "title", "heading"],
       searchOptions: {
         boost: { title: 3, heading: 2, tags: 2, content: 1 },
         fuzzy: 0.2,
@@ -54,43 +66,73 @@ export class VaultSearch {
 
   /**
    * Build the full index and start listening for vault changes.
+   * Non-blocking: indexes in batches via requestIdleCallback.
    */
   async ensureIndex(): Promise<void> {
-    if (this.indexing) return;
     if (this.indexed) return;
+    if (this.indexPromise) return this.indexPromise;
 
+    this.indexPromise = this.doBatchIndex();
+    return this.indexPromise;
+  }
+
+  private async doBatchIndex(): Promise<void> {
     this.indexing = true;
     try {
       const files = this.app.vault.getMarkdownFiles();
-      for (const file of files) {
-        await this.indexFile(file);
+      const BATCH_SIZE = 50;
+
+      for (let i = 0; i < files.length; i += BATCH_SIZE) {
+        const batch = files.slice(i, i + BATCH_SIZE);
+        for (const file of batch) {
+          await this.indexFile(file);
+        }
+        // Yield to main thread between batches
+        if (i + BATCH_SIZE < files.length) {
+          await this.yieldToMain();
+        }
       }
+
       this.indexed = true;
       this.registerVaultEvents();
     } finally {
       this.indexing = false;
+      this.indexPromise = null;
     }
+  }
+
+  /**
+   * Yield control back to the main thread to prevent UI freezing.
+   */
+  private yieldToMain(): Promise<void> {
+    return new Promise((resolve) => {
+      if (typeof requestIdleCallback !== "undefined") {
+        requestIdleCallback(() => resolve(), { timeout: 100 });
+      } else {
+        setTimeout(resolve, 0);
+      }
+    });
   }
 
   /**
    * Listen for vault file changes and update the index incrementally.
    */
   private registerVaultEvents() {
-    // File modified → re-index that file
+    const isMd = (file: unknown): file is TFile =>
+      file instanceof Object && "extension" in file && (file as TFile).extension === "md";
+
+    // File modified → debounced re-index
     this.eventRefs.push(
       this.app.vault.on("modify", (file) => {
-        if (file instanceof Object && "extension" in file && (file as TFile).extension === "md") {
-          this.reindexFile(file as TFile);
-        }
+        if (!isMd(file)) return;
+        this.debouncedReindex(file);
       })
     );
 
     // File created → index it
     this.eventRefs.push(
       this.app.vault.on("create", (file) => {
-        if (file instanceof Object && "extension" in file && (file as TFile).extension === "md") {
-          this.indexFile(file as TFile);
-        }
+        if (isMd(file)) this.indexFile(file);
       })
     );
 
@@ -105,33 +147,51 @@ export class VaultSearch {
     this.eventRefs.push(
       this.app.vault.on("rename", (file, oldPath) => {
         this.removeFile(oldPath);
-        if (file instanceof Object && "extension" in file && (file as TFile).extension === "md") {
-          this.indexFile(file as TFile);
-        }
+        if (isMd(file)) this.indexFile(file);
       })
     );
   }
 
   /**
-   * Remove all chunks belonging to a file path.
+   * Debounce re-indexing to avoid thrashing on rapid saves (e.g., auto-save).
    */
-  private removeFile(path: string) {
-    this.fileMtimes.delete(path);
-    // MiniSearch doesn't support removing by field, so we discard and re-add
-    // Use the stored document IDs pattern: path#0, path#1, etc.
-    const toRemove = Array.from({ length: 100 }, (_, i) => `${path}#${i}`);
-    for (const id of toRemove) {
-      try {
-        this.index.discard(id);
-      } catch {
-        break; // No more chunks for this file
-      }
-    }
+  private debouncedReindex(file: TFile) {
+    const existing = this.modifyTimers.get(file.path);
+    if (existing) clearTimeout(existing);
+
+    this.modifyTimers.set(
+      file.path,
+      setTimeout(() => {
+        this.modifyTimers.delete(file.path);
+        this.reindexFile(file);
+      }, VaultSearch.MODIFY_DEBOUNCE_MS)
+    );
   }
 
   /**
-   * Re-index a single file (remove old chunks, add new ones).
+   * Remove all chunks belonging to a file path.
+   * Uses tracked chunk count instead of guessing up to 100.
    */
+  private removeFile(path: string) {
+    const count = this.fileChunkCounts.get(path) ?? 0;
+    for (let i = 0; i < count; i++) {
+      const id = `${path}#${i}`;
+      try {
+        this.index.discard(id);
+      } catch {
+        // Already removed or doesn't exist
+      }
+      this.chunkContent.delete(id);
+    }
+    this.fileChunkCounts.delete(path);
+    // Cancel any pending debounce
+    const timer = this.modifyTimers.get(path);
+    if (timer) {
+      clearTimeout(timer);
+      this.modifyTimers.delete(path);
+    }
+  }
+
   private async reindexFile(file: TFile) {
     this.removeFile(file.path);
     await this.indexFile(file);
@@ -150,32 +210,35 @@ export class VaultSearch {
 
     if (!content.trim()) return;
 
-    this.fileMtimes.set(file.path, file.stat.mtime);
-
     const title = file.basename;
     const tags = this.extractTags(content);
     const chunks = this.splitByHeadings(content);
 
+    let chunkCount = 0;
     for (let i = 0; i < chunks.length; i++) {
       const chunk = chunks[i];
       if (!chunk.text.trim()) continue;
 
+      const id = `${file.path}#${i}`;
       this.index.add({
-        id: `${file.path}#${i}`,
+        id,
         path: file.path,
         title,
         heading: chunk.heading,
         content: chunk.text,
         tags,
       });
+      // Store content separately
+      this.chunkContent.set(id, chunk.text);
+      chunkCount = i + 1;
     }
+    this.fileChunkCounts.set(file.path, chunkCount);
   }
 
   /**
    * Split markdown content into chunks by headings.
+   * Oversized sections are split at paragraph boundaries.
    */
-  private static readonly MAX_CHUNK_CHARS = 2000;
-
   private splitByHeadings(content: string): { heading: string; text: string }[] {
     const lines = content.split("\n");
     const rawChunks: { heading: string; text: string }[] = [];
@@ -195,7 +258,7 @@ export class VaultSearch {
 
     for (let i = startIdx; i < lines.length; i++) {
       const line = lines[i];
-      const headingMatch = line.match(/^(#{1,3})\s+(.+)/);
+      const headingMatch = /^(#{1,3})\s+(.+)/.exec(line);
 
       if (headingMatch) {
         if (currentLines.length > 0) {
@@ -220,20 +283,21 @@ export class VaultSearch {
         continue;
       }
 
-      // Split at double-newlines (paragraph breaks)
       const paragraphs = chunk.text.split(/\n\n+/);
       let buf = "";
       let partNum = 0;
       for (const para of paragraphs) {
         if (buf.length + para.length > VaultSearch.MAX_CHUNK_CHARS && buf.length > 0) {
-          chunks.push({ heading: chunk.heading + (partNum > 0 ? ` (${partNum + 1})` : ""), text: buf.trim() });
+          const suffix = partNum > 0 ? ` (${partNum + 1})` : "";
+          chunks.push({ heading: chunk.heading + suffix, text: buf.trim() });
           partNum++;
           buf = "";
         }
         buf += (buf ? "\n\n" : "") + para;
       }
       if (buf.trim()) {
-        chunks.push({ heading: chunk.heading + (partNum > 0 ? ` (${partNum + 1})` : ""), text: buf.trim() });
+        const suffix = partNum > 0 ? ` (${partNum + 1})` : "";
+        chunks.push({ heading: chunk.heading + suffix, text: buf.trim() });
       }
     }
 
@@ -246,9 +310,9 @@ export class VaultSearch {
   private extractTags(content: string): string {
     const tags: string[] = [];
 
-    const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
+    const fmMatch = /^---\n([\s\S]*?)\n---/.exec(content);
     if (fmMatch) {
-      const tagLine = fmMatch[1].match(/tags:\s*\[?([^\]\n]+)/);
+      const tagLine = /tags:\s*\[?([^\]\n]+)/.exec(fmMatch[1]);
       if (tagLine) {
         tags.push(...tagLine[1].split(",").map((t) => t.trim().replace(/^#/, "")));
       }
@@ -288,7 +352,7 @@ export class VaultSearch {
   }[]> {
     await this.ensureIndex();
 
-    const results = this.index.search(query, { limit: maxResults + 10 });
+    const results = this.index.search(query).slice(0, maxResults + 10);
 
     const activeNote = this.getActiveNoteContext();
     const activePath = activeNote?.path;
@@ -303,8 +367,9 @@ export class VaultSearch {
     return combined.map((r) => ({
       path: r.path as string,
       title: r.title as string,
-      heading: r.heading as string,
-      content: r.content as string,
+      heading: (r.heading as string) ?? "",
+      // Retrieve content from our Map (not stored in MiniSearch)
+      content: this.chunkContent.get(r.id) ?? "",
       score: r.score,
     }));
   }
@@ -320,7 +385,7 @@ export class VaultSearch {
 
     // 1. Always include active note (up to 30% of budget)
     const activeNote = this.getActiveNoteContext();
-    if (activeNote && activeNote.content.trim()) {
+    if (activeNote?.content.trim()) {
       const activeBudget = Math.floor(maxChars * 0.3);
       const activeContent = activeNote.content.length > activeBudget
         ? activeNote.content.slice(0, activeBudget) + "\n[... rest of active note omitted]"
@@ -364,13 +429,23 @@ export class VaultSearch {
   }
 
   /**
-   * Clean up event listeners.
+   * Clean up event listeners and timers.
    */
   destroy() {
     for (const ref of this.eventRefs) {
       this.app.vault.offref(ref);
     }
     this.eventRefs = [];
+
+    // Clear debounce timers
+    for (const timer of this.modifyTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.modifyTimers.clear();
+
+    // Free content memory
+    this.chunkContent.clear();
+    this.fileChunkCounts.clear();
   }
 
   get documentCount(): number {

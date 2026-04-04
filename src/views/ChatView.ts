@@ -300,7 +300,7 @@ export class ChatView extends ItemView {
     this.activeChatId = id;
     this.messages = target.messages;
     this.renderTabs();
-    this.renderMessagesContent();
+    this.renderMessagesContent(true);
   }
 
   private renderTabs() {
@@ -373,7 +373,7 @@ export class ChatView extends ItemView {
       if (current) current.messages = this.messages;
       this.createNewChat();
       this.renderTabs();
-      this.renderMessagesContent();
+      this.renderMessagesContent(true);
       this.persistSessions();
       this.inputEl?.focus();
     });
@@ -384,15 +384,26 @@ export class ChatView extends ItemView {
     this.renderMessagesContent();
   }
 
-  private async renderMessagesContent() {
+  /** Number of messages already rendered in the DOM */
+  private renderedCount = 0;
+
+  /**
+   * Render messages — incrementally appends only new messages
+   * instead of rebuilding the entire DOM on every call.
+   * Pass force=true (or call after tab switch) for full rebuild.
+   */
+  private async renderMessagesContent(force = false) {
     if (!this.messagesContainer) return;
 
-    // Clean up old markdown components
-    this.markdownComponents.forEach((c) => c.unload());
-    this.markdownComponents = [];
+    // Full rebuild needed when switching tabs or messages were removed
+    if (force || this.renderedCount > this.messages.length) {
+      this.markdownComponents.forEach((c) => c.unload());
+      this.markdownComponents = [];
+      this.messagesContainer.empty();
+      this.renderedCount = 0;
+    }
 
-    this.messagesContainer.empty();
-
+    // Empty state
     if (this.messages.length === 0) {
       const emptyState = this.messagesContainer.createDiv({
         cls: "llm-empty-state",
@@ -405,84 +416,92 @@ export class ChatView extends ItemView {
       return;
     }
 
-    // Get source path for link resolution (use active file if available)
+    // Remove empty state if present
+    this.messagesContainer.querySelector(".llm-empty-state")?.remove();
+
+    // Only render messages we haven't rendered yet
+    const startIdx = this.renderedCount;
+    for (let i = startIdx; i < this.messages.length; i++) {
+      await this.renderSingleMessage(this.messages[i]);
+    }
+    this.renderedCount = this.messages.length;
+
+    // Scroll to bottom
+    this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+  }
+
+  /**
+   * Render a single message and append it to the messages container.
+   */
+  private async renderSingleMessage(msg: ConversationMessage) {
+    if (!this.messagesContainer) return;
+
     const activeFile = this.app.workspace.getActiveFile();
     const sourcePath = activeFile?.path ?? "";
 
-    for (const msg of this.messages) {
-      const msgEl = this.messagesContainer.createDiv({
-        cls: `llm-message llm-message-${msg.role}`,
-      });
+    const msgEl = this.messagesContainer.createDiv({
+      cls: `llm-message llm-message-${msg.role}`,
+    });
 
-      const headerEl = msgEl.createDiv({ cls: "llm-message-header" });
-      headerEl.createSpan({
-        text: msg.role === "user" ? "You" : PROVIDER_DISPLAY_NAMES[msg.provider],
-        cls: "llm-message-role",
-      });
-      headerEl.createSpan({
-        text: new Date(msg.timestamp).toLocaleTimeString(),
-        cls: "llm-message-time",
-      });
+    const headerEl = msgEl.createDiv({ cls: "llm-message-header" });
+    headerEl.createSpan({
+      text: msg.role === "user" ? "You" : PROVIDER_DISPLAY_NAMES[msg.provider],
+      cls: "llm-message-role",
+    });
+    headerEl.createSpan({
+      text: new Date(msg.timestamp).toLocaleTimeString(),
+      cls: "llm-message-time",
+    });
 
-      // Add action buttons for all messages
-      const actionsEl = headerEl.createDiv({ cls: "llm-message-actions" });
+    const actionsEl = headerEl.createDiv({ cls: "llm-message-actions" });
 
-      // Copy button (for both user and assistant messages)
-      const copyBtn = actionsEl.createEl("button", {
+    const copyBtn = actionsEl.createEl("button", {
+      cls: "llm-action-btn",
+      attr: { "aria-label": "Copy to clipboard" },
+    });
+    setIcon(copyBtn, "copy");
+    copyBtn.addEventListener("click", () => {
+      navigator.clipboard.writeText(msg.content);
+      new Notice("Copied to clipboard");
+    });
+
+    if (msg.role === "assistant") {
+      const createNoteBtn = actionsEl.createEl("button", {
         cls: "llm-action-btn",
-        attr: { "aria-label": "Copy to clipboard" },
+        attr: { "aria-label": "Create note from response" },
       });
-      setIcon(copyBtn, "copy");
-      copyBtn.addEventListener("click", () => {
-        navigator.clipboard.writeText(msg.content);
-        new Notice("Copied to clipboard");
+      setIcon(createNoteBtn, "file-plus");
+      createNoteBtn.addEventListener("click", () => this.createNoteFromMessage(msg));
+    }
+
+    const contentEl = msgEl.createDiv({ cls: "llm-message-content" });
+
+    if (msg.role === "assistant") {
+      const component = new Component();
+      component.load();
+      this.markdownComponents.push(component);
+      await MarkdownRenderer.render(
+        this.app,
+        msg.content,
+        contentEl,
+        sourcePath,
+        component
+      );
+
+      contentEl.querySelectorAll("a.internal-link").forEach((link) => {
+        link.addEventListener("click", (e) => {
+          e.preventDefault();
+          const href = (link as HTMLElement).dataset.href;
+          if (href) {
+            this.app.workspace.openLinkText(href, sourcePath);
+          }
+        });
       });
 
-      // Create note button (only for assistant messages)
-      if (msg.role === "assistant") {
-        const createNoteBtn = actionsEl.createEl("button", {
-          cls: "llm-action-btn",
-          attr: { "aria-label": "Create note from response" },
-        });
-        setIcon(createNoteBtn, "file-plus");
-        createNoteBtn.addEventListener("click", () => this.createNoteFromMessage(msg));
-      }
-
-      const contentEl = msgEl.createDiv({ cls: "llm-message-content" });
-
-      if (msg.role === "assistant") {
-        // Render assistant messages as markdown
-        const component = new Component();
-        component.load();
-        this.markdownComponents.push(component);
-        await MarkdownRenderer.render(
-          this.app,
-          msg.content,
-          contentEl,
-          sourcePath,
-          component
-        );
-
-        // Add click handlers for internal links (wiki links)
-        contentEl.querySelectorAll("a.internal-link").forEach((link) => {
-          link.addEventListener("click", (e) => {
-            e.preventDefault();
-            const href = (link as HTMLElement).dataset.href;
-            if (href) {
-              this.app.workspace.openLinkText(href, sourcePath);
-            }
-          });
-        });
-
-        // Add change handlers for checkboxes in task lists
-        this.attachCheckboxHandlers(contentEl, msg);
-
-        // Add click handlers for buttons
-        this.attachButtonHandlers(contentEl);
-      } else {
-        // User messages as plain text
-        contentEl.setText(msg.content);
-      }
+      this.attachCheckboxHandlers(contentEl, msg);
+      this.attachButtonHandlers(contentEl);
+    } else {
+      contentEl.setText(msg.content);
     }
 
     // Scroll to bottom
@@ -751,122 +770,6 @@ export class ChatView extends ItemView {
   }
 
   /**
-   * Truncate long content while preserving structure.
-   * Keeps all headings and the first lines of each section,
-   * so the AI always sees the full document outline.
-   */
-  private static smartTruncate(content: string, maxChars: number): string {
-    if (content.length <= maxChars) return content;
-
-    const lines = content.split("\n");
-    const result: string[] = [];
-    let currentLength = 0;
-    let skipping = false;
-    let skippedSections = 0;
-    const reserveForSuffix = 120;
-    const limit = maxChars - reserveForSuffix;
-
-    for (const line of lines) {
-      const isHeading = /^#{1,6}\s/.test(line);
-
-      if (isHeading) {
-        // Always include headings to preserve structure
-        skipping = false;
-        result.push(line);
-        currentLength += line.length + 1;
-      } else if (!skipping && currentLength + line.length + 1 <= limit) {
-        result.push(line);
-        currentLength += line.length + 1;
-      } else if (!skipping) {
-        // Start skipping this section
-        skipping = true;
-        skippedSections++;
-        result.push("[...]");
-        currentLength += 6;
-      }
-      // If skipping, skip until next heading
-    }
-
-    result.push(`\n(${skippedSections} sections shortened — ${content.length} chars total)`);
-    return result.join("\n");
-  }
-
-  /**
-   * Get today's daily note content if the Daily Notes plugin is enabled
-   */
-  private async getDailyNoteContext(): Promise<string> {
-    // Check if daily-notes core plugin is enabled
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const internalPlugins = (this.app as any).internalPlugins;
-    const dailyNotesPlugin = internalPlugins?.plugins?.["daily-notes"];
-
-    if (!dailyNotesPlugin?.enabled) {
-      return "";
-    }
-
-    // Get daily notes settings
-    const settings = dailyNotesPlugin.instance?.options || {};
-    const folder = settings.folder || "";
-    const format = settings.format || "YYYY-MM-DD";
-
-    // Format today's date according to the configured format
-    const today = new Date();
-    const dateStr = this.formatDate(today, format);
-
-    // Build the path to today's daily note
-    const fileName = `${dateStr}.md`;
-    const filePath = folder ? `${folder}/${fileName}` : fileName;
-
-    // Try to find and read the file
-    const file = this.app.vault.getAbstractFileByPath(filePath);
-    if (!(file instanceof TFile)) {
-      // Daily note doesn't exist yet for today
-      return "";
-    }
-
-    try {
-      const content = await this.app.vault.cachedRead(file);
-      const trimmedContent = ChatView.smartTruncate(content, 4000);
-
-      return `=== Today's Daily Note (${filePath}) ===\n${trimmedContent}\n=== End Daily Note ===\n`;
-    } catch {
-      return "";
-    }
-  }
-
-  /**
-   * Format a date according to a moment.js-style format string
-   * Supports common tokens: YYYY, YY, MM, M, DD, D, ddd, dddd
-   */
-  private formatDate(date: Date, format: string): string {
-    const year = date.getFullYear();
-    const month = date.getMonth() + 1;
-    const day = date.getDate();
-    const dayOfWeek = date.getDay();
-
-    const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-    const dayNamesShort = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    const monthNames = ["January", "February", "March", "April", "May", "June",
-      "July", "August", "September", "October", "November", "December"];
-    const monthNamesShort = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
-      "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const quarterNum = Math.ceil(month / 3);
-
-    return format
-      .replace(/YYYY/g, String(year))
-      .replace(/YY/g, String(year).slice(-2))
-      .replace(/MMMM/g, monthNames[month - 1])
-      .replace(/MMM/g, monthNamesShort[month - 1])
-      .replace(/MM/g, String(month).padStart(2, "0"))
-      .replace(/M/g, String(month))
-      .replace(/DD/g, String(day).padStart(2, "0"))
-      .replace(/D/g, String(day))
-      .replace(/dddd/g, dayNames[dayOfWeek])
-      .replace(/ddd/g, dayNamesShort[dayOfWeek])
-      .replace(/Q/g, String(quarterNum));
-  }
-
-  /**
    * Read the system prompt from the configured file
    */
   private async getSystemPrompt(): Promise<string> {
@@ -940,6 +843,11 @@ export class ChatView extends ItemView {
     return parts.join("\n\n");
   }
 
+  private getVaultPath(): string | undefined {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (this.app.vault.adapter as any).basePath as string | undefined;
+  }
+
   /**
    * Eagerly connect to ACP if enabled for the current provider.
    * This is called when the view opens and when the provider changes.
@@ -989,9 +897,7 @@ export class ChatView extends ItemView {
    * Separated to allow tracking the promise.
    */
   private async doConnectAcp(targetProvider: LLMProvider): Promise<void> {
-    // Get vault path for working directory
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const vaultPath = (this.app.vault.adapter as any).basePath as string | undefined;
+    const vaultPath = this.getVaultPath();
 
     // Block user input while connecting
     this.setLoading(true);
@@ -1084,9 +990,7 @@ export class ChatView extends ItemView {
         this.handleProgressEvent(event);
       };
 
-      // Get vault path to use as working directory
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const vaultPath = (this.app.vault.adapter as any).basePath as string | undefined;
+      const vaultPath = this.getVaultPath();
 
       // Check if ACP mode is enabled for this provider
       const providerConfig = this.plugin.settings.providers[this.currentProvider];
@@ -1098,21 +1002,11 @@ export class ChatView extends ItemView {
         // Use local HTTP executor
         this.localExecutor.updateSettings(this.plugin.settings);
 
-        // Build messages array for chat completions API
         const chatMessages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [];
 
-        // Add system prompt + relevant vault context (RAG) + referenced notes
-        const systemPrompt = await this.getSystemPrompt();
-        const systemParts: string[] = [];
-        if (systemPrompt) systemParts.push(systemPrompt);
-        const referencedNotes = await this.resolveNoteReferences(prompt);
-        if (referencedNotes) systemParts.push(referencedNotes);
-        const vaultContext = await this.vaultSearch.buildContext(prompt, this.getContextBudget());
-        if (vaultContext) systemParts.push(vaultContext);
-        const dailyNote = await this.getDailyNoteContext();
-        if (dailyNote) systemParts.push(dailyNote);
-        if (systemParts.length > 0) {
-          chatMessages.push({ role: "system", content: systemParts.join("\n\n") });
+        const systemContext = await this.buildSystemContext(prompt);
+        if (systemContext) {
+          chatMessages.push({ role: "system", content: systemContext });
         }
 
         // Add conversation history
@@ -1188,7 +1082,7 @@ export class ChatView extends ItemView {
         if (this.inputEl) this.inputEl.value = savedInput;
         // Remove the user message we already added
         this.messages.pop();
-        await this.renderMessagesContent();
+        await this.renderMessagesContent(true);
         this.showError(response.error);
       } else {
         // Remove streaming/progress elements
@@ -1212,7 +1106,7 @@ export class ChatView extends ItemView {
       if (this.inputEl) this.inputEl.value = savedInput;
       // Remove the user message we already added
       this.messages.pop();
-      await this.renderMessagesContent();
+      await this.renderMessagesContent(true);
       this.showError(error instanceof Error ? error.message : String(error));
     } finally {
       this.setLoading(false);
@@ -1336,9 +1230,7 @@ export class ChatView extends ItemView {
 
     link.addEventListener("click", (e) => {
       e.preventDefault();
-      // Try to open the file - handle both vault-relative and absolute paths
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const vaultPath = (this.app.vault.adapter as any).basePath as string;
+      const vaultPath = this.getVaultPath() ?? "";
       let relativePath = filePath;
 
       // If it's an absolute path, try to make it relative to the vault
@@ -1473,32 +1365,29 @@ export class ChatView extends ItemView {
     return parts.join("\n\n");
   }
 
+  /**
+   * Gather system context: system prompt, referenced notes, vault RAG.
+   */
+  private async buildSystemContext(prompt: string): Promise<string> {
+    const [systemPrompt, referencedNotes, vaultContext] = await Promise.all([
+      this.getSystemPrompt(),
+      this.resolveNoteReferences(prompt),
+      this.vaultSearch.buildContext(prompt, this.getContextBudget()),
+    ]);
+    const parts: string[] = [];
+    if (systemPrompt) parts.push(systemPrompt);
+    if (referencedNotes) parts.push(referencedNotes);
+    if (vaultContext) parts.push(vaultContext);
+    return parts.join("\n\n");
+  }
+
   private async buildContextPrompt(currentPrompt: string): Promise<string> {
-    const systemPrompt = await this.getSystemPrompt();
-    const vaultContext = await this.vaultSearch.buildContext(currentPrompt, this.getContextBudget());
-    const dailyNoteContext = await this.getDailyNoteContext();
-    const referencedNotes = await this.resolveNoteReferences(currentPrompt);
+    const systemContext = await this.buildSystemContext(currentPrompt);
 
     const contextParts: string[] = [];
 
-    // System prompt (custom file or auto-generated default)
-    if (systemPrompt) {
-      contextParts.push(`System: ${systemPrompt}`);
-    }
-
-    // Add explicitly referenced notes (via [[Note]] syntax)
-    if (referencedNotes) {
-      contextParts.push(referencedNotes);
-    }
-
-    // Add today's daily note context
-    if (dailyNoteContext) {
-      contextParts.push(dailyNoteContext);
-    }
-
-    // Add relevant vault context (RAG search)
-    if (vaultContext) {
-      contextParts.push(vaultContext);
+    if (systemContext) {
+      contextParts.push(`System: ${systemContext}`);
     }
 
     // Add conversation history if enabled
