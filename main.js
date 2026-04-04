@@ -1484,7 +1484,7 @@ __export(main_exports, {
   default: () => LLMPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian5 = require("obsidian");
+var import_obsidian6 = require("obsidian");
 
 // src/types.ts
 var ACP_SUPPORTED_PROVIDERS = ["claude", "opencode", "gemini", "codex"];
@@ -2627,7 +2627,7 @@ User: ${prompt}`;
 };
 
 // src/views/ChatView.ts
-var import_obsidian4 = require("obsidian");
+var import_obsidian5 = require("obsidian");
 init_LLMExecutor();
 
 // src/executor/AcpExecutor.ts
@@ -10014,11 +10014,11 @@ var capitalizeFirstCharacter = (text) => {
 };
 function getUnitTypeFromNumber(number4) {
   const abs = Math.abs(number4);
-  const last = abs % 10;
-  const last2 = abs % 100;
-  if (last2 >= 11 && last2 <= 19 || last === 0)
+  const last2 = abs % 10;
+  const last22 = abs % 100;
+  if (last22 >= 11 && last22 <= 19 || last2 === 0)
     return "many";
-  if (last === 1)
+  if (last2 === 1)
     return "one";
   return "few";
 }
@@ -18712,6 +18712,2075 @@ var AcpExecutor = class {
 
 // src/views/ChatView.ts
 init_LocalLLMExecutor();
+
+// node_modules/minisearch/dist/es/index.js
+var ENTRIES = "ENTRIES";
+var KEYS = "KEYS";
+var VALUES = "VALUES";
+var LEAF = "";
+var TreeIterator = class {
+  constructor(set2, type) {
+    const node = set2._tree;
+    const keys = Array.from(node.keys());
+    this.set = set2;
+    this._type = type;
+    this._path = keys.length > 0 ? [{ node, keys }] : [];
+  }
+  next() {
+    const value = this.dive();
+    this.backtrack();
+    return value;
+  }
+  dive() {
+    if (this._path.length === 0) {
+      return { done: true, value: void 0 };
+    }
+    const { node, keys } = last$1(this._path);
+    if (last$1(keys) === LEAF) {
+      return { done: false, value: this.result() };
+    }
+    const child = node.get(last$1(keys));
+    this._path.push({ node: child, keys: Array.from(child.keys()) });
+    return this.dive();
+  }
+  backtrack() {
+    if (this._path.length === 0) {
+      return;
+    }
+    const keys = last$1(this._path).keys;
+    keys.pop();
+    if (keys.length > 0) {
+      return;
+    }
+    this._path.pop();
+    this.backtrack();
+  }
+  key() {
+    return this.set._prefix + this._path.map(({ keys }) => last$1(keys)).filter((key) => key !== LEAF).join("");
+  }
+  value() {
+    return last$1(this._path).node.get(LEAF);
+  }
+  result() {
+    switch (this._type) {
+      case VALUES:
+        return this.value();
+      case KEYS:
+        return this.key();
+      default:
+        return [this.key(), this.value()];
+    }
+  }
+  [Symbol.iterator]() {
+    return this;
+  }
+};
+var last$1 = (array2) => {
+  return array2[array2.length - 1];
+};
+var fuzzySearch = (node, query, maxDistance) => {
+  const results = /* @__PURE__ */ new Map();
+  if (query === void 0)
+    return results;
+  const n = query.length + 1;
+  const m = n + maxDistance;
+  const matrix = new Uint8Array(m * n).fill(maxDistance + 1);
+  for (let j = 0; j < n; ++j)
+    matrix[j] = j;
+  for (let i = 1; i < m; ++i)
+    matrix[i * n] = i;
+  recurse(node, query, maxDistance, results, matrix, 1, n, "");
+  return results;
+};
+var recurse = (node, query, maxDistance, results, matrix, m, n, prefix) => {
+  const offset = m * n;
+  key: for (const key of node.keys()) {
+    if (key === LEAF) {
+      const distance = matrix[offset - 1];
+      if (distance <= maxDistance) {
+        results.set(prefix, [node.get(key), distance]);
+      }
+    } else {
+      let i = m;
+      for (let pos = 0; pos < key.length; ++pos, ++i) {
+        const char = key[pos];
+        const thisRowOffset = n * i;
+        const prevRowOffset = thisRowOffset - n;
+        let minDistance = matrix[thisRowOffset];
+        const jmin = Math.max(0, i - maxDistance - 1);
+        const jmax = Math.min(n - 1, i + maxDistance);
+        for (let j = jmin; j < jmax; ++j) {
+          const different = char !== query[j];
+          const rpl = matrix[prevRowOffset + j] + +different;
+          const del = matrix[prevRowOffset + j + 1] + 1;
+          const ins = matrix[thisRowOffset + j] + 1;
+          const dist = matrix[thisRowOffset + j + 1] = Math.min(rpl, del, ins);
+          if (dist < minDistance)
+            minDistance = dist;
+        }
+        if (minDistance > maxDistance) {
+          continue key;
+        }
+      }
+      recurse(node.get(key), query, maxDistance, results, matrix, i, n, prefix + key);
+    }
+  }
+};
+var SearchableMap = class _SearchableMap {
+  /**
+   * The constructor is normally called without arguments, creating an empty
+   * map. In order to create a {@link SearchableMap} from an iterable or from an
+   * object, check {@link SearchableMap.from} and {@link
+   * SearchableMap.fromObject}.
+   *
+   * The constructor arguments are for internal use, when creating derived
+   * mutable views of a map at a prefix.
+   */
+  constructor(tree = /* @__PURE__ */ new Map(), prefix = "") {
+    this._size = void 0;
+    this._tree = tree;
+    this._prefix = prefix;
+  }
+  /**
+   * Creates and returns a mutable view of this {@link SearchableMap},
+   * containing only entries that share the given prefix.
+   *
+   * ### Usage:
+   *
+   * ```javascript
+   * let map = new SearchableMap()
+   * map.set("unicorn", 1)
+   * map.set("universe", 2)
+   * map.set("university", 3)
+   * map.set("unique", 4)
+   * map.set("hello", 5)
+   *
+   * let uni = map.atPrefix("uni")
+   * uni.get("unique") // => 4
+   * uni.get("unicorn") // => 1
+   * uni.get("hello") // => undefined
+   *
+   * let univer = map.atPrefix("univer")
+   * univer.get("unique") // => undefined
+   * univer.get("universe") // => 2
+   * univer.get("university") // => 3
+   * ```
+   *
+   * @param prefix  The prefix
+   * @return A {@link SearchableMap} representing a mutable view of the original
+   * Map at the given prefix
+   */
+  atPrefix(prefix) {
+    if (!prefix.startsWith(this._prefix)) {
+      throw new Error("Mismatched prefix");
+    }
+    const [node, path] = trackDown(this._tree, prefix.slice(this._prefix.length));
+    if (node === void 0) {
+      const [parentNode, key] = last(path);
+      for (const k of parentNode.keys()) {
+        if (k !== LEAF && k.startsWith(key)) {
+          const node2 = /* @__PURE__ */ new Map();
+          node2.set(k.slice(key.length), parentNode.get(k));
+          return new _SearchableMap(node2, prefix);
+        }
+      }
+    }
+    return new _SearchableMap(node, prefix);
+  }
+  /**
+   * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/clear
+   */
+  clear() {
+    this._size = void 0;
+    this._tree.clear();
+  }
+  /**
+   * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/delete
+   * @param key  Key to delete
+   */
+  delete(key) {
+    this._size = void 0;
+    return remove(this._tree, key);
+  }
+  /**
+   * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/entries
+   * @return An iterator iterating through `[key, value]` entries.
+   */
+  entries() {
+    return new TreeIterator(this, ENTRIES);
+  }
+  /**
+   * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/forEach
+   * @param fn  Iteration function
+   */
+  forEach(fn) {
+    for (const [key, value] of this) {
+      fn(key, value, this);
+    }
+  }
+  /**
+   * Returns a Map of all the entries that have a key within the given edit
+   * distance from the search key. The keys of the returned Map are the matching
+   * keys, while the values are two-element arrays where the first element is
+   * the value associated to the key, and the second is the edit distance of the
+   * key to the search key.
+   *
+   * ### Usage:
+   *
+   * ```javascript
+   * let map = new SearchableMap()
+   * map.set('hello', 'world')
+   * map.set('hell', 'yeah')
+   * map.set('ciao', 'mondo')
+   *
+   * // Get all entries that match the key 'hallo' with a maximum edit distance of 2
+   * map.fuzzyGet('hallo', 2)
+   * // => Map(2) { 'hello' => ['world', 1], 'hell' => ['yeah', 2] }
+   *
+   * // In the example, the "hello" key has value "world" and edit distance of 1
+   * // (change "e" to "a"), the key "hell" has value "yeah" and edit distance of 2
+   * // (change "e" to "a", delete "o")
+   * ```
+   *
+   * @param key  The search key
+   * @param maxEditDistance  The maximum edit distance (Levenshtein)
+   * @return A Map of the matching keys to their value and edit distance
+   */
+  fuzzyGet(key, maxEditDistance) {
+    return fuzzySearch(this._tree, key, maxEditDistance);
+  }
+  /**
+   * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/get
+   * @param key  Key to get
+   * @return Value associated to the key, or `undefined` if the key is not
+   * found.
+   */
+  get(key) {
+    const node = lookup(this._tree, key);
+    return node !== void 0 ? node.get(LEAF) : void 0;
+  }
+  /**
+   * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/has
+   * @param key  Key
+   * @return True if the key is in the map, false otherwise
+   */
+  has(key) {
+    const node = lookup(this._tree, key);
+    return node !== void 0 && node.has(LEAF);
+  }
+  /**
+   * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/keys
+   * @return An `Iterable` iterating through keys
+   */
+  keys() {
+    return new TreeIterator(this, KEYS);
+  }
+  /**
+   * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/set
+   * @param key  Key to set
+   * @param value  Value to associate to the key
+   * @return The {@link SearchableMap} itself, to allow chaining
+   */
+  set(key, value) {
+    if (typeof key !== "string") {
+      throw new Error("key must be a string");
+    }
+    this._size = void 0;
+    const node = createPath(this._tree, key);
+    node.set(LEAF, value);
+    return this;
+  }
+  /**
+   * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/size
+   */
+  get size() {
+    if (this._size) {
+      return this._size;
+    }
+    this._size = 0;
+    const iter = this.entries();
+    while (!iter.next().done)
+      this._size += 1;
+    return this._size;
+  }
+  /**
+   * Updates the value at the given key using the provided function. The function
+   * is called with the current value at the key, and its return value is used as
+   * the new value to be set.
+   *
+   * ### Example:
+   *
+   * ```javascript
+   * // Increment the current value by one
+   * searchableMap.update('somekey', (currentValue) => currentValue == null ? 0 : currentValue + 1)
+   * ```
+   *
+   * If the value at the given key is or will be an object, it might not require
+   * re-assignment. In that case it is better to use `fetch()`, because it is
+   * faster.
+   *
+   * @param key  The key to update
+   * @param fn  The function used to compute the new value from the current one
+   * @return The {@link SearchableMap} itself, to allow chaining
+   */
+  update(key, fn) {
+    if (typeof key !== "string") {
+      throw new Error("key must be a string");
+    }
+    this._size = void 0;
+    const node = createPath(this._tree, key);
+    node.set(LEAF, fn(node.get(LEAF)));
+    return this;
+  }
+  /**
+   * Fetches the value of the given key. If the value does not exist, calls the
+   * given function to create a new value, which is inserted at the given key
+   * and subsequently returned.
+   *
+   * ### Example:
+   *
+   * ```javascript
+   * const map = searchableMap.fetch('somekey', () => new Map())
+   * map.set('foo', 'bar')
+   * ```
+   *
+   * @param key  The key to update
+   * @param initial  A function that creates a new value if the key does not exist
+   * @return The existing or new value at the given key
+   */
+  fetch(key, initial) {
+    if (typeof key !== "string") {
+      throw new Error("key must be a string");
+    }
+    this._size = void 0;
+    const node = createPath(this._tree, key);
+    let value = node.get(LEAF);
+    if (value === void 0) {
+      node.set(LEAF, value = initial());
+    }
+    return value;
+  }
+  /**
+   * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/values
+   * @return An `Iterable` iterating through values.
+   */
+  values() {
+    return new TreeIterator(this, VALUES);
+  }
+  /**
+   * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map/@@iterator
+   */
+  [Symbol.iterator]() {
+    return this.entries();
+  }
+  /**
+   * Creates a {@link SearchableMap} from an `Iterable` of entries
+   *
+   * @param entries  Entries to be inserted in the {@link SearchableMap}
+   * @return A new {@link SearchableMap} with the given entries
+   */
+  static from(entries) {
+    const tree = new _SearchableMap();
+    for (const [key, value] of entries) {
+      tree.set(key, value);
+    }
+    return tree;
+  }
+  /**
+   * Creates a {@link SearchableMap} from the iterable properties of a JavaScript object
+   *
+   * @param object  Object of entries for the {@link SearchableMap}
+   * @return A new {@link SearchableMap} with the given entries
+   */
+  static fromObject(object2) {
+    return _SearchableMap.from(Object.entries(object2));
+  }
+};
+var trackDown = (tree, key, path = []) => {
+  if (key.length === 0 || tree == null) {
+    return [tree, path];
+  }
+  for (const k of tree.keys()) {
+    if (k !== LEAF && key.startsWith(k)) {
+      path.push([tree, k]);
+      return trackDown(tree.get(k), key.slice(k.length), path);
+    }
+  }
+  path.push([tree, key]);
+  return trackDown(void 0, "", path);
+};
+var lookup = (tree, key) => {
+  if (key.length === 0 || tree == null) {
+    return tree;
+  }
+  for (const k of tree.keys()) {
+    if (k !== LEAF && key.startsWith(k)) {
+      return lookup(tree.get(k), key.slice(k.length));
+    }
+  }
+};
+var createPath = (node, key) => {
+  const keyLength = key.length;
+  outer: for (let pos = 0; node && pos < keyLength; ) {
+    for (const k of node.keys()) {
+      if (k !== LEAF && key[pos] === k[0]) {
+        const len = Math.min(keyLength - pos, k.length);
+        let offset = 1;
+        while (offset < len && key[pos + offset] === k[offset])
+          ++offset;
+        const child2 = node.get(k);
+        if (offset === k.length) {
+          node = child2;
+        } else {
+          const intermediate = /* @__PURE__ */ new Map();
+          intermediate.set(k.slice(offset), child2);
+          node.set(key.slice(pos, pos + offset), intermediate);
+          node.delete(k);
+          node = intermediate;
+        }
+        pos += offset;
+        continue outer;
+      }
+    }
+    const child = /* @__PURE__ */ new Map();
+    node.set(key.slice(pos), child);
+    return child;
+  }
+  return node;
+};
+var remove = (tree, key) => {
+  const [node, path] = trackDown(tree, key);
+  if (node === void 0) {
+    return;
+  }
+  node.delete(LEAF);
+  if (node.size === 0) {
+    cleanup(path);
+  } else if (node.size === 1) {
+    const [key2, value] = node.entries().next().value;
+    merge2(path, key2, value);
+  }
+};
+var cleanup = (path) => {
+  if (path.length === 0) {
+    return;
+  }
+  const [node, key] = last(path);
+  node.delete(key);
+  if (node.size === 0) {
+    cleanup(path.slice(0, -1));
+  } else if (node.size === 1) {
+    const [key2, value] = node.entries().next().value;
+    if (key2 !== LEAF) {
+      merge2(path.slice(0, -1), key2, value);
+    }
+  }
+};
+var merge2 = (path, key, value) => {
+  if (path.length === 0) {
+    return;
+  }
+  const [node, nodeKey] = last(path);
+  node.set(nodeKey + key, value);
+  node.delete(nodeKey);
+};
+var last = (array2) => {
+  return array2[array2.length - 1];
+};
+var OR = "or";
+var AND = "and";
+var AND_NOT = "and_not";
+var MiniSearch = class _MiniSearch {
+  /**
+   * @param options  Configuration options
+   *
+   * ### Examples:
+   *
+   * ```javascript
+   * // Create a search engine that indexes the 'title' and 'text' fields of your
+   * // documents:
+   * const miniSearch = new MiniSearch({ fields: ['title', 'text'] })
+   * ```
+   *
+   * ### ID Field:
+   *
+   * ```javascript
+   * // Your documents are assumed to include a unique 'id' field, but if you want
+   * // to use a different field for document identification, you can set the
+   * // 'idField' option:
+   * const miniSearch = new MiniSearch({ idField: 'key', fields: ['title', 'text'] })
+   * ```
+   *
+   * ### Options and defaults:
+   *
+   * ```javascript
+   * // The full set of options (here with their default value) is:
+   * const miniSearch = new MiniSearch({
+   *   // idField: field that uniquely identifies a document
+   *   idField: 'id',
+   *
+   *   // extractField: function used to get the value of a field in a document.
+   *   // By default, it assumes the document is a flat object with field names as
+   *   // property keys and field values as string property values, but custom logic
+   *   // can be implemented by setting this option to a custom extractor function.
+   *   extractField: (document, fieldName) => document[fieldName],
+   *
+   *   // tokenize: function used to split fields into individual terms. By
+   *   // default, it is also used to tokenize search queries, unless a specific
+   *   // `tokenize` search option is supplied. When tokenizing an indexed field,
+   *   // the field name is passed as the second argument.
+   *   tokenize: (string, _fieldName) => string.split(SPACE_OR_PUNCTUATION),
+   *
+   *   // processTerm: function used to process each tokenized term before
+   *   // indexing. It can be used for stemming and normalization. Return a falsy
+   *   // value in order to discard a term. By default, it is also used to process
+   *   // search queries, unless a specific `processTerm` option is supplied as a
+   *   // search option. When processing a term from a indexed field, the field
+   *   // name is passed as the second argument.
+   *   processTerm: (term, _fieldName) => term.toLowerCase(),
+   *
+   *   // searchOptions: default search options, see the `search` method for
+   *   // details
+   *   searchOptions: undefined,
+   *
+   *   // fields: document fields to be indexed. Mandatory, but not set by default
+   *   fields: undefined
+   *
+   *   // storeFields: document fields to be stored and returned as part of the
+   *   // search results.
+   *   storeFields: []
+   * })
+   * ```
+   */
+  constructor(options) {
+    if ((options === null || options === void 0 ? void 0 : options.fields) == null) {
+      throw new Error('MiniSearch: option "fields" must be provided');
+    }
+    const autoVacuum = options.autoVacuum == null || options.autoVacuum === true ? defaultAutoVacuumOptions : options.autoVacuum;
+    this._options = {
+      ...defaultOptions,
+      ...options,
+      autoVacuum,
+      searchOptions: { ...defaultSearchOptions, ...options.searchOptions || {} },
+      autoSuggestOptions: { ...defaultAutoSuggestOptions, ...options.autoSuggestOptions || {} }
+    };
+    this._index = new SearchableMap();
+    this._documentCount = 0;
+    this._documentIds = /* @__PURE__ */ new Map();
+    this._idToShortId = /* @__PURE__ */ new Map();
+    this._fieldIds = {};
+    this._fieldLength = /* @__PURE__ */ new Map();
+    this._avgFieldLength = [];
+    this._nextId = 0;
+    this._storedFields = /* @__PURE__ */ new Map();
+    this._dirtCount = 0;
+    this._currentVacuum = null;
+    this._enqueuedVacuum = null;
+    this._enqueuedVacuumConditions = defaultVacuumConditions;
+    this.addFields(this._options.fields);
+  }
+  /**
+   * Adds a document to the index
+   *
+   * @param document  The document to be indexed
+   */
+  add(document) {
+    const { extractField, stringifyField, tokenize, processTerm, fields, idField } = this._options;
+    const id = extractField(document, idField);
+    if (id == null) {
+      throw new Error(`MiniSearch: document does not have ID field "${idField}"`);
+    }
+    if (this._idToShortId.has(id)) {
+      throw new Error(`MiniSearch: duplicate ID ${id}`);
+    }
+    const shortDocumentId = this.addDocumentId(id);
+    this.saveStoredFields(shortDocumentId, document);
+    for (const field of fields) {
+      const fieldValue = extractField(document, field);
+      if (fieldValue == null)
+        continue;
+      const tokens = tokenize(stringifyField(fieldValue, field), field);
+      const fieldId = this._fieldIds[field];
+      const uniqueTerms = new Set(tokens).size;
+      this.addFieldLength(shortDocumentId, fieldId, this._documentCount - 1, uniqueTerms);
+      for (const term of tokens) {
+        const processedTerm = processTerm(term, field);
+        if (Array.isArray(processedTerm)) {
+          for (const t of processedTerm) {
+            this.addTerm(fieldId, shortDocumentId, t);
+          }
+        } else if (processedTerm) {
+          this.addTerm(fieldId, shortDocumentId, processedTerm);
+        }
+      }
+    }
+  }
+  /**
+   * Adds all the given documents to the index
+   *
+   * @param documents  An array of documents to be indexed
+   */
+  addAll(documents) {
+    for (const document of documents)
+      this.add(document);
+  }
+  /**
+   * Adds all the given documents to the index asynchronously.
+   *
+   * Returns a promise that resolves (to `undefined`) when the indexing is done.
+   * This method is useful when index many documents, to avoid blocking the main
+   * thread. The indexing is performed asynchronously and in chunks.
+   *
+   * @param documents  An array of documents to be indexed
+   * @param options  Configuration options
+   * @return A promise resolving to `undefined` when the indexing is done
+   */
+  addAllAsync(documents, options = {}) {
+    const { chunkSize = 10 } = options;
+    const acc = { chunk: [], promise: Promise.resolve() };
+    const { chunk, promise: promise2 } = documents.reduce(({ chunk: chunk2, promise: promise3 }, document, i) => {
+      chunk2.push(document);
+      if ((i + 1) % chunkSize === 0) {
+        return {
+          chunk: [],
+          promise: promise3.then(() => new Promise((resolve) => setTimeout(resolve, 0))).then(() => this.addAll(chunk2))
+        };
+      } else {
+        return { chunk: chunk2, promise: promise3 };
+      }
+    }, acc);
+    return promise2.then(() => this.addAll(chunk));
+  }
+  /**
+   * Removes the given document from the index.
+   *
+   * The document to remove must NOT have changed between indexing and removal,
+   * otherwise the index will be corrupted.
+   *
+   * This method requires passing the full document to be removed (not just the
+   * ID), and immediately removes the document from the inverted index, allowing
+   * memory to be released. A convenient alternative is {@link
+   * MiniSearch#discard}, which needs only the document ID, and has the same
+   * visible effect, but delays cleaning up the index until the next vacuuming.
+   *
+   * @param document  The document to be removed
+   */
+  remove(document) {
+    const { tokenize, processTerm, extractField, stringifyField, fields, idField } = this._options;
+    const id = extractField(document, idField);
+    if (id == null) {
+      throw new Error(`MiniSearch: document does not have ID field "${idField}"`);
+    }
+    const shortId = this._idToShortId.get(id);
+    if (shortId == null) {
+      throw new Error(`MiniSearch: cannot remove document with ID ${id}: it is not in the index`);
+    }
+    for (const field of fields) {
+      const fieldValue = extractField(document, field);
+      if (fieldValue == null)
+        continue;
+      const tokens = tokenize(stringifyField(fieldValue, field), field);
+      const fieldId = this._fieldIds[field];
+      const uniqueTerms = new Set(tokens).size;
+      this.removeFieldLength(shortId, fieldId, this._documentCount, uniqueTerms);
+      for (const term of tokens) {
+        const processedTerm = processTerm(term, field);
+        if (Array.isArray(processedTerm)) {
+          for (const t of processedTerm) {
+            this.removeTerm(fieldId, shortId, t);
+          }
+        } else if (processedTerm) {
+          this.removeTerm(fieldId, shortId, processedTerm);
+        }
+      }
+    }
+    this._storedFields.delete(shortId);
+    this._documentIds.delete(shortId);
+    this._idToShortId.delete(id);
+    this._fieldLength.delete(shortId);
+    this._documentCount -= 1;
+  }
+  /**
+   * Removes all the given documents from the index. If called with no arguments,
+   * it removes _all_ documents from the index.
+   *
+   * @param documents  The documents to be removed. If this argument is omitted,
+   * all documents are removed. Note that, for removing all documents, it is
+   * more efficient to call this method with no arguments than to pass all
+   * documents.
+   */
+  removeAll(documents) {
+    if (documents) {
+      for (const document of documents)
+        this.remove(document);
+    } else if (arguments.length > 0) {
+      throw new Error("Expected documents to be present. Omit the argument to remove all documents.");
+    } else {
+      this._index = new SearchableMap();
+      this._documentCount = 0;
+      this._documentIds = /* @__PURE__ */ new Map();
+      this._idToShortId = /* @__PURE__ */ new Map();
+      this._fieldLength = /* @__PURE__ */ new Map();
+      this._avgFieldLength = [];
+      this._storedFields = /* @__PURE__ */ new Map();
+      this._nextId = 0;
+    }
+  }
+  /**
+   * Discards the document with the given ID, so it won't appear in search results
+   *
+   * It has the same visible effect of {@link MiniSearch.remove} (both cause the
+   * document to stop appearing in searches), but a different effect on the
+   * internal data structures:
+   *
+   *   - {@link MiniSearch#remove} requires passing the full document to be
+   *   removed as argument, and removes it from the inverted index immediately.
+   *
+   *   - {@link MiniSearch#discard} instead only needs the document ID, and
+   *   works by marking the current version of the document as discarded, so it
+   *   is immediately ignored by searches. This is faster and more convenient
+   *   than {@link MiniSearch#remove}, but the index is not immediately
+   *   modified. To take care of that, vacuuming is performed after a certain
+   *   number of documents are discarded, cleaning up the index and allowing
+   *   memory to be released.
+   *
+   * After discarding a document, it is possible to re-add a new version, and
+   * only the new version will appear in searches. In other words, discarding
+   * and re-adding a document works exactly like removing and re-adding it. The
+   * {@link MiniSearch.replace} method can also be used to replace a document
+   * with a new version.
+   *
+   * #### Details about vacuuming
+   *
+   * Repetite calls to this method would leave obsolete document references in
+   * the index, invisible to searches. Two mechanisms take care of cleaning up:
+   * clean up during search, and vacuuming.
+   *
+   *   - Upon search, whenever a discarded ID is found (and ignored for the
+   *   results), references to the discarded document are removed from the
+   *   inverted index entries for the search terms. This ensures that subsequent
+   *   searches for the same terms do not need to skip these obsolete references
+   *   again.
+   *
+   *   - In addition, vacuuming is performed automatically by default (see the
+   *   `autoVacuum` field in {@link Options}) after a certain number of
+   *   documents are discarded. Vacuuming traverses all terms in the index,
+   *   cleaning up all references to discarded documents. Vacuuming can also be
+   *   triggered manually by calling {@link MiniSearch#vacuum}.
+   *
+   * @param id  The ID of the document to be discarded
+   */
+  discard(id) {
+    const shortId = this._idToShortId.get(id);
+    if (shortId == null) {
+      throw new Error(`MiniSearch: cannot discard document with ID ${id}: it is not in the index`);
+    }
+    this._idToShortId.delete(id);
+    this._documentIds.delete(shortId);
+    this._storedFields.delete(shortId);
+    (this._fieldLength.get(shortId) || []).forEach((fieldLength, fieldId) => {
+      this.removeFieldLength(shortId, fieldId, this._documentCount, fieldLength);
+    });
+    this._fieldLength.delete(shortId);
+    this._documentCount -= 1;
+    this._dirtCount += 1;
+    this.maybeAutoVacuum();
+  }
+  maybeAutoVacuum() {
+    if (this._options.autoVacuum === false) {
+      return;
+    }
+    const { minDirtFactor, minDirtCount, batchSize, batchWait } = this._options.autoVacuum;
+    this.conditionalVacuum({ batchSize, batchWait }, { minDirtCount, minDirtFactor });
+  }
+  /**
+   * Discards the documents with the given IDs, so they won't appear in search
+   * results
+   *
+   * It is equivalent to calling {@link MiniSearch#discard} for all the given
+   * IDs, but with the optimization of triggering at most one automatic
+   * vacuuming at the end.
+   *
+   * Note: to remove all documents from the index, it is faster and more
+   * convenient to call {@link MiniSearch.removeAll} with no argument, instead
+   * of passing all IDs to this method.
+   */
+  discardAll(ids) {
+    const autoVacuum = this._options.autoVacuum;
+    try {
+      this._options.autoVacuum = false;
+      for (const id of ids) {
+        this.discard(id);
+      }
+    } finally {
+      this._options.autoVacuum = autoVacuum;
+    }
+    this.maybeAutoVacuum();
+  }
+  /**
+   * It replaces an existing document with the given updated version
+   *
+   * It works by discarding the current version and adding the updated one, so
+   * it is functionally equivalent to calling {@link MiniSearch#discard}
+   * followed by {@link MiniSearch#add}. The ID of the updated document should
+   * be the same as the original one.
+   *
+   * Since it uses {@link MiniSearch#discard} internally, this method relies on
+   * vacuuming to clean up obsolete document references from the index, allowing
+   * memory to be released (see {@link MiniSearch#discard}).
+   *
+   * @param updatedDocument  The updated document to replace the old version
+   * with
+   */
+  replace(updatedDocument) {
+    const { idField, extractField } = this._options;
+    const id = extractField(updatedDocument, idField);
+    this.discard(id);
+    this.add(updatedDocument);
+  }
+  /**
+   * Triggers a manual vacuuming, cleaning up references to discarded documents
+   * from the inverted index
+   *
+   * Vacuuming is only useful for applications that use the {@link
+   * MiniSearch#discard} or {@link MiniSearch#replace} methods.
+   *
+   * By default, vacuuming is performed automatically when needed (controlled by
+   * the `autoVacuum` field in {@link Options}), so there is usually no need to
+   * call this method, unless one wants to make sure to perform vacuuming at a
+   * specific moment.
+   *
+   * Vacuuming traverses all terms in the inverted index in batches, and cleans
+   * up references to discarded documents from the posting list, allowing memory
+   * to be released.
+   *
+   * The method takes an optional object as argument with the following keys:
+   *
+   *   - `batchSize`: the size of each batch (1000 by default)
+   *
+   *   - `batchWait`: the number of milliseconds to wait between batches (10 by
+   *   default)
+   *
+   * On large indexes, vacuuming could have a non-negligible cost: batching
+   * avoids blocking the thread for long, diluting this cost so that it is not
+   * negatively affecting the application. Nonetheless, this method should only
+   * be called when necessary, and relying on automatic vacuuming is usually
+   * better.
+   *
+   * It returns a promise that resolves (to undefined) when the clean up is
+   * completed. If vacuuming is already ongoing at the time this method is
+   * called, a new one is enqueued immediately after the ongoing one, and a
+   * corresponding promise is returned. However, no more than one vacuuming is
+   * enqueued on top of the ongoing one, even if this method is called more
+   * times (enqueuing multiple ones would be useless).
+   *
+   * @param options  Configuration options for the batch size and delay. See
+   * {@link VacuumOptions}.
+   */
+  vacuum(options = {}) {
+    return this.conditionalVacuum(options);
+  }
+  conditionalVacuum(options, conditions) {
+    if (this._currentVacuum) {
+      this._enqueuedVacuumConditions = this._enqueuedVacuumConditions && conditions;
+      if (this._enqueuedVacuum != null) {
+        return this._enqueuedVacuum;
+      }
+      this._enqueuedVacuum = this._currentVacuum.then(() => {
+        const conditions2 = this._enqueuedVacuumConditions;
+        this._enqueuedVacuumConditions = defaultVacuumConditions;
+        return this.performVacuuming(options, conditions2);
+      });
+      return this._enqueuedVacuum;
+    }
+    if (this.vacuumConditionsMet(conditions) === false) {
+      return Promise.resolve();
+    }
+    this._currentVacuum = this.performVacuuming(options);
+    return this._currentVacuum;
+  }
+  async performVacuuming(options, conditions) {
+    const initialDirtCount = this._dirtCount;
+    if (this.vacuumConditionsMet(conditions)) {
+      const batchSize = options.batchSize || defaultVacuumOptions.batchSize;
+      const batchWait = options.batchWait || defaultVacuumOptions.batchWait;
+      let i = 1;
+      for (const [term, fieldsData] of this._index) {
+        for (const [fieldId, fieldIndex] of fieldsData) {
+          for (const [shortId] of fieldIndex) {
+            if (this._documentIds.has(shortId)) {
+              continue;
+            }
+            if (fieldIndex.size <= 1) {
+              fieldsData.delete(fieldId);
+            } else {
+              fieldIndex.delete(shortId);
+            }
+          }
+        }
+        if (this._index.get(term).size === 0) {
+          this._index.delete(term);
+        }
+        if (i % batchSize === 0) {
+          await new Promise((resolve) => setTimeout(resolve, batchWait));
+        }
+        i += 1;
+      }
+      this._dirtCount -= initialDirtCount;
+    }
+    await null;
+    this._currentVacuum = this._enqueuedVacuum;
+    this._enqueuedVacuum = null;
+  }
+  vacuumConditionsMet(conditions) {
+    if (conditions == null) {
+      return true;
+    }
+    let { minDirtCount, minDirtFactor } = conditions;
+    minDirtCount = minDirtCount || defaultAutoVacuumOptions.minDirtCount;
+    minDirtFactor = minDirtFactor || defaultAutoVacuumOptions.minDirtFactor;
+    return this.dirtCount >= minDirtCount && this.dirtFactor >= minDirtFactor;
+  }
+  /**
+   * Is `true` if a vacuuming operation is ongoing, `false` otherwise
+   */
+  get isVacuuming() {
+    return this._currentVacuum != null;
+  }
+  /**
+   * The number of documents discarded since the most recent vacuuming
+   */
+  get dirtCount() {
+    return this._dirtCount;
+  }
+  /**
+   * A number between 0 and 1 giving an indication about the proportion of
+   * documents that are discarded, and can therefore be cleaned up by vacuuming.
+   * A value close to 0 means that the index is relatively clean, while a higher
+   * value means that the index is relatively dirty, and vacuuming could release
+   * memory.
+   */
+  get dirtFactor() {
+    return this._dirtCount / (1 + this._documentCount + this._dirtCount);
+  }
+  /**
+   * Returns `true` if a document with the given ID is present in the index and
+   * available for search, `false` otherwise
+   *
+   * @param id  The document ID
+   */
+  has(id) {
+    return this._idToShortId.has(id);
+  }
+  /**
+   * Returns the stored fields (as configured in the `storeFields` constructor
+   * option) for the given document ID. Returns `undefined` if the document is
+   * not present in the index.
+   *
+   * @param id  The document ID
+   */
+  getStoredFields(id) {
+    const shortId = this._idToShortId.get(id);
+    if (shortId == null) {
+      return void 0;
+    }
+    return this._storedFields.get(shortId);
+  }
+  /**
+   * Search for documents matching the given search query.
+   *
+   * The result is a list of scored document IDs matching the query, sorted by
+   * descending score, and each including data about which terms were matched and
+   * in which fields.
+   *
+   * ### Basic usage:
+   *
+   * ```javascript
+   * // Search for "zen art motorcycle" with default options: terms have to match
+   * // exactly, and individual terms are joined with OR
+   * miniSearch.search('zen art motorcycle')
+   * // => [ { id: 2, score: 2.77258, match: { ... } }, { id: 4, score: 1.38629, match: { ... } } ]
+   * ```
+   *
+   * ### Restrict search to specific fields:
+   *
+   * ```javascript
+   * // Search only in the 'title' field
+   * miniSearch.search('zen', { fields: ['title'] })
+   * ```
+   *
+   * ### Field boosting:
+   *
+   * ```javascript
+   * // Boost a field
+   * miniSearch.search('zen', { boost: { title: 2 } })
+   * ```
+   *
+   * ### Prefix search:
+   *
+   * ```javascript
+   * // Search for "moto" with prefix search (it will match documents
+   * // containing terms that start with "moto" or "neuro")
+   * miniSearch.search('moto neuro', { prefix: true })
+   * ```
+   *
+   * ### Fuzzy search:
+   *
+   * ```javascript
+   * // Search for "ismael" with fuzzy search (it will match documents containing
+   * // terms similar to "ismael", with a maximum edit distance of 0.2 term.length
+   * // (rounded to nearest integer)
+   * miniSearch.search('ismael', { fuzzy: 0.2 })
+   * ```
+   *
+   * ### Combining strategies:
+   *
+   * ```javascript
+   * // Mix of exact match, prefix search, and fuzzy search
+   * miniSearch.search('ismael mob', {
+   *  prefix: true,
+   *  fuzzy: 0.2
+   * })
+   * ```
+   *
+   * ### Advanced prefix and fuzzy search:
+   *
+   * ```javascript
+   * // Perform fuzzy and prefix search depending on the search term. Here
+   * // performing prefix and fuzzy search only on terms longer than 3 characters
+   * miniSearch.search('ismael mob', {
+   *  prefix: term => term.length > 3
+   *  fuzzy: term => term.length > 3 ? 0.2 : null
+   * })
+   * ```
+   *
+   * ### Combine with AND:
+   *
+   * ```javascript
+   * // Combine search terms with AND (to match only documents that contain both
+   * // "motorcycle" and "art")
+   * miniSearch.search('motorcycle art', { combineWith: 'AND' })
+   * ```
+   *
+   * ### Combine with AND_NOT:
+   *
+   * There is also an AND_NOT combinator, that finds documents that match the
+   * first term, but do not match any of the other terms. This combinator is
+   * rarely useful with simple queries, and is meant to be used with advanced
+   * query combinations (see later for more details).
+   *
+   * ### Filtering results:
+   *
+   * ```javascript
+   * // Filter only results in the 'fiction' category (assuming that 'category'
+   * // is a stored field)
+   * miniSearch.search('motorcycle art', {
+   *   filter: (result) => result.category === 'fiction'
+   * })
+   * ```
+   *
+   * ### Wildcard query
+   *
+   * Searching for an empty string (assuming the default tokenizer) returns no
+   * results. Sometimes though, one needs to match all documents, like in a
+   * "wildcard" search. This is possible by passing the special value
+   * {@link MiniSearch.wildcard} as the query:
+   *
+   * ```javascript
+   * // Return search results for all documents
+   * miniSearch.search(MiniSearch.wildcard)
+   * ```
+   *
+   * Note that search options such as `filter` and `boostDocument` are still
+   * applied, influencing which results are returned, and their order:
+   *
+   * ```javascript
+   * // Return search results for all documents in the 'fiction' category
+   * miniSearch.search(MiniSearch.wildcard, {
+   *   filter: (result) => result.category === 'fiction'
+   * })
+   * ```
+   *
+   * ### Advanced combination of queries:
+   *
+   * It is possible to combine different subqueries with OR, AND, and AND_NOT,
+   * and even with different search options, by passing a query expression
+   * tree object as the first argument, instead of a string.
+   *
+   * ```javascript
+   * // Search for documents that contain "zen" and ("motorcycle" or "archery")
+   * miniSearch.search({
+   *   combineWith: 'AND',
+   *   queries: [
+   *     'zen',
+   *     {
+   *       combineWith: 'OR',
+   *       queries: ['motorcycle', 'archery']
+   *     }
+   *   ]
+   * })
+   *
+   * // Search for documents that contain ("apple" or "pear") but not "juice" and
+   * // not "tree"
+   * miniSearch.search({
+   *   combineWith: 'AND_NOT',
+   *   queries: [
+   *     {
+   *       combineWith: 'OR',
+   *       queries: ['apple', 'pear']
+   *     },
+   *     'juice',
+   *     'tree'
+   *   ]
+   * })
+   * ```
+   *
+   * Each node in the expression tree can be either a string, or an object that
+   * supports all {@link SearchOptions} fields, plus a `queries` array field for
+   * subqueries.
+   *
+   * Note that, while this can become complicated to do by hand for complex or
+   * deeply nested queries, it provides a formalized expression tree API for
+   * external libraries that implement a parser for custom query languages.
+   *
+   * @param query  Search query
+   * @param searchOptions  Search options. Each option, if not given, defaults to the corresponding value of `searchOptions` given to the constructor, or to the library default.
+   */
+  search(query, searchOptions = {}) {
+    const { searchOptions: globalSearchOptions } = this._options;
+    const searchOptionsWithDefaults = { ...globalSearchOptions, ...searchOptions };
+    const rawResults = this.executeQuery(query, searchOptions);
+    const results = [];
+    for (const [docId, { score, terms, match }] of rawResults) {
+      const quality = terms.length || 1;
+      const result = {
+        id: this._documentIds.get(docId),
+        score: score * quality,
+        terms: Object.keys(match),
+        queryTerms: terms,
+        match
+      };
+      Object.assign(result, this._storedFields.get(docId));
+      if (searchOptionsWithDefaults.filter == null || searchOptionsWithDefaults.filter(result)) {
+        results.push(result);
+      }
+    }
+    if (query === _MiniSearch.wildcard && searchOptionsWithDefaults.boostDocument == null) {
+      return results;
+    }
+    results.sort(byScore);
+    return results;
+  }
+  /**
+   * Provide suggestions for the given search query
+   *
+   * The result is a list of suggested modified search queries, derived from the
+   * given search query, each with a relevance score, sorted by descending score.
+   *
+   * By default, it uses the same options used for search, except that by
+   * default it performs prefix search on the last term of the query, and
+   * combine terms with `'AND'` (requiring all query terms to match). Custom
+   * options can be passed as a second argument. Defaults can be changed upon
+   * calling the {@link MiniSearch} constructor, by passing a
+   * `autoSuggestOptions` option.
+   *
+   * ### Basic usage:
+   *
+   * ```javascript
+   * // Get suggestions for 'neuro':
+   * miniSearch.autoSuggest('neuro')
+   * // => [ { suggestion: 'neuromancer', terms: [ 'neuromancer' ], score: 0.46240 } ]
+   * ```
+   *
+   * ### Multiple words:
+   *
+   * ```javascript
+   * // Get suggestions for 'zen ar':
+   * miniSearch.autoSuggest('zen ar')
+   * // => [
+   * //  { suggestion: 'zen archery art', terms: [ 'zen', 'archery', 'art' ], score: 1.73332 },
+   * //  { suggestion: 'zen art', terms: [ 'zen', 'art' ], score: 1.21313 }
+   * // ]
+   * ```
+   *
+   * ### Fuzzy suggestions:
+   *
+   * ```javascript
+   * // Correct spelling mistakes using fuzzy search:
+   * miniSearch.autoSuggest('neromancer', { fuzzy: 0.2 })
+   * // => [ { suggestion: 'neuromancer', terms: [ 'neuromancer' ], score: 1.03998 } ]
+   * ```
+   *
+   * ### Filtering:
+   *
+   * ```javascript
+   * // Get suggestions for 'zen ar', but only within the 'fiction' category
+   * // (assuming that 'category' is a stored field):
+   * miniSearch.autoSuggest('zen ar', {
+   *   filter: (result) => result.category === 'fiction'
+   * })
+   * // => [
+   * //  { suggestion: 'zen archery art', terms: [ 'zen', 'archery', 'art' ], score: 1.73332 },
+   * //  { suggestion: 'zen art', terms: [ 'zen', 'art' ], score: 1.21313 }
+   * // ]
+   * ```
+   *
+   * @param queryString  Query string to be expanded into suggestions
+   * @param options  Search options. The supported options and default values
+   * are the same as for the {@link MiniSearch#search} method, except that by
+   * default prefix search is performed on the last term in the query, and terms
+   * are combined with `'AND'`.
+   * @return  A sorted array of suggestions sorted by relevance score.
+   */
+  autoSuggest(queryString, options = {}) {
+    options = { ...this._options.autoSuggestOptions, ...options };
+    const suggestions = /* @__PURE__ */ new Map();
+    for (const { score, terms } of this.search(queryString, options)) {
+      const phrase = terms.join(" ");
+      const suggestion = suggestions.get(phrase);
+      if (suggestion != null) {
+        suggestion.score += score;
+        suggestion.count += 1;
+      } else {
+        suggestions.set(phrase, { score, terms, count: 1 });
+      }
+    }
+    const results = [];
+    for (const [suggestion, { score, terms, count }] of suggestions) {
+      results.push({ suggestion, terms, score: score / count });
+    }
+    results.sort(byScore);
+    return results;
+  }
+  /**
+   * Total number of documents available to search
+   */
+  get documentCount() {
+    return this._documentCount;
+  }
+  /**
+   * Number of terms in the index
+   */
+  get termCount() {
+    return this._index.size;
+  }
+  /**
+   * Deserializes a JSON index (serialized with `JSON.stringify(miniSearch)`)
+   * and instantiates a MiniSearch instance. It should be given the same options
+   * originally used when serializing the index.
+   *
+   * ### Usage:
+   *
+   * ```javascript
+   * // If the index was serialized with:
+   * let miniSearch = new MiniSearch({ fields: ['title', 'text'] })
+   * miniSearch.addAll(documents)
+   *
+   * const json = JSON.stringify(miniSearch)
+   * // It can later be deserialized like this:
+   * miniSearch = MiniSearch.loadJSON(json, { fields: ['title', 'text'] })
+   * ```
+   *
+   * @param json  JSON-serialized index
+   * @param options  configuration options, same as the constructor
+   * @return An instance of MiniSearch deserialized from the given JSON.
+   */
+  static loadJSON(json2, options) {
+    if (options == null) {
+      throw new Error("MiniSearch: loadJSON should be given the same options used when serializing the index");
+    }
+    return this.loadJS(JSON.parse(json2), options);
+  }
+  /**
+   * Async equivalent of {@link MiniSearch.loadJSON}
+   *
+   * This function is an alternative to {@link MiniSearch.loadJSON} that returns
+   * a promise, and loads the index in batches, leaving pauses between them to avoid
+   * blocking the main thread. It tends to be slower than the synchronous
+   * version, but does not block the main thread, so it can be a better choice
+   * when deserializing very large indexes.
+   *
+   * @param json  JSON-serialized index
+   * @param options  configuration options, same as the constructor
+   * @return A Promise that will resolve to an instance of MiniSearch deserialized from the given JSON.
+   */
+  static async loadJSONAsync(json2, options) {
+    if (options == null) {
+      throw new Error("MiniSearch: loadJSON should be given the same options used when serializing the index");
+    }
+    return this.loadJSAsync(JSON.parse(json2), options);
+  }
+  /**
+   * Returns the default value of an option. It will throw an error if no option
+   * with the given name exists.
+   *
+   * @param optionName  Name of the option
+   * @return The default value of the given option
+   *
+   * ### Usage:
+   *
+   * ```javascript
+   * // Get default tokenizer
+   * MiniSearch.getDefault('tokenize')
+   *
+   * // Get default term processor
+   * MiniSearch.getDefault('processTerm')
+   *
+   * // Unknown options will throw an error
+   * MiniSearch.getDefault('notExisting')
+   * // => throws 'MiniSearch: unknown option "notExisting"'
+   * ```
+   */
+  static getDefault(optionName) {
+    if (defaultOptions.hasOwnProperty(optionName)) {
+      return getOwnProperty(defaultOptions, optionName);
+    } else {
+      throw new Error(`MiniSearch: unknown option "${optionName}"`);
+    }
+  }
+  /**
+   * @ignore
+   */
+  static loadJS(js, options) {
+    const { index, documentIds, fieldLength, storedFields, serializationVersion } = js;
+    const miniSearch = this.instantiateMiniSearch(js, options);
+    miniSearch._documentIds = objectToNumericMap(documentIds);
+    miniSearch._fieldLength = objectToNumericMap(fieldLength);
+    miniSearch._storedFields = objectToNumericMap(storedFields);
+    for (const [shortId, id] of miniSearch._documentIds) {
+      miniSearch._idToShortId.set(id, shortId);
+    }
+    for (const [term, data] of index) {
+      const dataMap = /* @__PURE__ */ new Map();
+      for (const fieldId of Object.keys(data)) {
+        let indexEntry = data[fieldId];
+        if (serializationVersion === 1) {
+          indexEntry = indexEntry.ds;
+        }
+        dataMap.set(parseInt(fieldId, 10), objectToNumericMap(indexEntry));
+      }
+      miniSearch._index.set(term, dataMap);
+    }
+    return miniSearch;
+  }
+  /**
+   * @ignore
+   */
+  static async loadJSAsync(js, options) {
+    const { index, documentIds, fieldLength, storedFields, serializationVersion } = js;
+    const miniSearch = this.instantiateMiniSearch(js, options);
+    miniSearch._documentIds = await objectToNumericMapAsync(documentIds);
+    miniSearch._fieldLength = await objectToNumericMapAsync(fieldLength);
+    miniSearch._storedFields = await objectToNumericMapAsync(storedFields);
+    for (const [shortId, id] of miniSearch._documentIds) {
+      miniSearch._idToShortId.set(id, shortId);
+    }
+    let count = 0;
+    for (const [term, data] of index) {
+      const dataMap = /* @__PURE__ */ new Map();
+      for (const fieldId of Object.keys(data)) {
+        let indexEntry = data[fieldId];
+        if (serializationVersion === 1) {
+          indexEntry = indexEntry.ds;
+        }
+        dataMap.set(parseInt(fieldId, 10), await objectToNumericMapAsync(indexEntry));
+      }
+      if (++count % 1e3 === 0)
+        await wait(0);
+      miniSearch._index.set(term, dataMap);
+    }
+    return miniSearch;
+  }
+  /**
+   * @ignore
+   */
+  static instantiateMiniSearch(js, options) {
+    const { documentCount, nextId, fieldIds, averageFieldLength, dirtCount, serializationVersion } = js;
+    if (serializationVersion !== 1 && serializationVersion !== 2) {
+      throw new Error("MiniSearch: cannot deserialize an index created with an incompatible version");
+    }
+    const miniSearch = new _MiniSearch(options);
+    miniSearch._documentCount = documentCount;
+    miniSearch._nextId = nextId;
+    miniSearch._idToShortId = /* @__PURE__ */ new Map();
+    miniSearch._fieldIds = fieldIds;
+    miniSearch._avgFieldLength = averageFieldLength;
+    miniSearch._dirtCount = dirtCount || 0;
+    miniSearch._index = new SearchableMap();
+    return miniSearch;
+  }
+  /**
+   * @ignore
+   */
+  executeQuery(query, searchOptions = {}) {
+    if (query === _MiniSearch.wildcard) {
+      return this.executeWildcardQuery(searchOptions);
+    }
+    if (typeof query !== "string") {
+      const options2 = { ...searchOptions, ...query, queries: void 0 };
+      const results2 = query.queries.map((subquery) => this.executeQuery(subquery, options2));
+      return this.combineResults(results2, options2.combineWith);
+    }
+    const { tokenize, processTerm, searchOptions: globalSearchOptions } = this._options;
+    const options = { tokenize, processTerm, ...globalSearchOptions, ...searchOptions };
+    const { tokenize: searchTokenize, processTerm: searchProcessTerm } = options;
+    const terms = searchTokenize(query).flatMap((term) => searchProcessTerm(term)).filter((term) => !!term);
+    const queries = terms.map(termToQuerySpec(options));
+    const results = queries.map((query2) => this.executeQuerySpec(query2, options));
+    return this.combineResults(results, options.combineWith);
+  }
+  /**
+   * @ignore
+   */
+  executeQuerySpec(query, searchOptions) {
+    const options = { ...this._options.searchOptions, ...searchOptions };
+    const boosts = (options.fields || this._options.fields).reduce((boosts2, field) => ({ ...boosts2, [field]: getOwnProperty(options.boost, field) || 1 }), {});
+    const { boostDocument, weights, maxFuzzy, bm25: bm25params } = options;
+    const { fuzzy: fuzzyWeight, prefix: prefixWeight } = { ...defaultSearchOptions.weights, ...weights };
+    const data = this._index.get(query.term);
+    const results = this.termResults(query.term, query.term, 1, query.termBoost, data, boosts, boostDocument, bm25params);
+    let prefixMatches;
+    let fuzzyMatches;
+    if (query.prefix) {
+      prefixMatches = this._index.atPrefix(query.term);
+    }
+    if (query.fuzzy) {
+      const fuzzy = query.fuzzy === true ? 0.2 : query.fuzzy;
+      const maxDistance = fuzzy < 1 ? Math.min(maxFuzzy, Math.round(query.term.length * fuzzy)) : fuzzy;
+      if (maxDistance)
+        fuzzyMatches = this._index.fuzzyGet(query.term, maxDistance);
+    }
+    if (prefixMatches) {
+      for (const [term, data2] of prefixMatches) {
+        const distance = term.length - query.term.length;
+        if (!distance) {
+          continue;
+        }
+        fuzzyMatches === null || fuzzyMatches === void 0 ? void 0 : fuzzyMatches.delete(term);
+        const weight = prefixWeight * term.length / (term.length + 0.3 * distance);
+        this.termResults(query.term, term, weight, query.termBoost, data2, boosts, boostDocument, bm25params, results);
+      }
+    }
+    if (fuzzyMatches) {
+      for (const term of fuzzyMatches.keys()) {
+        const [data2, distance] = fuzzyMatches.get(term);
+        if (!distance) {
+          continue;
+        }
+        const weight = fuzzyWeight * term.length / (term.length + distance);
+        this.termResults(query.term, term, weight, query.termBoost, data2, boosts, boostDocument, bm25params, results);
+      }
+    }
+    return results;
+  }
+  /**
+   * @ignore
+   */
+  executeWildcardQuery(searchOptions) {
+    const results = /* @__PURE__ */ new Map();
+    const options = { ...this._options.searchOptions, ...searchOptions };
+    for (const [shortId, id] of this._documentIds) {
+      const score = options.boostDocument ? options.boostDocument(id, "", this._storedFields.get(shortId)) : 1;
+      results.set(shortId, {
+        score,
+        terms: [],
+        match: {}
+      });
+    }
+    return results;
+  }
+  /**
+   * @ignore
+   */
+  combineResults(results, combineWith = OR) {
+    if (results.length === 0) {
+      return /* @__PURE__ */ new Map();
+    }
+    const operator = combineWith.toLowerCase();
+    const combinator = combinators[operator];
+    if (!combinator) {
+      throw new Error(`Invalid combination operator: ${combineWith}`);
+    }
+    return results.reduce(combinator) || /* @__PURE__ */ new Map();
+  }
+  /**
+   * Allows serialization of the index to JSON, to possibly store it and later
+   * deserialize it with {@link MiniSearch.loadJSON}.
+   *
+   * Normally one does not directly call this method, but rather call the
+   * standard JavaScript `JSON.stringify()` passing the {@link MiniSearch}
+   * instance, and JavaScript will internally call this method. Upon
+   * deserialization, one must pass to {@link MiniSearch.loadJSON} the same
+   * options used to create the original instance that was serialized.
+   *
+   * ### Usage:
+   *
+   * ```javascript
+   * // Serialize the index:
+   * let miniSearch = new MiniSearch({ fields: ['title', 'text'] })
+   * miniSearch.addAll(documents)
+   * const json = JSON.stringify(miniSearch)
+   *
+   * // Later, to deserialize it:
+   * miniSearch = MiniSearch.loadJSON(json, { fields: ['title', 'text'] })
+   * ```
+   *
+   * @return A plain-object serializable representation of the search index.
+   */
+  toJSON() {
+    const index = [];
+    for (const [term, fieldIndex] of this._index) {
+      const data = {};
+      for (const [fieldId, freqs] of fieldIndex) {
+        data[fieldId] = Object.fromEntries(freqs);
+      }
+      index.push([term, data]);
+    }
+    return {
+      documentCount: this._documentCount,
+      nextId: this._nextId,
+      documentIds: Object.fromEntries(this._documentIds),
+      fieldIds: this._fieldIds,
+      fieldLength: Object.fromEntries(this._fieldLength),
+      averageFieldLength: this._avgFieldLength,
+      storedFields: Object.fromEntries(this._storedFields),
+      dirtCount: this._dirtCount,
+      index,
+      serializationVersion: 2
+    };
+  }
+  /**
+   * @ignore
+   */
+  termResults(sourceTerm, derivedTerm, termWeight, termBoost, fieldTermData, fieldBoosts, boostDocumentFn, bm25params, results = /* @__PURE__ */ new Map()) {
+    if (fieldTermData == null)
+      return results;
+    for (const field of Object.keys(fieldBoosts)) {
+      const fieldBoost = fieldBoosts[field];
+      const fieldId = this._fieldIds[field];
+      const fieldTermFreqs = fieldTermData.get(fieldId);
+      if (fieldTermFreqs == null)
+        continue;
+      let matchingFields = fieldTermFreqs.size;
+      const avgFieldLength = this._avgFieldLength[fieldId];
+      for (const docId of fieldTermFreqs.keys()) {
+        if (!this._documentIds.has(docId)) {
+          this.removeTerm(fieldId, docId, derivedTerm);
+          matchingFields -= 1;
+          continue;
+        }
+        const docBoost = boostDocumentFn ? boostDocumentFn(this._documentIds.get(docId), derivedTerm, this._storedFields.get(docId)) : 1;
+        if (!docBoost)
+          continue;
+        const termFreq = fieldTermFreqs.get(docId);
+        const fieldLength = this._fieldLength.get(docId)[fieldId];
+        const rawScore = calcBM25Score(termFreq, matchingFields, this._documentCount, fieldLength, avgFieldLength, bm25params);
+        const weightedScore = termWeight * termBoost * fieldBoost * docBoost * rawScore;
+        const result = results.get(docId);
+        if (result) {
+          result.score += weightedScore;
+          assignUniqueTerm(result.terms, sourceTerm);
+          const match = getOwnProperty(result.match, derivedTerm);
+          if (match) {
+            match.push(field);
+          } else {
+            result.match[derivedTerm] = [field];
+          }
+        } else {
+          results.set(docId, {
+            score: weightedScore,
+            terms: [sourceTerm],
+            match: { [derivedTerm]: [field] }
+          });
+        }
+      }
+    }
+    return results;
+  }
+  /**
+   * @ignore
+   */
+  addTerm(fieldId, documentId, term) {
+    const indexData = this._index.fetch(term, createMap);
+    let fieldIndex = indexData.get(fieldId);
+    if (fieldIndex == null) {
+      fieldIndex = /* @__PURE__ */ new Map();
+      fieldIndex.set(documentId, 1);
+      indexData.set(fieldId, fieldIndex);
+    } else {
+      const docs = fieldIndex.get(documentId);
+      fieldIndex.set(documentId, (docs || 0) + 1);
+    }
+  }
+  /**
+   * @ignore
+   */
+  removeTerm(fieldId, documentId, term) {
+    if (!this._index.has(term)) {
+      this.warnDocumentChanged(documentId, fieldId, term);
+      return;
+    }
+    const indexData = this._index.fetch(term, createMap);
+    const fieldIndex = indexData.get(fieldId);
+    if (fieldIndex == null || fieldIndex.get(documentId) == null) {
+      this.warnDocumentChanged(documentId, fieldId, term);
+    } else if (fieldIndex.get(documentId) <= 1) {
+      if (fieldIndex.size <= 1) {
+        indexData.delete(fieldId);
+      } else {
+        fieldIndex.delete(documentId);
+      }
+    } else {
+      fieldIndex.set(documentId, fieldIndex.get(documentId) - 1);
+    }
+    if (this._index.get(term).size === 0) {
+      this._index.delete(term);
+    }
+  }
+  /**
+   * @ignore
+   */
+  warnDocumentChanged(shortDocumentId, fieldId, term) {
+    for (const fieldName of Object.keys(this._fieldIds)) {
+      if (this._fieldIds[fieldName] === fieldId) {
+        this._options.logger("warn", `MiniSearch: document with ID ${this._documentIds.get(shortDocumentId)} has changed before removal: term "${term}" was not present in field "${fieldName}". Removing a document after it has changed can corrupt the index!`, "version_conflict");
+        return;
+      }
+    }
+  }
+  /**
+   * @ignore
+   */
+  addDocumentId(documentId) {
+    const shortDocumentId = this._nextId;
+    this._idToShortId.set(documentId, shortDocumentId);
+    this._documentIds.set(shortDocumentId, documentId);
+    this._documentCount += 1;
+    this._nextId += 1;
+    return shortDocumentId;
+  }
+  /**
+   * @ignore
+   */
+  addFields(fields) {
+    for (let i = 0; i < fields.length; i++) {
+      this._fieldIds[fields[i]] = i;
+    }
+  }
+  /**
+   * @ignore
+   */
+  addFieldLength(documentId, fieldId, count, length) {
+    let fieldLengths = this._fieldLength.get(documentId);
+    if (fieldLengths == null)
+      this._fieldLength.set(documentId, fieldLengths = []);
+    fieldLengths[fieldId] = length;
+    const averageFieldLength = this._avgFieldLength[fieldId] || 0;
+    const totalFieldLength = averageFieldLength * count + length;
+    this._avgFieldLength[fieldId] = totalFieldLength / (count + 1);
+  }
+  /**
+   * @ignore
+   */
+  removeFieldLength(documentId, fieldId, count, length) {
+    if (count === 1) {
+      this._avgFieldLength[fieldId] = 0;
+      return;
+    }
+    const totalFieldLength = this._avgFieldLength[fieldId] * count - length;
+    this._avgFieldLength[fieldId] = totalFieldLength / (count - 1);
+  }
+  /**
+   * @ignore
+   */
+  saveStoredFields(documentId, doc) {
+    const { storeFields, extractField } = this._options;
+    if (storeFields == null || storeFields.length === 0) {
+      return;
+    }
+    let documentFields = this._storedFields.get(documentId);
+    if (documentFields == null)
+      this._storedFields.set(documentId, documentFields = {});
+    for (const fieldName of storeFields) {
+      const fieldValue = extractField(doc, fieldName);
+      if (fieldValue !== void 0)
+        documentFields[fieldName] = fieldValue;
+    }
+  }
+};
+MiniSearch.wildcard = Symbol("*");
+var getOwnProperty = (object2, property) => Object.prototype.hasOwnProperty.call(object2, property) ? object2[property] : void 0;
+var combinators = {
+  [OR]: (a, b) => {
+    for (const docId of b.keys()) {
+      const existing = a.get(docId);
+      if (existing == null) {
+        a.set(docId, b.get(docId));
+      } else {
+        const { score, terms, match } = b.get(docId);
+        existing.score = existing.score + score;
+        existing.match = Object.assign(existing.match, match);
+        assignUniqueTerms(existing.terms, terms);
+      }
+    }
+    return a;
+  },
+  [AND]: (a, b) => {
+    const combined = /* @__PURE__ */ new Map();
+    for (const docId of b.keys()) {
+      const existing = a.get(docId);
+      if (existing == null)
+        continue;
+      const { score, terms, match } = b.get(docId);
+      assignUniqueTerms(existing.terms, terms);
+      combined.set(docId, {
+        score: existing.score + score,
+        terms: existing.terms,
+        match: Object.assign(existing.match, match)
+      });
+    }
+    return combined;
+  },
+  [AND_NOT]: (a, b) => {
+    for (const docId of b.keys())
+      a.delete(docId);
+    return a;
+  }
+};
+var defaultBM25params = { k: 1.2, b: 0.7, d: 0.5 };
+var calcBM25Score = (termFreq, matchingCount, totalCount, fieldLength, avgFieldLength, bm25params) => {
+  const { k, b, d } = bm25params;
+  const invDocFreq = Math.log(1 + (totalCount - matchingCount + 0.5) / (matchingCount + 0.5));
+  return invDocFreq * (d + termFreq * (k + 1) / (termFreq + k * (1 - b + b * fieldLength / avgFieldLength)));
+};
+var termToQuerySpec = (options) => (term, i, terms) => {
+  const fuzzy = typeof options.fuzzy === "function" ? options.fuzzy(term, i, terms) : options.fuzzy || false;
+  const prefix = typeof options.prefix === "function" ? options.prefix(term, i, terms) : options.prefix === true;
+  const termBoost = typeof options.boostTerm === "function" ? options.boostTerm(term, i, terms) : 1;
+  return { term, fuzzy, prefix, termBoost };
+};
+var defaultOptions = {
+  idField: "id",
+  extractField: (document, fieldName) => document[fieldName],
+  stringifyField: (fieldValue, fieldName) => fieldValue.toString(),
+  tokenize: (text) => text.split(SPACE_OR_PUNCTUATION),
+  processTerm: (term) => term.toLowerCase(),
+  fields: void 0,
+  searchOptions: void 0,
+  storeFields: [],
+  logger: (level, message) => {
+    if (typeof (console === null || console === void 0 ? void 0 : console[level]) === "function")
+      console[level](message);
+  },
+  autoVacuum: true
+};
+var defaultSearchOptions = {
+  combineWith: OR,
+  prefix: false,
+  fuzzy: false,
+  maxFuzzy: 6,
+  boost: {},
+  weights: { fuzzy: 0.45, prefix: 0.375 },
+  bm25: defaultBM25params
+};
+var defaultAutoSuggestOptions = {
+  combineWith: AND,
+  prefix: (term, i, terms) => i === terms.length - 1
+};
+var defaultVacuumOptions = { batchSize: 1e3, batchWait: 10 };
+var defaultVacuumConditions = { minDirtFactor: 0.1, minDirtCount: 20 };
+var defaultAutoVacuumOptions = { ...defaultVacuumOptions, ...defaultVacuumConditions };
+var assignUniqueTerm = (target, term) => {
+  if (!target.includes(term))
+    target.push(term);
+};
+var assignUniqueTerms = (target, source) => {
+  for (const term of source) {
+    if (!target.includes(term))
+      target.push(term);
+  }
+};
+var byScore = ({ score: a }, { score: b }) => b - a;
+var createMap = () => /* @__PURE__ */ new Map();
+var objectToNumericMap = (object2) => {
+  const map2 = /* @__PURE__ */ new Map();
+  for (const key of Object.keys(object2)) {
+    map2.set(parseInt(key, 10), object2[key]);
+  }
+  return map2;
+};
+var objectToNumericMapAsync = async (object2) => {
+  const map2 = /* @__PURE__ */ new Map();
+  let count = 0;
+  for (const key of Object.keys(object2)) {
+    map2.set(parseInt(key, 10), object2[key]);
+    if (++count % 1e3 === 0) {
+      await wait(0);
+    }
+  }
+  return map2;
+};
+var wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+var SPACE_OR_PUNCTUATION = /[\n\r\p{Z}\p{P}]+/u;
+
+// src/utils/vaultSearch.ts
+var import_obsidian4 = require("obsidian");
+var VaultSearch = class {
+  constructor(app) {
+    this.indexed = false;
+    this.indexing = false;
+    /** Track mtime per file to skip unchanged files on full re-index */
+    this.fileMtimes = /* @__PURE__ */ new Map();
+    /** Vault event refs for cleanup */
+    this.eventRefs = [];
+    this.app = app;
+    this.index = new MiniSearch({
+      fields: ["title", "heading", "content", "tags"],
+      storeFields: ["path", "title", "heading", "content"],
+      searchOptions: {
+        boost: { title: 3, heading: 2, tags: 2, content: 1 },
+        fuzzy: 0.2,
+        prefix: true
+      }
+    });
+  }
+  /**
+   * Build the full index and start listening for vault changes.
+   */
+  async ensureIndex() {
+    if (this.indexing) return;
+    if (this.indexed) return;
+    this.indexing = true;
+    try {
+      const files = this.app.vault.getMarkdownFiles();
+      for (const file2 of files) {
+        await this.indexFile(file2);
+      }
+      this.indexed = true;
+      this.registerVaultEvents();
+    } finally {
+      this.indexing = false;
+    }
+  }
+  /**
+   * Listen for vault file changes and update the index incrementally.
+   */
+  registerVaultEvents() {
+    this.eventRefs.push(
+      this.app.vault.on("modify", (file2) => {
+        if (file2 instanceof Object && "extension" in file2 && file2.extension === "md") {
+          this.reindexFile(file2);
+        }
+      })
+    );
+    this.eventRefs.push(
+      this.app.vault.on("create", (file2) => {
+        if (file2 instanceof Object && "extension" in file2 && file2.extension === "md") {
+          this.indexFile(file2);
+        }
+      })
+    );
+    this.eventRefs.push(
+      this.app.vault.on("delete", (file2) => {
+        this.removeFile(file2.path);
+      })
+    );
+    this.eventRefs.push(
+      this.app.vault.on("rename", (file2, oldPath) => {
+        this.removeFile(oldPath);
+        if (file2 instanceof Object && "extension" in file2 && file2.extension === "md") {
+          this.indexFile(file2);
+        }
+      })
+    );
+  }
+  /**
+   * Remove all chunks belonging to a file path.
+   */
+  removeFile(path) {
+    this.fileMtimes.delete(path);
+    const toRemove = Array.from({ length: 100 }, (_, i) => `${path}#${i}`);
+    for (const id of toRemove) {
+      try {
+        this.index.discard(id);
+      } catch (e) {
+        break;
+      }
+    }
+  }
+  /**
+   * Re-index a single file (remove old chunks, add new ones).
+   */
+  async reindexFile(file2) {
+    this.removeFile(file2.path);
+    await this.indexFile(file2);
+  }
+  /**
+   * Index a single file by splitting it into heading-level chunks.
+   */
+  async indexFile(file2) {
+    let content;
+    try {
+      content = await this.app.vault.cachedRead(file2);
+    } catch (e) {
+      return;
+    }
+    if (!content.trim()) return;
+    this.fileMtimes.set(file2.path, file2.stat.mtime);
+    const title = file2.basename;
+    const tags = this.extractTags(content);
+    const chunks = this.splitByHeadings(content);
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+      if (!chunk.text.trim()) continue;
+      this.index.add({
+        id: `${file2.path}#${i}`,
+        path: file2.path,
+        title,
+        heading: chunk.heading,
+        content: chunk.text,
+        tags
+      });
+    }
+  }
+  /**
+   * Split markdown content into chunks by headings.
+   */
+  splitByHeadings(content) {
+    var _a3;
+    const lines = content.split("\n");
+    const chunks = [];
+    let currentHeading = "";
+    let currentLines = [];
+    let startIdx = 0;
+    if (((_a3 = lines[0]) == null ? void 0 : _a3.trim()) === "---") {
+      for (let i = 1; i < lines.length; i++) {
+        if (lines[i].trim() === "---") {
+          startIdx = i + 1;
+          break;
+        }
+      }
+    }
+    for (let i = startIdx; i < lines.length; i++) {
+      const line = lines[i];
+      const headingMatch = line.match(/^(#{1,3})\s+(.+)/);
+      if (headingMatch) {
+        if (currentLines.length > 0) {
+          chunks.push({ heading: currentHeading, text: currentLines.join("\n") });
+        }
+        currentHeading = headingMatch[2].trim();
+        currentLines = [line];
+      } else {
+        currentLines.push(line);
+      }
+    }
+    if (currentLines.length > 0) {
+      chunks.push({ heading: currentHeading, text: currentLines.join("\n") });
+    }
+    return chunks;
+  }
+  /**
+   * Extract tags from frontmatter and inline tags.
+   */
+  extractTags(content) {
+    const tags = [];
+    const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
+    if (fmMatch) {
+      const tagLine = fmMatch[1].match(/tags:\s*\[?([^\]\n]+)/);
+      if (tagLine) {
+        tags.push(...tagLine[1].split(",").map((t) => t.trim().replace(/^#/, "")));
+      }
+    }
+    const inlineTags = content.match(/#[a-zA-Z][\w/-]*/g);
+    if (inlineTags) {
+      tags.push(...inlineTags.map((t) => t.replace(/^#/, "")));
+    }
+    return [...new Set(tags)].join(" ");
+  }
+  /**
+   * Get the content of the currently active note.
+   */
+  getActiveNoteContext() {
+    const view = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+    if (!(view == null ? void 0 : view.file)) return null;
+    return {
+      path: view.file.path,
+      title: view.file.basename,
+      content: view.editor.getValue()
+    };
+  }
+  /**
+   * Search the vault for chunks relevant to a query.
+   * Active note chunks are always boosted to the top.
+   */
+  async search(query, maxResults = 15) {
+    await this.ensureIndex();
+    const results = this.index.search(query, { limit: maxResults + 10 });
+    const activeNote = this.getActiveNoteContext();
+    const activePath = activeNote == null ? void 0 : activeNote.path;
+    const activeResults = results.filter((r) => r.path === activePath);
+    const otherResults = results.filter((r) => r.path !== activePath);
+    const combined = [...activeResults, ...otherResults].slice(0, maxResults);
+    return combined.map((r) => ({
+      path: r.path,
+      title: r.title,
+      heading: r.heading,
+      content: r.content,
+      score: r.score
+    }));
+  }
+  /**
+   * Build a context string from search results.
+   * Always includes the active note (even if not in search results),
+   * then fills remaining budget with relevant vault chunks.
+   */
+  async buildContext(query, maxChars = 12e3, maxResults = 15) {
+    const parts = [];
+    let totalLength = 0;
+    const activeNote = this.getActiveNoteContext();
+    if (activeNote && activeNote.content.trim()) {
+      const activeBudget = Math.floor(maxChars * 0.3);
+      const activeContent = activeNote.content.length > activeBudget ? activeNote.content.slice(0, activeBudget) + "\n[... rest of active note omitted]" : activeNote.content;
+      const activeBlock = `=== Active note: ${activeNote.title} (${activeNote.path}) ===
+${activeContent}
+`;
+      parts.push(activeBlock);
+      totalLength += activeBlock.length;
+    }
+    const results = await this.search(query, maxResults);
+    const ragResults = activeNote ? results.filter((r) => r.path !== activeNote.path) : results;
+    if (ragResults.length > 0) {
+      const ragHeader = "\n=== Related notes from vault ===\n";
+      parts.push(ragHeader);
+      totalLength += ragHeader.length;
+      for (const r of ragResults) {
+        const header = `--- ${r.title}${r.heading ? " > " + r.heading : ""} ---`;
+        const chunk = r.content.length > 2e3 ? r.content.slice(0, 2e3) + "\n[...]" : r.content;
+        const entry = header + "\n" + chunk + "\n";
+        if (totalLength + entry.length > maxChars) break;
+        parts.push(entry);
+        totalLength += entry.length;
+      }
+    }
+    if (parts.length === 0) return "";
+    parts.push("=== End of vault context ===");
+    return parts.join("\n");
+  }
+  /**
+   * Clean up event listeners.
+   */
+  destroy() {
+    for (const ref of this.eventRefs) {
+      this.app.vault.offref(ref);
+    }
+    this.eventRefs = [];
+  }
+  get documentCount() {
+    return this.index.documentCount;
+  }
+};
+
+// src/views/ChatView.ts
 var CHAT_VIEW_TYPE = "llm-chat-view";
 var PROVIDER_DISPLAY_NAMES3 = {
   claude: "Claude",
@@ -18720,8 +20789,7 @@ var PROVIDER_DISPLAY_NAMES3 = {
   gemini: "Gemini",
   local: "Local LLM"
 };
-var ChatView = class extends import_obsidian4.ItemView {
-  // Track in-flight ACP connection
+var ChatView = class _ChatView extends import_obsidian5.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.messages = [];
@@ -18730,8 +20798,11 @@ var ChatView = class extends import_obsidian4.ItemView {
     this.inputEl = null;
     this.sendBtn = null;
     this.cancelBtn = null;
-    this.includeContextToggle = null;
     this.progressContainer = null;
+    // Chat tabs
+    this.chatTabs = [];
+    this.activeChatId = "";
+    this.tabBar = null;
     this.currentToolUse = null;
     this.markdownComponents = [];
     this.toolHistory = [];
@@ -18739,10 +20810,13 @@ var ChatView = class extends import_obsidian4.ItemView {
     this.hasActiveSession = false;
     // Track if we have an active Claude session
     this.acpConnectionPromise = null;
+    this.providerSelectEl = null;
+    this.modelSelectEl = null;
     this.plugin = plugin;
     this.executor = new LLMExecutor(plugin.settings);
     this.acpExecutor = new AcpExecutor(plugin.settings);
     this.localExecutor = new LocalLLMExecutor(plugin.settings);
+    this.vaultSearch = new VaultSearch(plugin.app);
     this.currentProvider = plugin.settings.defaultProvider;
   }
   getViewType() {
@@ -18755,6 +20829,7 @@ var ChatView = class extends import_obsidian4.ItemView {
     return "message-square";
   }
   async onOpen() {
+    this.loadSessions();
     const container = this.containerEl.children[1];
     container.empty();
     container.addClass("llm-chat-view");
@@ -18765,53 +20840,232 @@ var ChatView = class extends import_obsidian4.ItemView {
       var _a3;
       return (_a3 = this.inputEl) == null ? void 0 : _a3.focus();
     }, 50);
+    this.vaultSearch.ensureIndex();
     this.connectAcpIfEnabled();
   }
   async onClose() {
+    await this.persistSessions();
     this.executor.cancel();
     await this.acpExecutor.disconnect();
+    this.vaultSearch.destroy();
     this.markdownComponents.forEach((c) => c.unload());
     this.markdownComponents = [];
     this.plugin.updateStatusBar();
   }
+  loadSessions() {
+    const saved = this.plugin.getChatSessions();
+    if (saved.length > 0) {
+      this.chatTabs = saved.map((s) => ({
+        id: s.id,
+        name: s.name,
+        messages: s.messages
+      }));
+      this.activeChatId = this.chatTabs[0].id;
+      this.messages = this.chatTabs[0].messages;
+    }
+  }
+  async persistSessions() {
+    const current = this.chatTabs.find((t) => t.id === this.activeChatId);
+    if (current) current.messages = this.messages;
+    const sessions = this.chatTabs.map((t) => ({
+      id: t.id,
+      name: t.name,
+      messages: t.messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+        timestamp: m.timestamp,
+        provider: m.provider
+      }))
+    }));
+    await this.plugin.saveChatSessions(sessions);
+  }
   renderHeader(container) {
     const header = container.createDiv({ cls: "llm-chat-header" });
-    const controlsRow = header.createDiv({ cls: "llm-chat-controls" });
-    const providerSelector = controlsRow.createDiv({ cls: "llm-provider-selector" });
-    providerSelector.createSpan({ text: "Provider: " });
-    const dropdown = new import_obsidian4.DropdownComponent(providerSelector);
-    const providers = ["claude", "opencode", "codex", "gemini", "local"];
-    providers.forEach((provider) => {
-      if (this.plugin.settings.providers[provider].enabled) {
-        dropdown.addOption(provider, PROVIDER_DISPLAY_NAMES3[provider]);
-      }
-    });
-    dropdown.setValue(this.currentProvider);
-    dropdown.onChange((value) => {
-      this.currentProvider = value;
-      this.plugin.updateStatusBar(this.currentProvider);
+    this.tabBar = header.createDiv({ cls: "llm-tab-bar" });
+    if (this.chatTabs.length === 0) {
+      this.createNewChat();
+    }
+    this.renderTabs();
+    const selectorRow2 = header.createDiv({ cls: "llm-selector-row" });
+    this.providerSelectEl = selectorRow2.createEl("select", { cls: "llm-provider-select" });
+    const allProviders = ["claude", "opencode", "codex", "gemini", "local"];
+    for (const p of allProviders) {
+      const config2 = this.plugin.settings.providers[p];
+      if (!(config2 == null ? void 0 : config2.enabled)) continue;
+      const opt = this.providerSelectEl.createEl("option", {
+        value: p,
+        text: PROVIDER_DISPLAY_NAMES3[p]
+      });
+      if (p === this.currentProvider) opt.selected = true;
+    }
+    this.providerSelectEl.addEventListener("change", () => {
+      const newProvider = this.providerSelectEl.value;
+      this.currentProvider = newProvider;
+      this.plugin.updateStatusBar(newProvider);
+      this.refreshModelSelect();
       this.connectAcpIfEnabled();
     });
+    this.modelSelectEl = selectorRow2.createEl("select", { cls: "llm-model-select" });
+    this.refreshModelSelect();
     this.plugin.updateStatusBar(this.currentProvider);
-    const contextToggle = controlsRow.createDiv({ cls: "llm-context-toggle" });
-    const contextLabel = contextToggle.createEl("label", {
-      cls: "llm-toggle-label"
+  }
+  /**
+   * Refresh the model dropdown for the current provider
+   */
+  async refreshModelSelect() {
+    if (!this.modelSelectEl) return;
+    this.modelSelectEl.empty();
+    const config2 = this.plugin.settings.providers[this.currentProvider];
+    const currentModel = (config2 == null ? void 0 : config2.model) || "";
+    this.modelSelectEl.createEl("option", { value: "", text: "Loading models..." });
+    try {
+      const models = await fetchModelsForProvider(this.currentProvider, config2);
+      this.modelSelectEl.empty();
+      for (const m of models) {
+        const opt = this.modelSelectEl.createEl("option", {
+          value: m.value,
+          text: m.label
+        });
+        if (m.value === currentModel) opt.selected = true;
+      }
+    } catch (e) {
+      this.modelSelectEl.empty();
+      this.modelSelectEl.createEl("option", { value: "", text: "Default" });
+    }
+    this.modelSelectEl.addEventListener("change", async () => {
+      const newModel = this.modelSelectEl.value;
+      this.plugin.settings.providers[this.currentProvider].model = newModel || void 0;
+      await this.plugin.saveSettings();
+      this.plugin.updateStatusBar(this.currentProvider);
     });
-    this.includeContextToggle = contextLabel.createEl("input", {
-      type: "checkbox",
-      attr: { checked: "true" }
+    const exportBtn = selectorRow.createEl("button", {
+      cls: "llm-export-btn clickable-icon",
+      attr: { "aria-label": "Save conversation as note" }
     });
-    this.includeContextToggle.checked = true;
-    contextLabel.createSpan({ text: " Include open files" });
-    const clearBtn = controlsRow.createEl("button", {
-      cls: "llm-icon-btn",
-      attr: { "aria-label": "Clear conversation" }
+    (0, import_obsidian5.setIcon)(exportBtn, "download");
+    exportBtn.addEventListener("click", () => this.exportConversation());
+  }
+  /**
+   * Export the entire conversation as a markdown note
+   */
+  async exportConversation() {
+    if (this.messages.length === 0) {
+      new import_obsidian5.Notice("No messages to export");
+      return;
+    }
+    const tab = this.chatTabs.find((t) => t.id === this.activeChatId);
+    const chatName = (tab == null ? void 0 : tab.name) || "Chat";
+    const now = /* @__PURE__ */ new Date();
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const lines = [];
+    lines.push(`# ${chatName}`);
+    lines.push(`*Exported ${now.toLocaleString()}*
+`);
+    for (const msg of this.messages) {
+      const role = msg.role === "user" ? "You" : PROVIDER_DISPLAY_NAMES3[msg.provider];
+      const time3 = new Date(msg.timestamp).toLocaleTimeString();
+      lines.push(`## ${role} \u2014 ${time3}
+`);
+      lines.push(msg.content);
+      lines.push("");
+    }
+    const content = lines.join("\n");
+    let fileName = `${chatName} ${dateStr}.md`;
+    let counter = 1;
+    while (this.app.vault.getAbstractFileByPath(fileName)) {
+      fileName = `${chatName} ${dateStr} ${counter}.md`;
+      counter++;
+    }
+    try {
+      const file2 = await this.app.vault.create(fileName, content);
+      new import_obsidian5.Notice(`Conversation saved: ${file2.path}`);
+      const leaf = this.app.workspace.getLeaf(false);
+      await leaf.openFile(file2);
+    } catch (error48) {
+      new import_obsidian5.Notice(`Failed to export: ${error48}`);
+    }
+  }
+  createNewChat() {
+    const id = `chat-${Date.now()}`;
+    const num = this.chatTabs.length + 1;
+    this.chatTabs.push({ id, name: `Chat ${num}`, messages: [] });
+    this.activeChatId = id;
+    this.messages = this.chatTabs[this.chatTabs.length - 1].messages;
+    return id;
+  }
+  switchChat(id) {
+    const current = this.chatTabs.find((t) => t.id === this.activeChatId);
+    if (current) current.messages = this.messages;
+    const target = this.chatTabs.find((t) => t.id === id);
+    if (!target) return;
+    this.activeChatId = id;
+    this.messages = target.messages;
+    this.renderTabs();
+    this.renderMessagesContent();
+  }
+  renderTabs() {
+    if (!this.tabBar) return;
+    this.tabBar.empty();
+    for (const tab of this.chatTabs) {
+      const tabEl = this.tabBar.createDiv({
+        cls: `llm-tab ${tab.id === this.activeChatId ? "llm-tab-active" : ""}`
+      });
+      const labelEl = tabEl.createSpan({ cls: "llm-tab-label", text: tab.name });
+      labelEl.addEventListener("dblclick", () => {
+        const input = createEl("input", {
+          cls: "llm-tab-rename",
+          value: tab.name
+        });
+        labelEl.replaceWith(input);
+        input.focus();
+        input.select();
+        const finish = () => {
+          tab.name = input.value.trim() || tab.name;
+          this.renderTabs();
+          this.persistSessions();
+        };
+        input.addEventListener("blur", finish);
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") finish();
+          if (e.key === "Escape") this.renderTabs();
+        });
+      });
+      tabEl.addEventListener("click", (e) => {
+        if (e.target.tagName === "INPUT") return;
+        this.switchChat(tab.id);
+      });
+      if (this.chatTabs.length > 1) {
+        const closeBtn = tabEl.createEl("button", {
+          cls: "llm-tab-close",
+          attr: { "aria-label": "Close chat" }
+        });
+        (0, import_obsidian5.setIcon)(closeBtn, "x");
+        closeBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.chatTabs = this.chatTabs.filter((t) => t.id !== tab.id);
+          if (this.activeChatId === tab.id) {
+            this.switchChat(this.chatTabs[0].id);
+          } else {
+            this.renderTabs();
+          }
+          this.persistSessions();
+        });
+      }
+    }
+    const newBtn = this.tabBar.createEl("button", {
+      cls: "llm-tab-new",
+      attr: { "aria-label": "New chat" }
     });
-    (0, import_obsidian4.setIcon)(clearBtn, "trash-2");
-    clearBtn.addEventListener("click", () => {
-      this.messages = [];
-      this.executor.clearSession();
+    (0, import_obsidian5.setIcon)(newBtn, "plus");
+    newBtn.addEventListener("click", () => {
+      var _a3;
+      const current = this.chatTabs.find((t) => t.id === this.activeChatId);
+      if (current) current.messages = this.messages;
+      this.createNewChat();
+      this.renderTabs();
       this.renderMessagesContent();
+      this.persistSessions();
+      (_a3 = this.inputEl) == null ? void 0 : _a3.focus();
     });
   }
   renderMessages(container) {
@@ -18828,9 +21082,9 @@ var ChatView = class extends import_obsidian4.ItemView {
       const emptyState = this.messagesContainer.createDiv({
         cls: "llm-empty-state"
       });
-      emptyState.createEl("p", { text: "Start a conversation with the LLM." });
+      emptyState.createEl("p", { text: "Start a conversation with AI." });
       emptyState.createEl("p", {
-        text: "Toggle 'Include open files' to provide context from your workspace.",
+        text: "Use the buttons above to quickly summarize, rewrite, or translate your notes.",
         cls: "llm-empty-hint"
       });
       return;
@@ -18855,25 +21109,25 @@ var ChatView = class extends import_obsidian4.ItemView {
         cls: "llm-action-btn",
         attr: { "aria-label": "Copy to clipboard" }
       });
-      (0, import_obsidian4.setIcon)(copyBtn, "copy");
+      (0, import_obsidian5.setIcon)(copyBtn, "copy");
       copyBtn.addEventListener("click", () => {
         navigator.clipboard.writeText(msg.content);
-        new import_obsidian4.Notice("Copied to clipboard");
+        new import_obsidian5.Notice("Copied to clipboard");
       });
       if (msg.role === "assistant") {
         const createNoteBtn = actionsEl.createEl("button", {
           cls: "llm-action-btn",
           attr: { "aria-label": "Create note from response" }
         });
-        (0, import_obsidian4.setIcon)(createNoteBtn, "file-plus");
+        (0, import_obsidian5.setIcon)(createNoteBtn, "file-plus");
         createNoteBtn.addEventListener("click", () => this.createNoteFromMessage(msg));
       }
       const contentEl = msgEl.createDiv({ cls: "llm-message-content" });
       if (msg.role === "assistant") {
-        const component = new import_obsidian4.Component();
+        const component = new import_obsidian5.Component();
         component.load();
         this.markdownComponents.push(component);
-        await import_obsidian4.MarkdownRenderer.render(
+        await import_obsidian5.MarkdownRenderer.render(
           this.app,
           msg.content,
           contentEl,
@@ -18904,9 +21158,15 @@ var ChatView = class extends import_obsidian4.ItemView {
       cls: "llm-chat-input",
       attr: {
         placeholder: "Ask anything about your notes... (Enter to send)",
-        rows: "3"
+        rows: "1"
       }
     });
+    const autoGrow = () => {
+      if (!this.inputEl) return;
+      this.inputEl.style.height = "auto";
+      this.inputEl.style.height = Math.min(this.inputEl.scrollHeight, 200) + "px";
+    };
+    this.inputEl.addEventListener("input", autoGrow);
     this.inputEl.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
@@ -18934,17 +21194,15 @@ var ChatView = class extends import_obsidian4.ItemView {
     const actions = container.createDiv({ cls: "llm-quick-actions" });
     const quickActions = [
       { label: "Summarize", icon: "file-text", prompt: "Summarize the current note concisely. Keep the key points and structure." },
-      { label: "Explain", icon: "help-circle", prompt: "Explain the content of the current note in simple terms. Assume I'm not an expert on this topic." },
-      { label: "Continue", icon: "pen-line", prompt: "Continue writing from where the current note left off. Match the style and tone." },
-      { label: "Action items", icon: "list-checks", prompt: "Extract all action items, tasks, and to-dos from the current note as a checklist." },
-      { label: "Questions", icon: "message-circle-question", prompt: "What are the most important questions raised by this note? List them as bullet points." }
+      { label: "Rewrite", icon: "pen-line", prompt: "Rewrite the current note more clearly and professionally. Keep the meaning, improve the structure and wording." },
+      { label: "Translate", icon: "languages", prompt: "Translate the current note. If it's in German, translate to English. If it's in English, translate to German. Keep formatting intact." }
     ];
     for (const action of quickActions) {
       const btn = actions.createEl("button", {
         cls: "llm-quick-action-btn",
         attr: { "aria-label": action.label }
       });
-      (0, import_obsidian4.setIcon)(btn, action.icon);
+      (0, import_obsidian5.setIcon)(btn, action.icon);
       btn.createSpan({ text: action.label });
       btn.addEventListener("click", () => {
         if (this.isLoading || !this.inputEl) return;
@@ -18958,7 +21216,7 @@ ${noteContent}
 ${action.prompt}`;
         } else {
           this.inputEl.value = action.prompt;
-          new import_obsidian4.Notice("No active note found \u2014 sending prompt without context");
+          new import_obsidian5.Notice("No active note found \u2014 sending prompt without context");
         }
         this.sendMessage();
       });
@@ -18968,7 +21226,7 @@ ${action.prompt}`;
    * Get the content of the currently active note (the one visible in the editor)
    */
   getActiveNoteContent() {
-    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView);
     if (!(activeView == null ? void 0 : activeView.file)) return null;
     const editor = activeView.editor;
     return editor.getValue();
@@ -18977,7 +21235,7 @@ ${action.prompt}`;
    * Get the title of the currently active note
    */
   getActiveNoteTitle() {
-    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView);
     if (!(activeView == null ? void 0 : activeView.file)) return null;
     return activeView.file.basename;
   }
@@ -18987,10 +21245,11 @@ ${action.prompt}`;
   cancelRequest() {
     this.executor.cancel();
     this.localExecutor.cancel();
+    this.acpExecutor.cancel();
     this.isLoading = false;
     this.updateButtonStates();
     this.clearProgress();
-    new import_obsidian4.Notice("Request cancelled");
+    new import_obsidian5.Notice("Request cancelled");
   }
   /**
    * Update send/cancel button visibility based on loading state
@@ -19008,37 +21267,38 @@ ${action.prompt}`;
     }
   }
   /**
-   * Get context from open files in the workspace
+   * Truncate long content while preserving structure.
+   * Keeps all headings and the first lines of each section,
+   * so the AI always sees the full document outline.
    */
-  getOpenFilesContext() {
-    const openFiles = [];
-    const activeFile = this.app.workspace.getActiveFile();
-    this.app.workspace.iterateAllLeaves((leaf) => {
-      if (leaf.view instanceof import_obsidian4.MarkdownView) {
-        const file2 = leaf.view.file;
-        if (file2) {
-          const content = leaf.view.editor.getValue();
-          const truncatedContent = content.length > 4e3 ? content.slice(0, 4e3) + "\n... (truncated)" : content;
-          openFiles.push({
-            path: file2.path,
-            content: truncatedContent
-          });
-        }
+  static smartTruncate(content, maxChars) {
+    if (content.length <= maxChars) return content;
+    const lines = content.split("\n");
+    const result = [];
+    let currentLength = 0;
+    let skipping = false;
+    let skippedSections = 0;
+    const reserveForSuffix = 120;
+    const limit = maxChars - reserveForSuffix;
+    for (const line of lines) {
+      const isHeading = /^#{1,6}\s/.test(line);
+      if (isHeading) {
+        skipping = false;
+        result.push(line);
+        currentLength += line.length + 1;
+      } else if (!skipping && currentLength + line.length + 1 <= limit) {
+        result.push(line);
+        currentLength += line.length + 1;
+      } else if (!skipping) {
+        skipping = true;
+        skippedSections++;
+        result.push("[...]");
+        currentLength += 6;
       }
-    });
-    if (openFiles.length === 0) {
-      return "";
     }
-    const contextParts = [];
-    contextParts.push("=== Open Files Context ===\n");
-    openFiles.forEach(({ path, content }) => {
-      const isActive = (activeFile == null ? void 0 : activeFile.path) === path;
-      contextParts.push(`--- ${path}${isActive ? " (active)" : ""} ---`);
-      contextParts.push(content);
-      contextParts.push("");
-    });
-    contextParts.push("=== End of Context ===\n");
-    return contextParts.join("\n");
+    result.push(`
+(${skippedSections} sections shortened \u2014 ${content.length} chars total)`);
+    return result.join("\n");
   }
   /**
    * Get today's daily note content if the Daily Notes plugin is enabled
@@ -19058,14 +21318,14 @@ ${action.prompt}`;
     const fileName = `${dateStr}.md`;
     const filePath = folder ? `${folder}/${fileName}` : fileName;
     const file2 = this.app.vault.getAbstractFileByPath(filePath);
-    if (!(file2 instanceof import_obsidian4.TFile)) {
+    if (!(file2 instanceof import_obsidian5.TFile)) {
       return "";
     }
     try {
       const content = await this.app.vault.cachedRead(file2);
-      const truncatedContent = content.length > 4e3 ? content.slice(0, 4e3) + "\n... (truncated)" : content;
+      const trimmedContent = _ChatView.smartTruncate(content, 4e3);
       return `=== Today's Daily Note (${filePath}) ===
-${truncatedContent}
+${trimmedContent}
 === End Daily Note ===
 `;
     } catch (e) {
@@ -19121,18 +21381,37 @@ ${truncatedContent}
     const filePath = this.plugin.settings.systemPromptFile;
     if (filePath) {
       const file2 = this.app.vault.getAbstractFileByPath(filePath);
-      if (!(file2 instanceof import_obsidian4.TFile)) {
-        new import_obsidian4.Notice(`System prompt file not found: ${filePath}`);
+      if (!(file2 instanceof import_obsidian5.TFile)) {
+        new import_obsidian5.Notice(`System prompt file not found: ${filePath}`);
         return "";
       }
       try {
         return await this.app.vault.cachedRead(file2);
       } catch (error48) {
-        new import_obsidian4.Notice(`Error reading system prompt file: ${error48}`);
+        new import_obsidian5.Notice(`Error reading system prompt file: ${error48}`);
         return "";
       }
     }
     return this.buildDefaultSystemPrompt();
+  }
+  /**
+   * Get context budget (in chars) based on the current provider's context window.
+   */
+  getContextBudget() {
+    var _a3;
+    const budgets = {
+      claude: 5e4,
+      // 200k token context
+      opencode: 5e4,
+      // Depends on model, but most are large
+      gemini: 3e4,
+      // 1M+ context, generous budget
+      codex: 3e4,
+      // Large context models
+      local: 4e3
+      // Often 4-8k context, be conservative
+    };
+    return (_a3 = budgets[this.currentProvider]) != null ? _a3 : 12e3;
   }
   /**
    * Generate a default system prompt with Obsidian context
@@ -19215,7 +21494,7 @@ ${truncatedContent}
       console.error("ACP connection failed:", errorMsg);
       await this.acpExecutor.disconnect();
       this.plugin.updateStatusBar(targetProvider, void 0, "idle");
-      new import_obsidian4.Notice(`ACP connection failed: ${errorMsg.slice(0, 100)}`, 5e3);
+      new import_obsidian5.Notice(`ACP connection failed: ${errorMsg.slice(0, 100)}`, 5e3);
       this.clearProgress();
     } finally {
       this.setLoading(false);
@@ -19223,10 +21502,11 @@ ${truncatedContent}
     }
   }
   async sendMessage() {
-    var _a3, _b;
     if (!this.inputEl || this.isLoading) return;
     const prompt = this.inputEl.value.trim();
     if (!prompt) return;
+    const savedInput = this.inputEl.value;
+    this.inputEl.value = "";
     const userMessage = {
       role: "user",
       content: prompt,
@@ -19235,7 +21515,6 @@ ${truncatedContent}
     };
     this.messages.push(userMessage);
     await this.renderMessagesContent();
-    this.inputEl.value = "";
     this.setLoading(true);
     const contextPrompt = await this.buildContextPrompt(prompt);
     try {
@@ -19255,15 +21534,12 @@ ${truncatedContent}
         this.localExecutor.updateSettings(this.plugin.settings);
         const chatMessages = [];
         const systemPrompt = await this.getSystemPrompt();
-        const includeContext = (_b = (_a3 = this.includeContextToggle) == null ? void 0 : _a3.checked) != null ? _b : false;
         const systemParts = [];
         if (systemPrompt) systemParts.push(systemPrompt);
-        if (includeContext) {
-          const openFiles = this.getOpenFilesContext();
-          if (openFiles) systemParts.push(openFiles);
-          const dailyNote = await this.getDailyNoteContext();
-          if (dailyNote) systemParts.push(dailyNote);
-        }
+        const vaultContext = await this.vaultSearch.buildContext(prompt, this.getContextBudget());
+        if (vaultContext) systemParts.push(vaultContext);
+        const dailyNote = await this.getDailyNoteContext();
+        if (dailyNote) systemParts.push(dailyNote);
         if (systemParts.length > 0) {
           chatMessages.push({ role: "system", content: systemParts.join("\n\n") });
         }
@@ -19316,6 +21592,9 @@ ${truncatedContent}
         );
       }
       if (response.error) {
+        if (this.inputEl) this.inputEl.value = savedInput;
+        this.messages.pop();
+        await this.renderMessagesContent();
         this.showError(response.error);
       } else {
         this.removeStreamingMessage();
@@ -19328,8 +21607,12 @@ ${truncatedContent}
         };
         this.messages.push(assistantMessage);
         await this.renderMessagesContent();
+        await this.persistSessions();
       }
     } catch (error48) {
+      if (this.inputEl) this.inputEl.value = savedInput;
+      this.messages.pop();
+      await this.renderMessagesContent();
       this.showError(error48 instanceof Error ? error48.message : String(error48));
     } finally {
       this.setLoading(false);
@@ -19398,9 +21681,9 @@ ${truncatedContent}
       const colonIdx = tool.indexOf(":");
       const toolName = colonIdx > 0 ? tool.slice(0, colonIdx).trim() : tool;
       const detail = colonIdx > 0 ? tool.slice(colonIdx + 1).trim() : void 0;
-      const last = collapsed[collapsed.length - 1];
-      if (last && last.name === toolName) {
-        last.count++;
+      const last2 = collapsed[collapsed.length - 1];
+      if (last2 && last2.name === toolName) {
+        last2.count++;
       } else {
         collapsed.push({ name: toolName, detail, count: 1 });
       }
@@ -19433,7 +21716,7 @@ ${truncatedContent}
         relativePath = filePath.slice(vaultPath.length + 1);
       }
       const file2 = this.app.vault.getAbstractFileByPath(relativePath);
-      if (file2 instanceof import_obsidian4.TFile) {
+      if (file2 instanceof import_obsidian5.TFile) {
         const leaf = this.app.workspace.getLeaf(false);
         leaf.openFile(file2);
       } else {
@@ -19475,7 +21758,7 @@ ${truncatedContent}
     const iconName = type === "tool" ? "wrench" : type === "thinking" ? "brain" : "loader";
     const progressEl = this.progressContainer.createDiv({ cls: `llm-progress llm-progress-${type}` });
     const iconEl = progressEl.createSpan({ cls: "llm-progress-icon" });
-    (0, import_obsidian4.setIcon)(iconEl, iconName);
+    (0, import_obsidian5.setIcon)(iconEl, iconName);
     const colonIdx = message.indexOf(":");
     if (colonIdx > 0) {
       const toolPart = message.slice(0, colonIdx + 1);
@@ -19505,11 +21788,9 @@ ${truncatedContent}
     this.recentStatuses = [];
   }
   async buildContextPrompt(currentPrompt) {
-    var _a3, _b;
     const systemPrompt = await this.getSystemPrompt();
-    const includeContext = (_b = (_a3 = this.includeContextToggle) == null ? void 0 : _a3.checked) != null ? _b : false;
-    const openFilesContext = includeContext ? this.getOpenFilesContext() : "";
-    const dailyNoteContext = includeContext ? await this.getDailyNoteContext() : "";
+    const vaultContext = await this.vaultSearch.buildContext(currentPrompt, this.getContextBudget());
+    const dailyNoteContext = await this.getDailyNoteContext();
     const contextParts = [];
     if (systemPrompt) {
       contextParts.push(`System: ${systemPrompt}`);
@@ -19517,8 +21798,8 @@ ${truncatedContent}
     if (dailyNoteContext) {
       contextParts.push(dailyNoteContext);
     }
-    if (openFilesContext) {
-      contextParts.push(openFilesContext);
+    if (vaultContext) {
+      contextParts.push(vaultContext);
     }
     if (this.plugin.settings.conversationHistory.enabled && this.messages.length > 1) {
       const maxMessages = this.plugin.settings.conversationHistory.maxMessages;
@@ -19572,9 +21853,9 @@ ${truncatedContent}
       contentEl.empty();
       const activeFile = this.app.workspace.getActiveFile();
       const sourcePath = (_a3 = activeFile == null ? void 0 : activeFile.path) != null ? _a3 : "";
-      const component = new import_obsidian4.Component();
+      const component = new import_obsidian5.Component();
       component.load();
-      await import_obsidian4.MarkdownRenderer.render(
+      await import_obsidian5.MarkdownRenderer.render(
         this.app,
         content,
         contentEl,
@@ -19674,7 +21955,7 @@ ${truncatedContent}
       this.inputEl.value = message;
       this.sendMessage();
     } else if (this.isLoading) {
-      new import_obsidian4.Notice(`Clicked: ${buttonText}`);
+      new import_obsidian5.Notice(`Clicked: ${buttonText}`);
     }
   }
   /**
@@ -19687,7 +21968,7 @@ ${truncatedContent}
       this.inputEl.value = message;
       this.sendMessage();
     } else if (this.isLoading) {
-      new import_obsidian4.Notice(`${action}: ${itemText}`);
+      new import_obsidian5.Notice(`${action}: ${itemText}`);
     }
   }
   /**
@@ -19710,11 +21991,11 @@ ${truncatedContent}
     }
     try {
       const file2 = await this.app.vault.create(fileName, msg.content);
-      new import_obsidian4.Notice(`Created note: ${file2.path}`);
+      new import_obsidian5.Notice(`Created note: ${file2.path}`);
       const leaf = this.app.workspace.getLeaf(false);
       await leaf.openFile(file2);
     } catch (error48) {
-      new import_obsidian4.Notice(`Failed to create note: ${error48}`);
+      new import_obsidian5.Notice(`Failed to create note: ${error48}`);
     }
   }
   /**
@@ -19735,17 +22016,19 @@ ${truncatedContent}
       provider
     });
     await this.renderMessagesContent();
+    await this.persistSessions();
   }
 };
 
 // main.ts
 init_LLMExecutor();
 init_autoDetect();
-var LLMPlugin = class extends import_obsidian5.Plugin {
+var LLMPlugin = class extends import_obsidian6.Plugin {
   constructor() {
     super(...arguments);
     this.executor = null;
     this.statusBarEl = null;
+    this.chatSessions = [];
   }
   async onload() {
     await this.loadSettings();
@@ -19778,7 +22061,7 @@ var LLMPlugin = class extends import_obsidian5.Plugin {
       editorCallback: (editor, view) => {
         const selection = editor.getSelection();
         if (!selection) {
-          new import_obsidian5.Notice("No text selected");
+          new import_obsidian6.Notice("No text selected");
           return;
         }
         new QuickPromptModal(this.app, this, {
@@ -19795,7 +22078,7 @@ var LLMPlugin = class extends import_obsidian5.Plugin {
       editorCallback: (editor, view) => {
         const selection = editor.getSelection();
         if (!selection) {
-          new import_obsidian5.Notice("No text selected");
+          new import_obsidian6.Notice("No text selected");
           return;
         }
         new QuickPromptModal(this.app, this, {
@@ -19813,7 +22096,7 @@ var LLMPlugin = class extends import_obsidian5.Plugin {
       editorCallback: (editor, view) => {
         const selection = editor.getSelection();
         if (!selection) {
-          new import_obsidian5.Notice("No text selected");
+          new import_obsidian6.Notice("No text selected");
           return;
         }
         new QuickPromptModal(this.app, this, {
@@ -19831,7 +22114,7 @@ var LLMPlugin = class extends import_obsidian5.Plugin {
       editorCallback: (editor, view) => {
         const selection = editor.getSelection();
         if (!selection) {
-          new import_obsidian5.Notice("No text selected");
+          new import_obsidian6.Notice("No text selected");
           return;
         }
         new QuickPromptModal(this.app, this, {
@@ -19867,18 +22150,18 @@ Your request:`,
       id: "detect-providers",
       name: "Scan for AI providers",
       callback: async () => {
-        new import_obsidian5.Notice("Scanning for AI providers...");
+        new import_obsidian6.Notice("Scanning for AI providers...");
         const result = await autoDetectProviders();
         if (result.detected.length === 0) {
-          new import_obsidian5.Notice("No AI providers found. Install a CLI tool (claude, codex, gemini) or start a local server (Ollama, LM Studio).");
+          new import_obsidian6.Notice("No AI providers found. Install a CLI tool (claude, codex, gemini) or start a local server (Ollama, LM Studio).");
         } else {
           const names = result.detected.map((d) => d.name).join(", ");
           const changed = applyDetectionResults(this.settings, result);
           if (changed) {
             await this.saveSettings();
-            new import_obsidian5.Notice(`Found: ${names}. Settings updated automatically.`);
+            new import_obsidian6.Notice(`Found: ${names}. Settings updated automatically.`);
           } else {
-            new import_obsidian5.Notice(`Found: ${names}`);
+            new import_obsidian6.Notice(`Found: ${names}`);
           }
         }
       }
@@ -19917,7 +22200,7 @@ Your request:`,
         if (changed) {
           await this.saveSettings();
           const names = result.detected.map((d) => d.name).join(", ");
-          new import_obsidian5.Notice(`AI providers detected: ${names}`);
+          new import_obsidian6.Notice(`AI providers detected: ${names}`);
         }
       }
     } catch (e) {
@@ -19968,11 +22251,13 @@ Your request:`,
     }
   }
   async loadSettings() {
+    var _a3;
     const loadedData = await this.loadData();
     this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData != null ? loadedData : {});
+    this.chatSessions = (_a3 = loadedData == null ? void 0 : loadedData._chatSessions) != null ? _a3 : [];
     const oldData = loadedData;
     if ((oldData == null ? void 0 : oldData.systemPrompt) && typeof oldData.systemPrompt === "string" && oldData.systemPrompt.trim()) {
-      new import_obsidian5.Notice(
+      new import_obsidian6.Notice(
         "System prompt settings have changed. Please create a note with your system prompt and select it in settings.",
         1e4
       );
@@ -19992,9 +22277,61 @@ Your request:`,
   }
   async saveSettings() {
     var _a3;
-    await this.saveData(this.settings);
+    const merged = await this.mergeBeforeSave();
+    await this.saveData(merged);
     (_a3 = this.executor) == null ? void 0 : _a3.updateSettings(this.settings);
     this.updateStatusBar();
+  }
+  getChatSessions() {
+    return this.chatSessions;
+  }
+  async saveChatSessions(sessions) {
+    this.chatSessions = sessions;
+    const merged = await this.mergeBeforeSave();
+    await this.saveData(merged);
+  }
+  /**
+   * Load current data.json and merge with in-memory state.
+   * Preserves user decisions from cloud-synced changes while
+   * incorporating local changes (new sessions, setting updates).
+   */
+  async mergeBeforeSave() {
+    var _a3, _b, _c, _d, _e;
+    const disk = (_a3 = await this.loadData()) != null ? _a3 : {};
+    const mergedProviders = {};
+    const allProviderKeys = /* @__PURE__ */ new Set([
+      ...Object.keys((_b = this.settings.providers) != null ? _b : {}),
+      ...Object.keys((_c = disk.providers) != null ? _c : {})
+    ]);
+    for (const key of allProviderKeys) {
+      const mem = this.settings.providers[key];
+      const ext = (_d = disk.providers) == null ? void 0 : _d[key];
+      if (mem && ext) {
+        mergedProviders[key] = { ...ext, ...mem };
+      } else {
+        mergedProviders[key] = mem != null ? mem : ext;
+      }
+    }
+    const diskSessions = (_e = disk._chatSessions) != null ? _e : [];
+    const memSessions = this.chatSessions;
+    const sessionMap = /* @__PURE__ */ new Map();
+    for (const s of diskSessions) {
+      sessionMap.set(s.id, s);
+    }
+    for (const s of memSessions) {
+      const existing = sessionMap.get(s.id);
+      if (!existing || s.messages.length >= existing.messages.length) {
+        sessionMap.set(s.id, s);
+      }
+    }
+    const mergedSessions = Array.from(sessionMap.values());
+    this.chatSessions = mergedSessions;
+    return {
+      ...disk,
+      ...this.settings,
+      providers: mergedProviders,
+      _chatSessions: mergedSessions
+    };
   }
   /**
    * Insert LLM response into the editor based on settings
@@ -20017,7 +22354,7 @@ Your request:`,
         editor.replaceSelection(response);
         break;
     }
-    new import_obsidian5.Notice("LLM response inserted");
+    new import_obsidian6.Notice("LLM response inserted");
   }
   /**
    * Update the status bar with current provider and model info

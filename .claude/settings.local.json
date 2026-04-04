@@ -13,7 +13,8 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "WebFetch(domain:openai.com)",
       "Bash(gh release:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "WebSearch"
     ]
   }
 }

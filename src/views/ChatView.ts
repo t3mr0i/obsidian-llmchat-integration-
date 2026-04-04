@@ -1,7 +1,6 @@
 import {
   ItemView,
   WorkspaceLeaf,
-  DropdownComponent,
   MarkdownRenderer,
   Notice,
   setIcon,
@@ -10,11 +9,14 @@ import {
   Component,
 } from "obsidian";
 import type LLMPlugin from "../../main";
+import type { ChatSession } from "../../main";
 import type { LLMProvider, ConversationMessage, ProgressEvent } from "../types";
-import { ACP_SUPPORTED_PROVIDERS } from "../types";
+import { ACP_SUPPORTED_PROVIDERS, PROVIDER_MODELS } from "../types";
+import { fetchModelsForProvider } from "../utils/modelFetcher";
 import { LLMExecutor } from "../executor/LLMExecutor";
 import { AcpExecutor } from "../executor/AcpExecutor";
 import { LocalLLMExecutor } from "../executor/LocalLLMExecutor";
+import { VaultSearch } from "../utils/vaultSearch";
 
 export const CHAT_VIEW_TYPE = "llm-chat-view";
 
@@ -38,14 +40,18 @@ export class ChatView extends ItemView {
   private inputEl: HTMLTextAreaElement | null = null;
   private sendBtn: HTMLButtonElement | null = null;
   private cancelBtn: HTMLButtonElement | null = null;
-  private includeContextToggle: HTMLInputElement | null = null;
   private progressContainer: HTMLElement | null = null;
+  // Chat tabs
+  private chatTabs: { id: string; name: string; messages: ConversationMessage[] }[] = [];
+  private activeChatId: string = "";
+  private tabBar: HTMLElement | null = null;
   private currentToolUse: string | null = null;
   private markdownComponents: Component[] = [];
   private toolHistory: string[] = [];
   private recentStatuses: string[] = [];
   private hasActiveSession = false; // Track if we have an active Claude session
   private acpConnectionPromise: Promise<void> | null = null; // Track in-flight ACP connection
+  private vaultSearch: VaultSearch;
 
   constructor(leaf: WorkspaceLeaf, plugin: LLMPlugin) {
     super(leaf);
@@ -53,6 +59,7 @@ export class ChatView extends ItemView {
     this.executor = new LLMExecutor(plugin.settings);
     this.acpExecutor = new AcpExecutor(plugin.settings);
     this.localExecutor = new LocalLLMExecutor(plugin.settings);
+    this.vaultSearch = new VaultSearch(plugin.app);
     this.currentProvider = plugin.settings.defaultProvider;
   }
 
@@ -69,6 +76,9 @@ export class ChatView extends ItemView {
   }
 
   async onOpen() {
+    // Restore saved sessions
+    this.loadSessions();
+
     const container = this.containerEl.children[1];
     container.empty();
     container.addClass("llm-chat-view");
@@ -80,13 +90,19 @@ export class ChatView extends ItemView {
     // Focus the input
     setTimeout(() => this.inputEl?.focus(), 50);
 
+    // Index vault in background for RAG search
+    this.vaultSearch.ensureIndex();
+
     // Eagerly connect to ACP if enabled for the current provider
     this.connectAcpIfEnabled();
   }
 
   async onClose() {
+    // Save sessions before closing
+    await this.persistSessions();
     this.executor.cancel();
     await this.acpExecutor.disconnect();
+    this.vaultSearch.destroy();
     // Clean up markdown components
     this.markdownComponents.forEach((c) => c.unload());
     this.markdownComponents = [];
@@ -94,57 +110,269 @@ export class ChatView extends ItemView {
     this.plugin.updateStatusBar();
   }
 
+  private loadSessions() {
+    const saved = this.plugin.getChatSessions();
+    if (saved.length > 0) {
+      this.chatTabs = saved.map((s) => ({
+        id: s.id,
+        name: s.name,
+        messages: s.messages as ConversationMessage[],
+      }));
+      this.activeChatId = this.chatTabs[0].id;
+      this.messages = this.chatTabs[0].messages;
+    }
+  }
+
+  private async persistSessions() {
+    // Sync current messages into active tab
+    const current = this.chatTabs.find((t) => t.id === this.activeChatId);
+    if (current) current.messages = this.messages;
+
+    const sessions: ChatSession[] = this.chatTabs.map((t) => ({
+      id: t.id,
+      name: t.name,
+      messages: t.messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+        timestamp: m.timestamp,
+        provider: m.provider,
+      })),
+    }));
+    await this.plugin.saveChatSessions(sessions);
+  }
+
+  private providerSelectEl: HTMLSelectElement | null = null;
+  private modelSelectEl: HTMLSelectElement | null = null;
+
   private renderHeader(container: HTMLElement) {
     const header = container.createDiv({ cls: "llm-chat-header" });
 
-    const controlsRow = header.createDiv({ cls: "llm-chat-controls" });
+    // Chat tabs bar
+    this.tabBar = header.createDiv({ cls: "llm-tab-bar" });
 
-    // Provider selector
-    const providerSelector = controlsRow.createDiv({ cls: "llm-provider-selector" });
-    providerSelector.createSpan({ text: "Provider: " });
+    // Initialize first chat if none exist
+    if (this.chatTabs.length === 0) {
+      this.createNewChat();
+    }
 
-    const dropdown = new DropdownComponent(providerSelector);
+    this.renderTabs();
 
-    const providers: LLMProvider[] = ["claude", "opencode", "codex", "gemini", "local"];
-    providers.forEach((provider) => {
-      if (this.plugin.settings.providers[provider].enabled) {
-        dropdown.addOption(provider, PROVIDER_DISPLAY_NAMES[provider]);
-      }
-    });
+    // Provider & model selector row
+    const selectorRow = header.createDiv({ cls: "llm-selector-row" });
 
-    dropdown.setValue(this.currentProvider);
-    dropdown.onChange((value) => {
-      this.currentProvider = value as LLMProvider;
-      this.plugin.updateStatusBar(this.currentProvider);
-      // Eagerly connect to ACP when provider changes
+    // Provider dropdown
+    this.providerSelectEl = selectorRow.createEl("select", { cls: "llm-provider-select" });
+    const allProviders: LLMProvider[] = ["claude", "opencode", "codex", "gemini", "local"];
+    for (const p of allProviders) {
+      const config = this.plugin.settings.providers[p];
+      if (!config?.enabled) continue;
+      const opt = this.providerSelectEl.createEl("option", {
+        value: p,
+        text: PROVIDER_DISPLAY_NAMES[p],
+      });
+      if (p === this.currentProvider) opt.selected = true;
+    }
+    this.providerSelectEl.addEventListener("change", () => {
+      const newProvider = this.providerSelectEl!.value as LLMProvider;
+      this.currentProvider = newProvider;
+      this.plugin.updateStatusBar(newProvider);
+      this.refreshModelSelect();
       this.connectAcpIfEnabled();
     });
 
+    // Model dropdown
+    this.modelSelectEl = selectorRow.createEl("select", { cls: "llm-model-select" });
+    this.refreshModelSelect();
+
     // Update status bar to show initial provider
     this.plugin.updateStatusBar(this.currentProvider);
+  }
 
-    // Include context toggle
-    const contextToggle = controlsRow.createDiv({ cls: "llm-context-toggle" });
-    const contextLabel = contextToggle.createEl("label", {
-      cls: "llm-toggle-label",
-    });
-    this.includeContextToggle = contextLabel.createEl("input", {
-      type: "checkbox",
-      attr: { checked: "true" },
-    });
-    this.includeContextToggle.checked = true;
-    contextLabel.createSpan({ text: " Include open files" });
+  /**
+   * Refresh the model dropdown for the current provider
+   */
+  private async refreshModelSelect() {
+    if (!this.modelSelectEl) return;
+    this.modelSelectEl.empty();
 
-    // Clear conversation button
-    const clearBtn = controlsRow.createEl("button", {
-      cls: "llm-icon-btn",
-      attr: { "aria-label": "Clear conversation" },
+    const config = this.plugin.settings.providers[this.currentProvider];
+    const currentModel = config?.model || "";
+
+    // Add loading placeholder
+    this.modelSelectEl.createEl("option", { value: "", text: "Loading models..." });
+
+    try {
+      const models = await fetchModelsForProvider(this.currentProvider, config);
+      this.modelSelectEl.empty();
+
+      for (const m of models) {
+        const opt = this.modelSelectEl.createEl("option", {
+          value: m.value,
+          text: m.label,
+        });
+        if (m.value === currentModel) opt.selected = true;
+      }
+    } catch {
+      this.modelSelectEl.empty();
+      this.modelSelectEl.createEl("option", { value: "", text: "Default" });
+    }
+
+    this.modelSelectEl.addEventListener("change", async () => {
+      const newModel = this.modelSelectEl!.value;
+      this.plugin.settings.providers[this.currentProvider].model = newModel || undefined;
+      await this.plugin.saveSettings();
+      this.plugin.updateStatusBar(this.currentProvider);
     });
-    setIcon(clearBtn, "trash-2");
-    clearBtn.addEventListener("click", () => {
-      this.messages = [];
-      this.executor.clearSession(); // Clear Claude session when conversation is cleared
+
+    // Export conversation button
+    const exportBtn = selectorRow.createEl("button", {
+      cls: "llm-export-btn clickable-icon",
+      attr: { "aria-label": "Save conversation as note" },
+    });
+    setIcon(exportBtn, "download");
+    exportBtn.addEventListener("click", () => this.exportConversation());
+  }
+
+  /**
+   * Export the entire conversation as a markdown note
+   */
+  private async exportConversation() {
+    if (this.messages.length === 0) {
+      new Notice("No messages to export");
+      return;
+    }
+
+    const tab = this.chatTabs.find((t) => t.id === this.activeChatId);
+    const chatName = tab?.name || "Chat";
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
+    const lines: string[] = [];
+    lines.push(`# ${chatName}`);
+    lines.push(`*Exported ${now.toLocaleString()}*\n`);
+
+    for (const msg of this.messages) {
+      const role = msg.role === "user" ? "You" : PROVIDER_DISPLAY_NAMES[msg.provider];
+      const time = new Date(msg.timestamp).toLocaleTimeString();
+      lines.push(`## ${role} — ${time}\n`);
+      lines.push(msg.content);
+      lines.push("");
+    }
+
+    const content = lines.join("\n");
+    let fileName = `${chatName} ${dateStr}.md`;
+    let counter = 1;
+    while (this.app.vault.getAbstractFileByPath(fileName)) {
+      fileName = `${chatName} ${dateStr} ${counter}.md`;
+      counter++;
+    }
+
+    try {
+      const file = await this.app.vault.create(fileName, content);
+      new Notice(`Conversation saved: ${file.path}`);
+      const leaf = this.app.workspace.getLeaf(false);
+      await leaf.openFile(file);
+    } catch (error) {
+      new Notice(`Failed to export: ${error}`);
+    }
+  }
+
+  private createNewChat(): string {
+    const id = `chat-${Date.now()}`;
+    const num = this.chatTabs.length + 1;
+    this.chatTabs.push({ id, name: `Chat ${num}`, messages: [] });
+    this.activeChatId = id;
+    this.messages = this.chatTabs[this.chatTabs.length - 1].messages;
+    return id;
+  }
+
+  private switchChat(id: string) {
+    // Save current messages
+    const current = this.chatTabs.find((t) => t.id === this.activeChatId);
+    if (current) current.messages = this.messages;
+
+    // Switch
+    const target = this.chatTabs.find((t) => t.id === id);
+    if (!target) return;
+    this.activeChatId = id;
+    this.messages = target.messages;
+    this.renderTabs();
+    this.renderMessagesContent();
+  }
+
+  private renderTabs() {
+    if (!this.tabBar) return;
+    this.tabBar.empty();
+
+    for (const tab of this.chatTabs) {
+      const tabEl = this.tabBar.createDiv({
+        cls: `llm-tab ${tab.id === this.activeChatId ? "llm-tab-active" : ""}`,
+      });
+
+      const labelEl = tabEl.createSpan({ cls: "llm-tab-label", text: tab.name });
+
+      // Double-click to rename
+      labelEl.addEventListener("dblclick", () => {
+        const input = createEl("input", {
+          cls: "llm-tab-rename",
+          value: tab.name,
+        });
+        labelEl.replaceWith(input);
+        input.focus();
+        input.select();
+        const finish = () => {
+          tab.name = input.value.trim() || tab.name;
+          this.renderTabs();
+          this.persistSessions();
+        };
+        input.addEventListener("blur", finish);
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") finish();
+          if (e.key === "Escape") this.renderTabs();
+        });
+      });
+
+      // Click to switch
+      tabEl.addEventListener("click", (e) => {
+        if ((e.target as HTMLElement).tagName === "INPUT") return;
+        this.switchChat(tab.id);
+      });
+
+      // Close button (only if more than 1 tab)
+      if (this.chatTabs.length > 1) {
+        const closeBtn = tabEl.createEl("button", {
+          cls: "llm-tab-close",
+          attr: { "aria-label": "Close chat" },
+        });
+        setIcon(closeBtn, "x");
+        closeBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.chatTabs = this.chatTabs.filter((t) => t.id !== tab.id);
+          if (this.activeChatId === tab.id) {
+            this.switchChat(this.chatTabs[0].id);
+          } else {
+            this.renderTabs();
+          }
+          this.persistSessions();
+        });
+      }
+    }
+
+    // New chat button
+    const newBtn = this.tabBar.createEl("button", {
+      cls: "llm-tab-new",
+      attr: { "aria-label": "New chat" },
+    });
+    setIcon(newBtn, "plus");
+    newBtn.addEventListener("click", () => {
+      // Save current
+      const current = this.chatTabs.find((t) => t.id === this.activeChatId);
+      if (current) current.messages = this.messages;
+      this.createNewChat();
+      this.renderTabs();
       this.renderMessagesContent();
+      this.persistSessions();
+      this.inputEl?.focus();
     });
   }
 
@@ -166,9 +394,9 @@ export class ChatView extends ItemView {
       const emptyState = this.messagesContainer.createDiv({
         cls: "llm-empty-state",
       });
-      emptyState.createEl("p", { text: "Start a conversation with the LLM." });
+      emptyState.createEl("p", { text: "Start a conversation with AI." });
       emptyState.createEl("p", {
-        text: "Toggle 'Include open files' to provide context from your workspace.",
+        text: "Use the buttons above to quickly summarize, rewrite, or translate your notes.",
         cls: "llm-empty-hint",
       });
       return;
@@ -268,9 +496,17 @@ export class ChatView extends ItemView {
       cls: "llm-chat-input",
       attr: {
         placeholder: "Ask anything about your notes... (Enter to send)",
-        rows: "3",
+        rows: "1",
       },
     });
+
+    // Auto-grow textarea as user types
+    const autoGrow = () => {
+      if (!this.inputEl) return;
+      this.inputEl.style.height = "auto";
+      this.inputEl.style.height = Math.min(this.inputEl.scrollHeight, 200) + "px";
+    };
+    this.inputEl.addEventListener("input", autoGrow);
 
     // Enter to send, Shift+Enter for newline (common chat pattern)
     this.inputEl.addEventListener("keydown", (e) => {
@@ -305,10 +541,8 @@ export class ChatView extends ItemView {
 
     const quickActions = [
       { label: "Summarize", icon: "file-text", prompt: "Summarize the current note concisely. Keep the key points and structure." },
-      { label: "Explain", icon: "help-circle", prompt: "Explain the content of the current note in simple terms. Assume I'm not an expert on this topic." },
-      { label: "Continue", icon: "pen-line", prompt: "Continue writing from where the current note left off. Match the style and tone." },
-      { label: "Action items", icon: "list-checks", prompt: "Extract all action items, tasks, and to-dos from the current note as a checklist." },
-      { label: "Questions", icon: "message-circle-question", prompt: "What are the most important questions raised by this note? List them as bullet points." },
+      { label: "Rewrite", icon: "pen-line", prompt: "Rewrite the current note more clearly and professionally. Keep the meaning, improve the structure and wording." },
+      { label: "Translate", icon: "languages", prompt: "Translate the current note. If it's in German, translate to English. If it's in English, translate to German. Keep formatting intact." },
     ];
 
     for (const action of quickActions) {
@@ -324,6 +558,7 @@ export class ChatView extends ItemView {
         const noteContent = this.getActiveNoteContent();
         const noteTitle = this.getActiveNoteTitle();
         if (noteContent) {
+          // Send full note content — RAG search in sendMessage() adds vault context
           this.inputEl.value = `[Note: ${noteTitle || "Untitled"}]\n${noteContent}\n\n---\n${action.prompt}`;
         } else {
           this.inputEl.value = action.prompt;
@@ -360,6 +595,7 @@ export class ChatView extends ItemView {
   private cancelRequest() {
     this.executor.cancel();
     this.localExecutor.cancel();
+    this.acpExecutor.cancel();
     this.isLoading = false;
     this.updateButtonStates();
     this.clearProgress();
@@ -383,50 +619,44 @@ export class ChatView extends ItemView {
   }
 
   /**
-   * Get context from open files in the workspace
+   * Truncate long content while preserving structure.
+   * Keeps all headings and the first lines of each section,
+   * so the AI always sees the full document outline.
    */
-  private getOpenFilesContext(): string {
-    const openFiles: { path: string; content: string }[] = [];
-    const activeFile = this.app.workspace.getActiveFile();
+  private static smartTruncate(content: string, maxChars: number): string {
+    if (content.length <= maxChars) return content;
 
-    // Get all open markdown views
-    this.app.workspace.iterateAllLeaves((leaf) => {
-      if (leaf.view instanceof MarkdownView) {
-        const file = leaf.view.file;
-        if (file) {
-          const content = leaf.view.editor.getValue();
-          // Truncate large files
-          const truncatedContent =
-            content.length > 4000
-              ? content.slice(0, 4000) + "\n... (truncated)"
-              : content;
+    const lines = content.split("\n");
+    const result: string[] = [];
+    let currentLength = 0;
+    let skipping = false;
+    let skippedSections = 0;
+    const reserveForSuffix = 120;
+    const limit = maxChars - reserveForSuffix;
 
-          openFiles.push({
-            path: file.path,
-            content: truncatedContent,
-          });
-        }
+    for (const line of lines) {
+      const isHeading = /^#{1,6}\s/.test(line);
+
+      if (isHeading) {
+        // Always include headings to preserve structure
+        skipping = false;
+        result.push(line);
+        currentLength += line.length + 1;
+      } else if (!skipping && currentLength + line.length + 1 <= limit) {
+        result.push(line);
+        currentLength += line.length + 1;
+      } else if (!skipping) {
+        // Start skipping this section
+        skipping = true;
+        skippedSections++;
+        result.push("[...]");
+        currentLength += 6;
       }
-    });
-
-    if (openFiles.length === 0) {
-      return "";
+      // If skipping, skip until next heading
     }
 
-    // Build context string
-    const contextParts: string[] = [];
-    contextParts.push("=== Open Files Context ===\n");
-
-    openFiles.forEach(({ path, content }) => {
-      const isActive = activeFile?.path === path;
-      contextParts.push(`--- ${path}${isActive ? " (active)" : ""} ---`);
-      contextParts.push(content);
-      contextParts.push("");
-    });
-
-    contextParts.push("=== End of Context ===\n");
-
-    return contextParts.join("\n");
+    result.push(`\n(${skippedSections} sections shortened — ${content.length} chars total)`);
+    return result.join("\n");
   }
 
   /**
@@ -464,13 +694,9 @@ export class ChatView extends ItemView {
 
     try {
       const content = await this.app.vault.cachedRead(file);
-      // Truncate if too large
-      const truncatedContent =
-        content.length > 4000
-          ? content.slice(0, 4000) + "\n... (truncated)"
-          : content;
+      const trimmedContent = ChatView.smartTruncate(content, 4000);
 
-      return `=== Today's Daily Note (${filePath}) ===\n${truncatedContent}\n=== End Daily Note ===\n`;
+      return `=== Today's Daily Note (${filePath}) ===\n${trimmedContent}\n=== End Daily Note ===\n`;
     } catch {
       return "";
     }
@@ -531,6 +757,20 @@ export class ChatView extends ItemView {
 
     // Auto-generate a smart default system prompt
     return this.buildDefaultSystemPrompt();
+  }
+
+  /**
+   * Get context budget (in chars) based on the current provider's context window.
+   */
+  private getContextBudget(): number {
+    const budgets: Record<LLMProvider, number> = {
+      claude: 50000,     // 200k token context
+      opencode: 50000,   // Depends on model, but most are large
+      gemini: 30000,     // 1M+ context, generous budget
+      codex: 30000,      // Large context models
+      local: 4000,       // Often 4-8k context, be conservative
+    };
+    return budgets[this.currentProvider] ?? 12000;
   }
 
   /**
@@ -679,6 +919,10 @@ export class ChatView extends ItemView {
     const prompt = this.inputEl.value.trim();
     if (!prompt) return;
 
+    // Save input in case of error, then clear
+    const savedInput = this.inputEl.value;
+    this.inputEl.value = "";
+
     // Add user message
     const userMessage: ConversationMessage = {
       role: "user",
@@ -688,9 +932,6 @@ export class ChatView extends ItemView {
     };
     this.messages.push(userMessage);
     await this.renderMessagesContent();
-
-    // Clear input
-    this.inputEl.value = "";
 
     // Show loading state
     this.setLoading(true);
@@ -728,17 +969,14 @@ export class ChatView extends ItemView {
         // Build messages array for chat completions API
         const chatMessages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [];
 
-        // Add system prompt if available
+        // Add system prompt + relevant vault context (RAG)
         const systemPrompt = await this.getSystemPrompt();
-        const includeContext = this.includeContextToggle?.checked ?? false;
         const systemParts: string[] = [];
         if (systemPrompt) systemParts.push(systemPrompt);
-        if (includeContext) {
-          const openFiles = this.getOpenFilesContext();
-          if (openFiles) systemParts.push(openFiles);
-          const dailyNote = await this.getDailyNoteContext();
-          if (dailyNote) systemParts.push(dailyNote);
-        }
+        const vaultContext = await this.vaultSearch.buildContext(prompt, this.getContextBudget());
+        if (vaultContext) systemParts.push(vaultContext);
+        const dailyNote = await this.getDailyNoteContext();
+        if (dailyNote) systemParts.push(dailyNote);
         if (systemParts.length > 0) {
           chatMessages.push({ role: "system", content: systemParts.join("\n\n") });
         }
@@ -812,6 +1050,11 @@ export class ChatView extends ItemView {
       }
 
       if (response.error) {
+        // Restore input so user can retry
+        if (this.inputEl) this.inputEl.value = savedInput;
+        // Remove the user message we already added
+        this.messages.pop();
+        await this.renderMessagesContent();
         this.showError(response.error);
       } else {
         // Remove streaming/progress elements
@@ -827,8 +1070,15 @@ export class ChatView extends ItemView {
         };
         this.messages.push(assistantMessage);
         await this.renderMessagesContent();
+        // Auto-save after each exchange
+        await this.persistSessions();
       }
     } catch (error) {
+      // Restore input so user can retry
+      if (this.inputEl) this.inputEl.value = savedInput;
+      // Remove the user message we already added
+      this.messages.pop();
+      await this.renderMessagesContent();
       this.showError(error instanceof Error ? error.message : String(error));
     } finally {
       this.setLoading(false);
@@ -1056,9 +1306,8 @@ export class ChatView extends ItemView {
 
   private async buildContextPrompt(currentPrompt: string): Promise<string> {
     const systemPrompt = await this.getSystemPrompt();
-    const includeContext = this.includeContextToggle?.checked ?? false;
-    const openFilesContext = includeContext ? this.getOpenFilesContext() : "";
-    const dailyNoteContext = includeContext ? await this.getDailyNoteContext() : "";
+    const vaultContext = await this.vaultSearch.buildContext(currentPrompt, this.getContextBudget());
+    const dailyNoteContext = await this.getDailyNoteContext();
 
     const contextParts: string[] = [];
 
@@ -1072,9 +1321,9 @@ export class ChatView extends ItemView {
       contextParts.push(dailyNoteContext);
     }
 
-    // Add open files context
-    if (openFilesContext) {
-      contextParts.push(openFilesContext);
+    // Add relevant vault context (RAG search)
+    if (vaultContext) {
+      contextParts.push(vaultContext);
     }
 
     // Add conversation history if enabled
@@ -1368,7 +1617,8 @@ export class ChatView extends ItemView {
       provider,
     });
 
-    // Re-render messages
+    // Re-render messages and save
     await this.renderMessagesContent();
+    await this.persistSessions();
   }
 }

@@ -1,5 +1,5 @@
 import { Editor, MarkdownView, Notice, Plugin, WorkspaceLeaf } from "obsidian";
-import type { LLMPluginSettings, LLMProvider } from "./src/types";
+import type { LLMPluginSettings, LLMProvider, ProviderConfig } from "./src/types";
 import { DEFAULT_SETTINGS } from "./src/types";
 import { LLMSettingTab } from "./src/settings/SettingsTab";
 import { QuickPromptModal } from "./src/modals";
@@ -7,10 +7,17 @@ import { ChatView, CHAT_VIEW_TYPE } from "./src/views";
 import { LLMExecutor } from "./src/executor/LLMExecutor";
 import { autoDetectProviders, applyDetectionResults } from "./src/utils/autoDetect";
 
+export interface ChatSession {
+  id: string;
+  name: string;
+  messages: { role: "user" | "assistant"; content: string; timestamp: number; provider: string }[];
+}
+
 export default class LLMPlugin extends Plugin {
   settings: LLMPluginSettings;
   private executor: LLMExecutor | null = null;
   private statusBarEl: HTMLElement | null = null;
+  private chatSessions: ChatSession[] = [];
 
   async onload() {
     await this.loadSettings();
@@ -280,6 +287,8 @@ export default class LLMPlugin extends Plugin {
   async loadSettings() {
     const loadedData = await this.loadData();
     this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData ?? {});
+    // Load chat sessions (stored alongside settings)
+    this.chatSessions = (loadedData as any)?._chatSessions ?? [];
 
     // Migration: handle old systemPrompt string setting
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -310,10 +319,75 @@ export default class LLMPlugin extends Plugin {
   }
 
   async saveSettings() {
-    await this.saveData(this.settings);
+    const merged = await this.mergeBeforeSave();
+    await this.saveData(merged);
     // Update executor with new settings
     this.executor?.updateSettings(this.settings);
     this.updateStatusBar();
+  }
+
+  getChatSessions(): ChatSession[] {
+    return this.chatSessions;
+  }
+
+  async saveChatSessions(sessions: ChatSession[]) {
+    this.chatSessions = sessions;
+    const merged = await this.mergeBeforeSave();
+    await this.saveData(merged);
+  }
+
+  /**
+   * Load current data.json and merge with in-memory state.
+   * Preserves user decisions from cloud-synced changes while
+   * incorporating local changes (new sessions, setting updates).
+   */
+  private async mergeBeforeSave(): Promise<Record<string, unknown>> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const disk = (await this.loadData()) as any ?? {};
+
+    // Merge provider configs: for each provider, prefer local in-memory values
+    // but preserve any keys that exist on disk but not in memory (user decisions
+    // from another device). Never drop a provider the user enabled elsewhere.
+    const mergedProviders: Record<string, ProviderConfig> = {};
+    const allProviderKeys = new Set([
+      ...Object.keys(this.settings.providers ?? {}),
+      ...Object.keys(disk.providers ?? {}),
+    ]);
+    for (const key of allProviderKeys) {
+      const mem = (this.settings.providers as Record<string, ProviderConfig>)[key];
+      const ext = (disk.providers as Record<string, ProviderConfig> | undefined)?.[key];
+      if (mem && ext) {
+        // Both exist: in-memory wins per-field, but keep extra disk keys
+        mergedProviders[key] = { ...ext, ...mem };
+      } else {
+        mergedProviders[key] = mem ?? ext;
+      }
+    }
+
+    // Merge chat sessions by ID: combine both sets, preferring the version
+    // with the most messages (= most recent activity)
+    const diskSessions: ChatSession[] = disk._chatSessions ?? [];
+    const memSessions = this.chatSessions;
+    const sessionMap = new Map<string, ChatSession>();
+    for (const s of diskSessions) {
+      sessionMap.set(s.id, s);
+    }
+    for (const s of memSessions) {
+      const existing = sessionMap.get(s.id);
+      if (!existing || s.messages.length >= existing.messages.length) {
+        sessionMap.set(s.id, s);
+      }
+    }
+    const mergedSessions = Array.from(sessionMap.values());
+    this.chatSessions = mergedSessions;
+
+    // Build final object: disk as base, then in-memory settings, then merged parts
+    return {
+      ...disk,
+      ...this.settings,
+      providers: mergedProviders,
+      _chatSessions: mergedSessions,
+    };
   }
 
   /**

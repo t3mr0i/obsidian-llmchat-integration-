@@ -546,8 +546,9 @@
 
 .llm-chat-view .llm-chat-input {
   width: 100%;
-  min-height: 60px;
-  max-height: 150px;
+  min-height: 44px;
+  max-height: 200px;
+  overflow-y: auto;
   border-radius: 6px;
   padding: 10px;
 }
@@ -1164,4 +1165,165 @@
   width: 13px;
   height: 13px;
   flex-shrink: 0;
+}
+
+/* ============================================
+   Provider & Model Selector
+   ============================================ */
+.llm-selector-row {
+  display: flex;
+  gap: 6px;
+  padding: 4px 8px 6px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.llm-provider-select,
+.llm-model-select {
+  flex: 1;
+  min-width: 0;
+  padding: 3px 6px;
+  font-size: 12px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  cursor: pointer;
+}
+
+.llm-provider-select:hover,
+.llm-model-select:hover {
+  border-color: var(--interactive-accent);
+}
+
+.llm-provider-select:focus,
+.llm-model-select:focus {
+  outline: none;
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
+}
+
+.llm-export-btn {
+  flex-shrink: 0;
+  padding: 3px 6px;
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.llm-export-btn:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+
+/* ============================================
+   Chat Tabs
+   ============================================ */
+.llm-tab-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.llm-tab-bar::-webkit-scrollbar {
+  height: 0;
+}
+
+.llm-tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+  font-size: 0.82em;
+  font-family: var(--llm-font);
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: none;
+  white-space: nowrap;
+  transition: all 0.12s ease;
+}
+
+.llm-tab:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+
+.llm-tab-active {
+  color: var(--text-normal);
+  background: var(--llm-accent-subtle);
+  border-color: var(--llm-border, var(--background-modifier-border));
+  font-weight: 600;
+}
+
+.llm-tab-label {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.llm-tab-rename {
+  width: 80px;
+  padding: 1px 4px;
+  font-size: inherit;
+  font-family: inherit;
+  border: 1px solid var(--llm-accent);
+  border-radius: 3px;
+  background: var(--background-primary);
+  outline: none;
+}
+
+.llm-tab-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 1px;
+  color: var(--text-muted);
+  border-radius: 3px;
+  opacity: 0;
+  transition: all 0.1s ease;
+}
+
+.llm-tab:hover .llm-tab-close {
+  opacity: 1;
+}
+
+.llm-tab-close:hover {
+  color: var(--text-error);
+  background: var(--background-modifier-hover);
+}
+
+.llm-tab-close svg {
+  width: 12px;
+  height: 12px;
+}
+
+.llm-tab-new {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px dashed var(--llm-border, var(--background-modifier-border));
+  border-radius: 6px 6px 0 0;
+  border-bottom: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  color: var(--text-muted);
+  transition: all 0.12s ease;
+}
+
+.llm-tab-new:hover {
+  color: var(--llm-accent);
+  border-color: var(--llm-accent);
+}
+
+.llm-tab-new svg {
+  width: 14px;
+  height: 14px;
 }
