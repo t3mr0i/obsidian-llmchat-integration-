@@ -161,7 +161,7 @@ var init_LocalLLMExecutor = __esm({
         const startTime = Date.now();
         this.abortController = new AbortController();
         onProgress == null ? void 0 : onProgress({ type: "status", message: `Connecting to ${serverUrl}...` });
-        const endpoint = this.getChatEndpoint(serverUrl, config2.serverType);
+        const endpoint = this.getChatEndpoint(serverUrl);
         const body = {
           model,
           messages,
@@ -239,9 +239,8 @@ var init_LocalLLMExecutor = __esm({
         }
         return null;
       }
-      getChatEndpoint(serverUrl, serverType) {
-        const base = serverUrl.replace(/\/$/, "");
-        return `${base}/v1/chat/completions`;
+      getChatEndpoint(serverUrl) {
+        return `${serverUrl.replace(/\/$/, "")}/v1/chat/completions`;
       }
       cancel() {
         var _a3;
@@ -1484,9 +1483,16 @@ __export(main_exports, {
   default: () => LLMPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian6 = require("obsidian");
+var import_obsidian5 = require("obsidian");
 
 // src/types.ts
+var PROVIDER_DISPLAY_NAMES = {
+  claude: "Claude",
+  opencode: "OpenCode",
+  codex: "Codex",
+  gemini: "Gemini",
+  local: "Local LLM"
+};
 var ACP_SUPPORTED_PROVIDERS = ["claude", "opencode", "gemini", "codex"];
 var PROVIDER_MODELS = {
   claude: [
@@ -1631,15 +1637,6 @@ async function fetchOpenCodeModels() {
     return PROVIDER_MODELS.opencode;
   }
 }
-async function fetchClaudeModels() {
-  return PROVIDER_MODELS.claude;
-}
-async function fetchGeminiModels() {
-  return PROVIDER_MODELS.gemini;
-}
-async function fetchCodexModels() {
-  return PROVIDER_MODELS.codex;
-}
 async function fetchLocalModels(config2) {
   const serverUrl = (config2 == null ? void 0 : config2.serverUrl) || "http://localhost:11434";
   const serverType = (config2 == null ? void 0 : config2.serverType) || "ollama";
@@ -1654,6 +1651,7 @@ async function fetchLocalModels(config2) {
   }
 }
 async function fetchModelsForProvider(provider, providerConfig) {
+  var _a3;
   const acpModels = acpModelCache.get(provider);
   if (acpModels && acpModels.length > 1) {
     return acpModels;
@@ -1667,20 +1665,11 @@ async function fetchModelsForProvider(provider, providerConfig) {
     case "opencode":
       models = await fetchOpenCodeModels();
       break;
-    case "claude":
-      models = await fetchClaudeModels();
-      break;
-    case "gemini":
-      models = await fetchGeminiModels();
-      break;
-    case "codex":
-      models = await fetchCodexModels();
-      break;
     case "local":
       models = await fetchLocalModels(providerConfig);
       break;
     default:
-      models = [{ value: "", label: "Default" }];
+      models = (_a3 = PROVIDER_MODELS[provider]) != null ? _a3 : [{ value: "", label: "Default" }];
   }
   modelCache.set(provider, { models, timestamp: Date.now() });
   return models;
@@ -1705,7 +1694,7 @@ var SystemPromptFileSuggestModal = class extends import_obsidian.FuzzySuggestMod
     this.onSelect(file2);
   }
 };
-var PROVIDER_DISPLAY_NAMES = {
+var PROVIDER_DISPLAY_NAMES2 = {
   claude: "Claude (Anthropic)",
   opencode: "OpenCode",
   codex: "Codex (OpenAI)",
@@ -1746,7 +1735,7 @@ var LLMSettingTab = class extends import_obsidian.PluginSettingTab {
     new import_obsidian.Setting(containerEl).setName("Default AI provider").setDesc("Which AI to use when you open a new chat").addDropdown((dropdown) => {
       const allProviders = ["claude", "opencode", "codex", "gemini", "local"];
       allProviders.forEach((provider) => {
-        dropdown.addOption(provider, PROVIDER_DISPLAY_NAMES[provider]);
+        dropdown.addOption(provider, PROVIDER_DISPLAY_NAMES2[provider]);
       });
       dropdown.setValue(this.plugin.settings.defaultProvider);
       dropdown.onChange(async (value) => {
@@ -1997,7 +1986,7 @@ var LLMSettingTab = class extends import_obsidian.PluginSettingTab {
   addCloudProviderSettings(containerEl, provider) {
     var _a3;
     const providerConfig = this.plugin.settings.providers[provider];
-    const displayName = PROVIDER_DISPLAY_NAMES[provider];
+    const displayName = PROVIDER_DISPLAY_NAMES2[provider];
     const detailsEl = containerEl.createEl("details", {
       cls: "llm-provider-details"
     });
@@ -2423,21 +2412,10 @@ var LLMSettingTab = class extends import_obsidian.PluginSettingTab {
   }
 };
 
-// src/modals/ChatModal.ts
+// src/modals/QuickPromptModal.ts
 var import_obsidian2 = require("obsidian");
 init_LLMExecutor();
-
-// src/modals/QuickPromptModal.ts
-var import_obsidian3 = require("obsidian");
-init_LLMExecutor();
-var PROVIDER_DISPLAY_NAMES2 = {
-  claude: "Claude",
-  opencode: "OpenCode",
-  codex: "Codex",
-  gemini: "Gemini",
-  local: "Local LLM"
-};
-var QuickPromptModal = class extends import_obsidian3.Modal {
+var QuickPromptModal = class extends import_obsidian2.Modal {
   constructor(app, plugin, options = {}) {
     super(app);
     this.inputEl = null;
@@ -2470,11 +2448,11 @@ var QuickPromptModal = class extends import_obsidian3.Modal {
     header.createEl("h2", { text: "Quick LLM Prompt" });
     const providerSelector = header.createDiv({ cls: "llm-provider-selector" });
     providerSelector.createSpan({ text: "Provider: " });
-    const dropdown = new import_obsidian3.DropdownComponent(providerSelector);
+    const dropdown = new import_obsidian2.DropdownComponent(providerSelector);
     const providers = ["claude", "opencode", "codex", "gemini"];
     providers.forEach((provider) => {
       if (this.plugin.settings.providers[provider].enabled) {
-        dropdown.addOption(provider, PROVIDER_DISPLAY_NAMES2[provider]);
+        dropdown.addOption(provider, PROVIDER_DISPLAY_NAMES[provider]);
       }
     });
     dropdown.setValue(this.currentProvider);
@@ -2525,7 +2503,7 @@ var QuickPromptModal = class extends import_obsidian3.Modal {
     });
     this.copyBtn.addEventListener("click", () => {
       navigator.clipboard.writeText(this.lastResponse);
-      new import_obsidian3.Notice("Copied to clipboard");
+      new import_obsidian2.Notice("Copied to clipboard");
     });
     this.insertBtn = actionsContainer.createEl("button", {
       text: "Insert into Document",
@@ -2545,14 +2523,14 @@ var QuickPromptModal = class extends import_obsidian3.Modal {
     const filePath = this.plugin.settings.systemPromptFile;
     if (!filePath) return "";
     const file2 = this.app.vault.getAbstractFileByPath(filePath);
-    if (!(file2 instanceof import_obsidian3.TFile)) {
-      new import_obsidian3.Notice(`System prompt file not found: ${filePath}`);
+    if (!(file2 instanceof import_obsidian2.TFile)) {
+      new import_obsidian2.Notice(`System prompt file not found: ${filePath}`);
       return "";
     }
     try {
       return await this.app.vault.cachedRead(file2);
     } catch (error48) {
-      new import_obsidian3.Notice(`Error reading system prompt file: ${error48}`);
+      new import_obsidian2.Notice(`Error reading system prompt file: ${error48}`);
       return "";
     }
   }
@@ -2627,7 +2605,7 @@ User: ${prompt}`;
 };
 
 // src/views/ChatView.ts
-var import_obsidian5 = require("obsidian");
+var import_obsidian4 = require("obsidian");
 init_LLMExecutor();
 
 // src/executor/AcpExecutor.ts
@@ -20524,7 +20502,7 @@ var wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 var SPACE_OR_PUNCTUATION = /[\n\r\p{Z}\p{P}]+/u;
 
 // src/utils/vaultSearch.ts
-var import_obsidian4 = require("obsidian");
+var import_obsidian3 = require("obsidian");
 var _VaultSearch = class _VaultSearch {
   constructor(app) {
     this.indexed = false;
@@ -20776,7 +20754,7 @@ var _VaultSearch = class _VaultSearch {
    * Get the content of the currently active note.
    */
   getActiveNoteContext() {
-    const view = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+    const view = this.app.workspace.getActiveViewOfType(import_obsidian3.MarkdownView);
     if (!(view == null ? void 0 : view.file)) return null;
     return {
       path: view.file.path,
@@ -20870,14 +20848,7 @@ var VaultSearch = _VaultSearch;
 
 // src/views/ChatView.ts
 var CHAT_VIEW_TYPE = "llm-chat-view";
-var PROVIDER_DISPLAY_NAMES3 = {
-  claude: "Claude",
-  opencode: "OpenCode",
-  codex: "Codex",
-  gemini: "Gemini",
-  local: "Local LLM"
-};
-var ChatView = class extends import_obsidian5.ItemView {
+var ChatView = class extends import_obsidian4.ItemView {
   constructor(leaf, plugin) {
     super(leaf);
     this.messages = [];
@@ -20891,10 +20862,8 @@ var ChatView = class extends import_obsidian5.ItemView {
     this.chatTabs = [];
     this.activeChatId = "";
     this.tabBar = null;
-    this.currentToolUse = null;
     this.markdownComponents = [];
     this.toolHistory = [];
-    this.recentStatuses = [];
     this.acpConnectionPromise = null;
     this.providerSelectEl = null;
     this.modelSelectEl = null;
@@ -20987,7 +20956,7 @@ var ChatView = class extends import_obsidian5.ItemView {
     for (const p of enabledProviders) {
       const opt = this.providerSelectEl.createEl("option", {
         value: p,
-        text: PROVIDER_DISPLAY_NAMES3[p]
+        text: PROVIDER_DISPLAY_NAMES[p]
       });
       if (p === this.currentProvider) opt.selected = true;
     }
@@ -21010,7 +20979,7 @@ var ChatView = class extends import_obsidian5.ItemView {
       cls: "llm-export-btn clickable-icon",
       attr: { "aria-label": "Save conversation as note" }
     });
-    (0, import_obsidian5.setIcon)(exportBtn, "download");
+    (0, import_obsidian4.setIcon)(exportBtn, "download");
     exportBtn.addEventListener("click", () => this.exportConversation());
     this.plugin.updateStatusBar(this.currentProvider);
   }
@@ -21043,7 +21012,7 @@ var ChatView = class extends import_obsidian5.ItemView {
    */
   async exportConversation() {
     if (this.messages.length === 0) {
-      new import_obsidian5.Notice("No messages to export");
+      new import_obsidian4.Notice("No messages to export");
       return;
     }
     const tab = this.chatTabs.find((t) => t.id === this.activeChatId);
@@ -21055,7 +21024,7 @@ var ChatView = class extends import_obsidian5.ItemView {
     lines.push(`*Exported ${now.toLocaleString()}*
 `);
     for (const msg of this.messages) {
-      const role = msg.role === "user" ? "You" : PROVIDER_DISPLAY_NAMES3[msg.provider];
+      const role = msg.role === "user" ? "You" : PROVIDER_DISPLAY_NAMES[msg.provider];
       const time3 = new Date(msg.timestamp).toLocaleTimeString();
       lines.push(`## ${role} \u2014 ${time3}
 `);
@@ -21071,11 +21040,11 @@ var ChatView = class extends import_obsidian5.ItemView {
     }
     try {
       const file2 = await this.app.vault.create(fileName, content);
-      new import_obsidian5.Notice(`Conversation saved: ${file2.path}`);
+      new import_obsidian4.Notice(`Conversation saved: ${file2.path}`);
       const leaf = this.app.workspace.getLeaf(false);
       await leaf.openFile(file2);
     } catch (error48) {
-      new import_obsidian5.Notice(`Failed to export: ${error48}`);
+      new import_obsidian4.Notice(`Failed to export: ${error48}`);
     }
   }
   createNewChat() {
@@ -21132,7 +21101,7 @@ var ChatView = class extends import_obsidian5.ItemView {
           cls: "llm-tab-close",
           attr: { "aria-label": "Close chat" }
         });
-        (0, import_obsidian5.setIcon)(closeBtn, "x");
+        (0, import_obsidian4.setIcon)(closeBtn, "x");
         closeBtn.addEventListener("click", (e) => {
           e.stopPropagation();
           this.chatTabs = this.chatTabs.filter((t) => t.id !== tab.id);
@@ -21149,7 +21118,7 @@ var ChatView = class extends import_obsidian5.ItemView {
       cls: "llm-tab-new",
       attr: { "aria-label": "New chat" }
     });
-    (0, import_obsidian5.setIcon)(newBtn, "plus");
+    (0, import_obsidian4.setIcon)(newBtn, "plus");
     newBtn.addEventListener("click", () => {
       var _a3;
       const current = this.chatTabs.find((t) => t.id === this.activeChatId);
@@ -21211,7 +21180,7 @@ var ChatView = class extends import_obsidian5.ItemView {
     });
     const headerEl = msgEl.createDiv({ cls: "llm-message-header" });
     headerEl.createSpan({
-      text: msg.role === "user" ? "You" : PROVIDER_DISPLAY_NAMES3[msg.provider],
+      text: msg.role === "user" ? "You" : PROVIDER_DISPLAY_NAMES[msg.provider],
       cls: "llm-message-role"
     });
     headerEl.createSpan({
@@ -21223,25 +21192,25 @@ var ChatView = class extends import_obsidian5.ItemView {
       cls: "llm-action-btn",
       attr: { "aria-label": "Copy to clipboard" }
     });
-    (0, import_obsidian5.setIcon)(copyBtn, "copy");
+    (0, import_obsidian4.setIcon)(copyBtn, "copy");
     copyBtn.addEventListener("click", () => {
       navigator.clipboard.writeText(msg.content);
-      new import_obsidian5.Notice("Copied to clipboard");
+      new import_obsidian4.Notice("Copied to clipboard");
     });
     if (msg.role === "assistant") {
       const createNoteBtn = actionsEl.createEl("button", {
         cls: "llm-action-btn",
         attr: { "aria-label": "Create note from response" }
       });
-      (0, import_obsidian5.setIcon)(createNoteBtn, "file-plus");
+      (0, import_obsidian4.setIcon)(createNoteBtn, "file-plus");
       createNoteBtn.addEventListener("click", () => this.createNoteFromMessage(msg));
     }
     const contentEl = msgEl.createDiv({ cls: "llm-message-content" });
     if (msg.role === "assistant") {
-      const component = new import_obsidian5.Component();
+      const component = new import_obsidian4.Component();
       component.load();
       this.markdownComponents.push(component);
-      await import_obsidian5.MarkdownRenderer.render(
+      await import_obsidian4.MarkdownRenderer.render(
         this.app,
         msg.content,
         contentEl,
@@ -21420,7 +21389,7 @@ var ChatView = class extends import_obsidian5.ItemView {
         cls: "llm-quick-action-btn",
         attr: { "aria-label": action.label }
       });
-      (0, import_obsidian5.setIcon)(btn, action.icon);
+      (0, import_obsidian4.setIcon)(btn, action.icon);
       btn.createSpan({ text: action.label });
       btn.addEventListener("click", () => {
         if (this.isLoading || !this.inputEl) return;
@@ -21434,7 +21403,7 @@ ${noteContent}
 ${action.prompt}`;
         } else {
           this.inputEl.value = action.prompt;
-          new import_obsidian5.Notice("No active note found \u2014 sending prompt without context");
+          new import_obsidian4.Notice("No active note found \u2014 sending prompt without context");
         }
         this.sendMessage();
       });
@@ -21444,7 +21413,7 @@ ${action.prompt}`;
    * Get the content of the currently active note (the one visible in the editor)
    */
   getActiveNoteContent() {
-    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView);
+    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
     if (!(activeView == null ? void 0 : activeView.file)) return null;
     const editor = activeView.editor;
     return editor.getValue();
@@ -21453,7 +21422,7 @@ ${action.prompt}`;
    * Get the title of the currently active note
    */
   getActiveNoteTitle() {
-    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian5.MarkdownView);
+    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
     if (!(activeView == null ? void 0 : activeView.file)) return null;
     return activeView.file.basename;
   }
@@ -21467,7 +21436,7 @@ ${action.prompt}`;
     this.isLoading = false;
     this.updateButtonStates();
     this.clearProgress();
-    new import_obsidian5.Notice("Request cancelled");
+    new import_obsidian4.Notice("Request cancelled");
   }
   /**
    * Update send/cancel button visibility based on loading state
@@ -21491,14 +21460,14 @@ ${action.prompt}`;
     const filePath = this.plugin.settings.systemPromptFile;
     if (filePath) {
       const file2 = this.app.vault.getAbstractFileByPath(filePath);
-      if (!(file2 instanceof import_obsidian5.TFile)) {
-        new import_obsidian5.Notice(`System prompt file not found: ${filePath}`);
+      if (!(file2 instanceof import_obsidian4.TFile)) {
+        new import_obsidian4.Notice(`System prompt file not found: ${filePath}`);
         return "";
       }
       try {
         return await this.app.vault.cachedRead(file2);
       } catch (error48) {
-        new import_obsidian5.Notice(`Error reading system prompt file: ${error48}`);
+        new import_obsidian4.Notice(`Error reading system prompt file: ${error48}`);
         return "";
       }
     }
@@ -21607,7 +21576,7 @@ ${action.prompt}`;
       console.error("ACP connection failed:", errorMsg);
       await this.acpExecutor.disconnect();
       this.plugin.updateStatusBar(targetProvider, void 0, "idle");
-      new import_obsidian5.Notice(`ACP connection failed: ${errorMsg.slice(0, 100)}`, 5e3);
+      new import_obsidian4.Notice(`ACP connection failed: ${errorMsg.slice(0, 100)}`, 5e3);
       this.clearProgress();
     } finally {
       this.setLoading(false);
@@ -21738,7 +21707,6 @@ ${action.prompt}`;
     }
     switch (event.type) {
       case "tool_use": {
-        this.currentToolUse = event.tool;
         const toolDisplay = event.input ? `${event.tool}: ${event.input}` : event.tool;
         if (this.toolHistory[this.toolHistory.length - 1] !== toolDisplay) {
           this.toolHistory.push(toolDisplay);
@@ -21748,14 +21716,10 @@ ${action.prompt}`;
       }
       case "thinking": {
         const thinkingMessage = event.content ? event.content.slice(0, 300) + (event.content.length > 300 ? "..." : "") : "Thinking...";
-        this.addRecentStatus(thinkingMessage.slice(0, 100));
         this.updateProgressDisplay(thinkingMessage, "thinking");
         break;
       }
       case "status":
-        if (event.message !== "Processing...") {
-          this.addRecentStatus(event.message);
-        }
         this.updateProgressDisplay(event.message, "status");
         break;
       case "text":
@@ -21763,17 +21727,6 @@ ${action.prompt}`;
           this.updateStreamingMessage(event.content);
         }
         break;
-    }
-  }
-  /**
-   * Add a status to recent history (keep last 3)
-   */
-  addRecentStatus(status) {
-    if (this.recentStatuses[this.recentStatuses.length - 1] !== status) {
-      this.recentStatuses.push(status);
-      if (this.recentStatuses.length > 3) {
-        this.recentStatuses.shift();
-      }
     }
   }
   /**
@@ -21824,7 +21777,7 @@ ${action.prompt}`;
         relativePath = filePath.slice(vaultPath.length + 1);
       }
       const file2 = this.app.vault.getAbstractFileByPath(relativePath);
-      if (file2 instanceof import_obsidian5.TFile) {
+      if (file2 instanceof import_obsidian4.TFile) {
         const leaf = this.app.workspace.getLeaf(false);
         leaf.openFile(file2);
       } else {
@@ -21866,7 +21819,7 @@ ${action.prompt}`;
     const iconName = type === "tool" ? "wrench" : type === "thinking" ? "brain" : "loader";
     const progressEl = this.progressContainer.createDiv({ cls: `llm-progress llm-progress-${type}` });
     const iconEl = progressEl.createSpan({ cls: "llm-progress-icon" });
-    (0, import_obsidian5.setIcon)(iconEl, iconName);
+    (0, import_obsidian4.setIcon)(iconEl, iconName);
     const colonIdx = message.indexOf(":");
     if (colonIdx > 0) {
       const toolPart = message.slice(0, colonIdx + 1);
@@ -21891,9 +21844,7 @@ ${action.prompt}`;
       this.progressContainer.remove();
       this.progressContainer = null;
     }
-    this.currentToolUse = null;
     this.toolHistory = [];
-    this.recentStatuses = [];
   }
   /**
    * Resolve [[Note]] references in a prompt — read referenced notes and
@@ -21910,7 +21861,7 @@ ${action.prompt}`;
       if (seen.has(linkText)) continue;
       seen.add(linkText);
       const file2 = this.app.metadataCache.getFirstLinkpathDest(linkText, "");
-      if (!(file2 instanceof import_obsidian5.TFile)) continue;
+      if (!(file2 instanceof import_obsidian4.TFile)) continue;
       try {
         const content = await this.app.vault.cachedRead(file2);
         if (content.trim()) {
@@ -21985,7 +21936,7 @@ ${content}`);
       });
       const headerEl = streamingEl.createDiv({ cls: "llm-message-header" });
       headerEl.createSpan({
-        text: PROVIDER_DISPLAY_NAMES3[this.currentProvider],
+        text: PROVIDER_DISPLAY_NAMES[this.currentProvider],
         cls: "llm-message-role"
       });
       headerEl.createSpan({ text: "...", cls: "llm-message-time" });
@@ -21996,9 +21947,9 @@ ${content}`);
       contentEl.empty();
       const activeFile = this.app.workspace.getActiveFile();
       const sourcePath = (_a3 = activeFile == null ? void 0 : activeFile.path) != null ? _a3 : "";
-      const component = new import_obsidian5.Component();
+      const component = new import_obsidian4.Component();
       component.load();
-      await import_obsidian5.MarkdownRenderer.render(
+      await import_obsidian4.MarkdownRenderer.render(
         this.app,
         content,
         contentEl,
@@ -22098,7 +22049,7 @@ ${content}`);
       this.inputEl.value = message;
       this.sendMessage();
     } else if (this.isLoading) {
-      new import_obsidian5.Notice(`Clicked: ${buttonText}`);
+      new import_obsidian4.Notice(`Clicked: ${buttonText}`);
     }
   }
   /**
@@ -22111,7 +22062,7 @@ ${content}`);
       this.inputEl.value = message;
       this.sendMessage();
     } else if (this.isLoading) {
-      new import_obsidian5.Notice(`${action}: ${itemText}`);
+      new import_obsidian4.Notice(`${action}: ${itemText}`);
     }
   }
   /**
@@ -22134,11 +22085,11 @@ ${content}`);
     }
     try {
       const file2 = await this.app.vault.create(fileName, msg.content);
-      new import_obsidian5.Notice(`Created note: ${file2.path}`);
+      new import_obsidian4.Notice(`Created note: ${file2.path}`);
       const leaf = this.app.workspace.getLeaf(false);
       await leaf.openFile(file2);
     } catch (error48) {
-      new import_obsidian5.Notice(`Failed to create note: ${error48}`);
+      new import_obsidian4.Notice(`Failed to create note: ${error48}`);
     }
   }
   /**
@@ -22166,7 +22117,7 @@ ${content}`);
 // main.ts
 init_LLMExecutor();
 init_autoDetect();
-var LLMPlugin = class extends import_obsidian6.Plugin {
+var LLMPlugin = class extends import_obsidian5.Plugin {
   constructor() {
     super(...arguments);
     this.executor = null;
@@ -22204,7 +22155,7 @@ var LLMPlugin = class extends import_obsidian6.Plugin {
       editorCallback: (editor, view) => {
         const selection = editor.getSelection();
         if (!selection) {
-          new import_obsidian6.Notice("No text selected");
+          new import_obsidian5.Notice("No text selected");
           return;
         }
         new QuickPromptModal(this.app, this, {
@@ -22221,7 +22172,7 @@ var LLMPlugin = class extends import_obsidian6.Plugin {
       editorCallback: (editor, view) => {
         const selection = editor.getSelection();
         if (!selection) {
-          new import_obsidian6.Notice("No text selected");
+          new import_obsidian5.Notice("No text selected");
           return;
         }
         new QuickPromptModal(this.app, this, {
@@ -22239,7 +22190,7 @@ var LLMPlugin = class extends import_obsidian6.Plugin {
       editorCallback: (editor, view) => {
         const selection = editor.getSelection();
         if (!selection) {
-          new import_obsidian6.Notice("No text selected");
+          new import_obsidian5.Notice("No text selected");
           return;
         }
         new QuickPromptModal(this.app, this, {
@@ -22257,7 +22208,7 @@ var LLMPlugin = class extends import_obsidian6.Plugin {
       editorCallback: (editor, view) => {
         const selection = editor.getSelection();
         if (!selection) {
-          new import_obsidian6.Notice("No text selected");
+          new import_obsidian5.Notice("No text selected");
           return;
         }
         new QuickPromptModal(this.app, this, {
@@ -22293,18 +22244,18 @@ Your request:`,
       id: "detect-providers",
       name: "Scan for AI providers",
       callback: async () => {
-        new import_obsidian6.Notice("Scanning for AI providers...");
+        new import_obsidian5.Notice("Scanning for AI providers...");
         const result = await autoDetectProviders();
         if (result.detected.length === 0) {
-          new import_obsidian6.Notice("No AI providers found. Install a CLI tool (claude, codex, gemini) or start a local server (Ollama, LM Studio).");
+          new import_obsidian5.Notice("No AI providers found. Install a CLI tool (claude, codex, gemini) or start a local server (Ollama, LM Studio).");
         } else {
           const names = result.detected.map((d) => d.name).join(", ");
           const changed = applyDetectionResults(this.settings, result);
           if (changed) {
             await this.saveSettings();
-            new import_obsidian6.Notice(`Found: ${names}. Settings updated automatically.`);
+            new import_obsidian5.Notice(`Found: ${names}. Settings updated automatically.`);
           } else {
-            new import_obsidian6.Notice(`Found: ${names}`);
+            new import_obsidian5.Notice(`Found: ${names}`);
           }
         }
       }
@@ -22343,7 +22294,7 @@ Your request:`,
         if (changed) {
           await this.saveSettings();
           const names = result.detected.map((d) => d.name).join(", ");
-          new import_obsidian6.Notice(`AI providers detected: ${names}`);
+          new import_obsidian5.Notice(`AI providers detected: ${names}`);
         }
       }
     } catch (e) {
@@ -22400,7 +22351,7 @@ Your request:`,
     this.chatSessions = (_a3 = loadedData == null ? void 0 : loadedData._chatSessions) != null ? _a3 : [];
     const oldData = loadedData;
     if ((oldData == null ? void 0 : oldData.systemPrompt) && typeof oldData.systemPrompt === "string" && oldData.systemPrompt.trim()) {
-      new import_obsidian6.Notice(
+      new import_obsidian5.Notice(
         "System prompt settings have changed. Please create a note with your system prompt and select it in settings.",
         1e4
       );
@@ -22496,7 +22447,7 @@ Your request:`,
         editor.replaceSelection(response);
         break;
     }
-    new import_obsidian6.Notice("LLM response inserted");
+    new import_obsidian5.Notice("LLM response inserted");
   }
   /**
    * Update the status bar with current provider and model info

@@ -1,15 +1,8 @@
 import { App, Modal, DropdownComponent, Notice, TFile } from "obsidian";
 import type LLMPlugin from "../../main";
 import type { LLMProvider } from "../types";
+import { PROVIDER_DISPLAY_NAMES } from "../types";
 import { LLMExecutor } from "../executor/LLMExecutor";
-
-const PROVIDER_DISPLAY_NAMES: Record<LLMProvider, string> = {
-  claude: "Claude",
-  opencode: "OpenCode",
-  codex: "Codex",
-  gemini: "Gemini",
-  local: "Local LLM",
-};
 
 export interface QuickPromptOptions {
   /** Initial text to populate the prompt (e.g., selected text) */

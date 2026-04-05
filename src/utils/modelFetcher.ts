@@ -88,30 +88,6 @@ async function fetchOpenCodeModels(): Promise<ModelOption[]> {
 }
 
 /**
- * Get models for Claude (currently static, could add `claude --list-models` if available)
- */
-async function fetchClaudeModels(): Promise<ModelOption[]> {
-  // Claude Code CLI doesn't have a list-models command yet
-  // Return static list
-  return PROVIDER_MODELS.claude;
-}
-
-/**
- * Get models for Gemini (currently static)
- */
-async function fetchGeminiModels(): Promise<ModelOption[]> {
-  // Gemini CLI doesn't have a list-models command that we know of
-  return PROVIDER_MODELS.gemini;
-}
-
-/**
- * Get models for Codex (currently static)
- */
-async function fetchCodexModels(): Promise<ModelOption[]> {
-  return PROVIDER_MODELS.codex;
-}
-
-/**
  * Get models from a local LLM server
  */
 async function fetchLocalModels(config?: ProviderConfig): Promise<ModelOption[]> {
@@ -153,25 +129,15 @@ export async function fetchModelsForProvider(
     case "opencode":
       models = await fetchOpenCodeModels();
       break;
-    case "claude":
-      models = await fetchClaudeModels();
-      break;
-    case "gemini":
-      models = await fetchGeminiModels();
-      break;
-    case "codex":
-      models = await fetchCodexModels();
-      break;
     case "local":
       models = await fetchLocalModels(providerConfig);
       break;
     default:
-      models = [{ value: "", label: "Default" }];
+      // Claude, Gemini, Codex — use static model lists
+      models = PROVIDER_MODELS[provider] ?? [{ value: "", label: "Default" }];
   }
 
-  // Update cache
   modelCache.set(provider, { models, timestamp: Date.now() });
-
   return models;
 }
 

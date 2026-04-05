@@ -155,7 +155,7 @@ export class LocalLLMExecutor {
 
     onProgress?.({ type: "status", message: `Connecting to ${serverUrl}...` });
 
-    const endpoint = this.getChatEndpoint(serverUrl, config.serverType);
+    const endpoint = this.getChatEndpoint(serverUrl);
 
     const body: Record<string, unknown> = {
       model,
@@ -249,9 +249,8 @@ export class LocalLLMExecutor {
     return null;
   }
 
-  private getChatEndpoint(serverUrl: string, serverType?: LocalServerType): string {
-    const base = serverUrl.replace(/\/$/, "");
-    return `${base}/v1/chat/completions`;
+  private getChatEndpoint(serverUrl: string): string {
+    return `${serverUrl.replace(/\/$/, "")}/v1/chat/completions`;
   }
 
   cancel(): void {

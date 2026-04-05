@@ -46,6 +46,17 @@ export interface ProviderConfig {
 }
 
 /**
+ * Display names for each provider
+ */
+export const PROVIDER_DISPLAY_NAMES: Record<LLMProvider, string> = {
+  claude: "Claude",
+  opencode: "OpenCode",
+  codex: "Codex",
+  gemini: "Gemini",
+  local: "Local LLM",
+};
+
+/**
  * Providers that support ACP (Agent Client Protocol)
  */
 export const ACP_SUPPORTED_PROVIDERS: LLMProvider[] = ["claude", "opencode", "gemini", "codex"];

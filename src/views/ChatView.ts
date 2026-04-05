@@ -11,7 +11,7 @@ import {
 import type LLMPlugin from "../../main";
 import type { ChatSession } from "../../main";
 import type { LLMProvider, ConversationMessage, ProgressEvent } from "../types";
-import { ACP_SUPPORTED_PROVIDERS } from "../types";
+import { ACP_SUPPORTED_PROVIDERS, PROVIDER_DISPLAY_NAMES } from "../types";
 import { fetchModelsForProvider } from "../utils/modelFetcher";
 import { LLMExecutor } from "../executor/LLMExecutor";
 import { AcpExecutor } from "../executor/AcpExecutor";
@@ -19,14 +19,6 @@ import { LocalLLMExecutor } from "../executor/LocalLLMExecutor";
 import { VaultSearch } from "../utils/vaultSearch";
 
 export const CHAT_VIEW_TYPE = "llm-chat-view";
-
-const PROVIDER_DISPLAY_NAMES: Record<LLMProvider, string> = {
-  claude: "Claude",
-  opencode: "OpenCode",
-  codex: "Codex",
-  gemini: "Gemini",
-  local: "Local LLM",
-};
 
 export class ChatView extends ItemView {
   plugin: LLMPlugin;
@@ -45,10 +37,8 @@ export class ChatView extends ItemView {
   private chatTabs: { id: string; name: string; messages: ConversationMessage[] }[] = [];
   private activeChatId: string = "";
   private tabBar: HTMLElement | null = null;
-  private currentToolUse: string | null = null;
   private markdownComponents: Component[] = [];
   private toolHistory: string[] = [];
-  private recentStatuses: string[] = [];
   private acpConnectionPromise: Promise<void> | null = null; // Track in-flight ACP connection
   private vaultSearch: VaultSearch;
 
@@ -1129,7 +1119,6 @@ export class ChatView extends ItemView {
 
     switch (event.type) {
       case "tool_use": {
-        this.currentToolUse = event.tool;
         const toolDisplay = event.input
           ? `${event.tool}: ${event.input}`
           : event.tool;
@@ -1147,16 +1136,11 @@ export class ChatView extends ItemView {
         const thinkingMessage = event.content
           ? event.content.slice(0, 300) + (event.content.length > 300 ? "..." : "")
           : "Thinking...";
-        this.addRecentStatus(thinkingMessage.slice(0, 100)); // Keep recent status shorter
         this.updateProgressDisplay(thinkingMessage, "thinking");
         break;
       }
 
       case "status":
-        // Don't add "Processing..." to history, it's too generic
-        if (event.message !== "Processing...") {
-          this.addRecentStatus(event.message);
-        }
         this.updateProgressDisplay(event.message, "status");
         break;
 
@@ -1166,18 +1150,6 @@ export class ChatView extends ItemView {
           this.updateStreamingMessage(event.content);
         }
         break;
-    }
-  }
-
-  /**
-   * Add a status to recent history (keep last 3)
-   */
-  private addRecentStatus(status: string) {
-    if (this.recentStatuses[this.recentStatuses.length - 1] !== status) {
-      this.recentStatuses.push(status);
-      if (this.recentStatuses.length > 3) {
-        this.recentStatuses.shift();
-      }
     }
   }
 
@@ -1325,9 +1297,7 @@ export class ChatView extends ItemView {
       this.progressContainer.remove();
       this.progressContainer = null;
     }
-    this.currentToolUse = null;
     this.toolHistory = [];
-    this.recentStatuses = [];
   }
 
   /**
