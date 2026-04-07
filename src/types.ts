@@ -59,7 +59,7 @@ export const PROVIDER_DISPLAY_NAMES: Record<LLMProvider, string> = {
 /**
  * Providers that support ACP (Agent Client Protocol)
  */
-export const ACP_SUPPORTED_PROVIDERS: LLMProvider[] = ["claude", "opencode", "gemini", "codex"];
+export const ACP_SUPPORTED_PROVIDERS: LLMProvider[] = ["claude", "gemini", "codex"]; // OpenCode ACP uses HTTP, not stdio
 
 /**
  * Common model options per provider
@@ -161,7 +161,7 @@ export const DEFAULT_PROVIDER_CONFIGS: Record<LLMProvider, ProviderConfig> = {
   },
   opencode: {
     enabled: false,
-    useAcp: true,
+    useAcp: false, // OpenCode ACP uses HTTP, not stdio - CLI mode is more reliable
   },
   codex: {
     enabled: false,

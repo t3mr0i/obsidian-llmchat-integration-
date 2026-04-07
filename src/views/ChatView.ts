@@ -844,6 +844,50 @@ export class ChatView extends ItemView {
    * Blocks user input while connecting.
    * Tracks in-flight connections to prevent overlapping connect/disconnect calls.
    */
+  /**
+   * Try to start a local LLM server if one is installed but not running.
+   * Probes known software (Ollama, LM Studio) and starts the first installed one.
+   */
+  private async tryStartLocalServer(onProgress: (e: ProgressEvent) => void): Promise<boolean> {
+    const { detectLocalSoftwareStatuses, startLocalServer } = await import("../utils/autoDetect");
+    onProgress({ type: "status", message: "Local server not running — checking installed software..." });
+
+    try {
+      const statuses = await detectLocalSoftwareStatuses();
+      const startable = statuses.find((s) => s.installed && !s.serverRunning && s.canAutoStart);
+      if (!startable) {
+        onProgress({ type: "status", message: "No local LLM server can be auto-started." });
+        return false;
+      }
+
+      onProgress({ type: "status", message: `Starting ${startable.name}...` });
+      new Notice(`Starting ${startable.name}...`);
+      const result = await startLocalServer(startable.name);
+
+      if (!result.ok) {
+        onProgress({ type: "status", message: `Failed to start ${startable.name}: ${result.error}` });
+        new Notice(`Failed to start ${startable.name}: ${result.error}`);
+        return false;
+      }
+
+      // Update settings to point at the started server
+      this.plugin.settings.providers.local.serverUrl = startable.url;
+      this.plugin.settings.providers.local.serverType = startable.type;
+      if (!this.plugin.settings.providers.local.model && startable.models.length > 0) {
+        this.plugin.settings.providers.local.model = startable.models[0];
+      }
+      await this.plugin.saveSettings();
+      this.localExecutor.updateSettings(this.plugin.settings);
+
+      onProgress({ type: "status", message: `${startable.name} started — retrying...` });
+      new Notice(`${startable.name} started`);
+      return true;
+    } catch (err) {
+      onProgress({ type: "status", message: `Auto-start failed: ${err instanceof Error ? err.message : String(err)}` });
+      return false;
+    }
+  }
+
   private connectAcpIfEnabled(): void {
     // Store the target provider at call time to detect if it changes during async operations
     const targetProvider = this.currentProvider;
@@ -984,6 +1028,10 @@ export class ChatView extends ItemView {
 
       // Check if ACP mode is enabled for this provider
       const providerConfig = this.plugin.settings.providers[this.currentProvider];
+      // OpenCode ACP uses HTTP transport, not stdio — force CLI mode regardless of stored setting
+      if (this.currentProvider === "opencode" && providerConfig.useAcp) {
+        providerConfig.useAcp = false;
+      }
       const useAcp = providerConfig.useAcp && ACP_SUPPORTED_PROVIDERS.includes(this.currentProvider);
 
       let response: { content: string; provider: LLMProvider; durationMs: number; error?: string };
@@ -1021,6 +1069,15 @@ export class ChatView extends ItemView {
         };
 
         response = await this.localExecutor.execute(chatMessages, onLocalStream, onProgress);
+
+        // Auto-start local server on connection failure and retry
+        if (response.error && /cannot connect|cannot reach|econnrefused|server is running/i.test(response.error)) {
+          const started = await this.tryStartLocalServer(onProgress);
+          if (started) {
+            streamedContent = "";
+            response = await this.localExecutor.execute(chatMessages, onLocalStream, onProgress);
+          }
+        }
       } else if (useAcp) {
         // Use ACP executor for persistent connection
         // Connect if not already connected or provider changed

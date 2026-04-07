@@ -18,6 +18,9 @@ npm-debug.log
 # Obsidian
 data.json
 
+# Local deploy config (per-developer vault paths)
+deploy-targets.json
+
 # Deliberate workflow
 .deliberate/
 

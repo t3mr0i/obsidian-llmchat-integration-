@@ -392,8 +392,9 @@ export class LLMExecutor {
       const [cmd, ...args] = command;
 
       // Most LLM CLIs accept prompt via stdin or as final argument
-      // Claude uses stdin, Gemini/codex/opencode use positional args
-      const useStdin = provider === "claude";
+      // Claude and OpenCode support stdin (avoids ARG_MAX limits for long prompts)
+      // Gemini and codex use positional args
+      const useStdin = provider === "claude" || provider === "opencode";
 
       if (!useStdin) {
         args.push(prompt);
@@ -439,13 +440,18 @@ export class LLMExecutor {
             this.debug("Progress event:", event.type, "-", (event as { message?: string }).message || "");
           }
 
-          if (onProgress) {
-            onProgress(event);
-          }
-          // Also feed text events to legacy stream callback
-          if (event.type === "text" && onStream) {
+          // Text events: accumulate and emit as cumulative via both onStream and onProgress
+          // (CLI parsers emit incremental block text; callers expect cumulative content)
+          if (event.type === "text") {
             streamedText += event.content;
-            onStream(streamedText);
+            if (onStream) {
+              onStream(streamedText);
+            }
+            if (onProgress) {
+              onProgress({ type: "text", content: streamedText });
+            }
+          } else if (onProgress) {
+            onProgress(event);
           }
         }
       });

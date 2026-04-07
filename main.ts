@@ -306,6 +306,11 @@ export default class LLMPlugin extends Plugin {
       this.settings.defaultTimeout = 120;
     }
 
+    // Migration: OpenCode ACP uses HTTP transport, not stdio — disable ACP for OpenCode
+    if (this.settings.providers.opencode?.useAcp === true) {
+      this.settings.providers.opencode.useAcp = false;
+    }
+
     // Migration: ensure local provider config exists
     if (!this.settings.providers.local) {
       this.settings.providers.local = {

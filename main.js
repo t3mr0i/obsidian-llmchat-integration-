@@ -667,7 +667,7 @@ var init_LLMExecutor = __esm({
           var _a3, _b, _c;
           const command = this.buildCommand(provider, config2);
           const [cmd, ...args] = command;
-          const useStdin = provider === "claude";
+          const useStdin = provider === "claude" || provider === "opencode";
           if (!useStdin) {
             args.push(prompt);
           }
@@ -703,12 +703,16 @@ var init_LLMExecutor = __esm({
               } else {
                 this.debug("Progress event:", event.type, "-", event.message || "");
               }
-              if (onProgress) {
-                onProgress(event);
-              }
-              if (event.type === "text" && onStream) {
+              if (event.type === "text") {
                 streamedText += event.content;
-                onStream(streamedText);
+                if (onStream) {
+                  onStream(streamedText);
+                }
+                if (onProgress) {
+                  onProgress({ type: "text", content: streamedText });
+                }
+              } else if (onProgress) {
+                onProgress(event);
               }
             }
           });
@@ -1157,6 +1161,7 @@ var autoDetect_exports = {};
 __export(autoDetect_exports, {
   applyDetectionResults: () => applyDetectionResults,
   autoDetectProviders: () => autoDetectProviders,
+  detectLocalSoftwareStatuses: () => detectLocalSoftwareStatuses,
   probeAllPorts: () => probeAllPorts,
   pullModel: () => pullModel,
   startLocalServer: () => startLocalServer
@@ -1196,6 +1201,9 @@ async function autoDetectProviders() {
 }
 async function detectLocalSoftware() {
   return Promise.all(LOCAL_SOFTWARE.map(checkSoftware));
+}
+function detectLocalSoftwareStatuses() {
+  return detectLocalSoftware();
 }
 async function checkSoftware(sw) {
   const status = {
@@ -1493,7 +1501,7 @@ var PROVIDER_DISPLAY_NAMES = {
   gemini: "Gemini",
   local: "Local LLM"
 };
-var ACP_SUPPORTED_PROVIDERS = ["claude", "opencode", "gemini", "codex"];
+var ACP_SUPPORTED_PROVIDERS = ["claude", "gemini", "codex"];
 var PROVIDER_MODELS = {
   claude: [
     { value: "", label: "Default (CLI default)" },
@@ -1559,7 +1567,8 @@ var DEFAULT_PROVIDER_CONFIGS = {
   },
   opencode: {
     enabled: false,
-    useAcp: true
+    useAcp: false
+    // OpenCode ACP uses HTTP, not stdio - CLI mode is more reliable
   },
   codex: {
     enabled: false,
@@ -21522,6 +21531,43 @@ ${action.prompt}`;
    * Blocks user input while connecting.
    * Tracks in-flight connections to prevent overlapping connect/disconnect calls.
    */
+  /**
+   * Try to start a local LLM server if one is installed but not running.
+   * Probes known software (Ollama, LM Studio) and starts the first installed one.
+   */
+  async tryStartLocalServer(onProgress) {
+    const { detectLocalSoftwareStatuses: detectLocalSoftwareStatuses2, startLocalServer: startLocalServer2 } = await Promise.resolve().then(() => (init_autoDetect(), autoDetect_exports));
+    onProgress({ type: "status", message: "Local server not running \u2014 checking installed software..." });
+    try {
+      const statuses = await detectLocalSoftwareStatuses2();
+      const startable = statuses.find((s) => s.installed && !s.serverRunning && s.canAutoStart);
+      if (!startable) {
+        onProgress({ type: "status", message: "No local LLM server can be auto-started." });
+        return false;
+      }
+      onProgress({ type: "status", message: `Starting ${startable.name}...` });
+      new import_obsidian4.Notice(`Starting ${startable.name}...`);
+      const result = await startLocalServer2(startable.name);
+      if (!result.ok) {
+        onProgress({ type: "status", message: `Failed to start ${startable.name}: ${result.error}` });
+        new import_obsidian4.Notice(`Failed to start ${startable.name}: ${result.error}`);
+        return false;
+      }
+      this.plugin.settings.providers.local.serverUrl = startable.url;
+      this.plugin.settings.providers.local.serverType = startable.type;
+      if (!this.plugin.settings.providers.local.model && startable.models.length > 0) {
+        this.plugin.settings.providers.local.model = startable.models[0];
+      }
+      await this.plugin.saveSettings();
+      this.localExecutor.updateSettings(this.plugin.settings);
+      onProgress({ type: "status", message: `${startable.name} started \u2014 retrying...` });
+      new import_obsidian4.Notice(`${startable.name} started`);
+      return true;
+    } catch (err) {
+      onProgress({ type: "status", message: `Auto-start failed: ${err instanceof Error ? err.message : String(err)}` });
+      return false;
+    }
+  }
   connectAcpIfEnabled() {
     const targetProvider = this.currentProvider;
     const providerConfig = this.plugin.settings.providers[targetProvider];
@@ -21610,6 +21656,9 @@ ${action.prompt}`;
       };
       const vaultPath = this.getVaultPath();
       const providerConfig = this.plugin.settings.providers[this.currentProvider];
+      if (this.currentProvider === "opencode" && providerConfig.useAcp) {
+        providerConfig.useAcp = false;
+      }
       const useAcp = providerConfig.useAcp && ACP_SUPPORTED_PROVIDERS.includes(this.currentProvider);
       let response;
       if (this.currentProvider === "local") {
@@ -21635,6 +21684,13 @@ ${action.prompt}`;
           this.updateStreamingMessage(streamedContent);
         };
         response = await this.localExecutor.execute(chatMessages, onLocalStream, onProgress);
+        if (response.error && /cannot connect|cannot reach|econnrefused|server is running/i.test(response.error)) {
+          const started = await this.tryStartLocalServer(onProgress);
+          if (started) {
+            streamedContent = "";
+            response = await this.localExecutor.execute(chatMessages, onLocalStream, onProgress);
+          }
+        }
       } else if (useAcp) {
         if (!this.acpExecutor.isConnected() || this.acpExecutor.getProvider() !== this.currentProvider) {
           onProgress({ type: "status", message: `Connecting to ${this.currentProvider} ACP...` });
@@ -22345,7 +22401,7 @@ Your request:`,
     }
   }
   async loadSettings() {
-    var _a3;
+    var _a3, _b;
     const loadedData = await this.loadData();
     this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData != null ? loadedData : {});
     this.chatSessions = (_a3 = loadedData == null ? void 0 : loadedData._chatSessions) != null ? _a3 : [];
@@ -22358,6 +22414,9 @@ Your request:`,
     }
     if (this.settings.defaultTimeout === void 0) {
       this.settings.defaultTimeout = 120;
+    }
+    if (((_b = this.settings.providers.opencode) == null ? void 0 : _b.useAcp) === true) {
+      this.settings.providers.opencode.useAcp = false;
     }
     if (!this.settings.providers.local) {
       this.settings.providers.local = {

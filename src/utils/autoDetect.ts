@@ -159,6 +159,13 @@ async function detectLocalSoftware(): Promise<LocalSoftwareStatus[]> {
   return Promise.all(LOCAL_SOFTWARE.map(checkSoftware));
 }
 
+/**
+ * Public alias for detectLocalSoftware — used by ChatView for auto-start.
+ */
+export function detectLocalSoftwareStatuses(): Promise<LocalSoftwareStatus[]> {
+  return detectLocalSoftware();
+}
+
 async function checkSoftware(
   sw: (typeof LOCAL_SOFTWARE)[number]
 ): Promise<LocalSoftwareStatus> {
