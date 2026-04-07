@@ -213,12 +213,26 @@ export class ChatView extends ItemView {
       const models = await fetchModelsForProvider(this.currentProvider, config);
       this.modelSelectEl.empty();
 
+      // If the stored model is not in the available list, reset it.
+      // Otherwise the dropdown shows the first option visually but the
+      // background config still points at an invalid model.
+      const isValid = !currentModel || models.some((m) => m.value === currentModel);
+      if (!isValid) {
+        const fallback = models.find((m) => m.value !== "")?.value || "";
+        if (config) {
+          config.model = fallback || undefined;
+          await this.plugin.saveSettings();
+        }
+        new Notice(`Model "${currentModel}" not available — switched to "${fallback || "default"}"`);
+      }
+
+      const effectiveModel = isValid ? currentModel : (config?.model || "");
       for (const m of models) {
         const opt = this.modelSelectEl.createEl("option", {
           value: m.value,
           text: m.label,
         });
-        if (m.value === currentModel) opt.selected = true;
+        if (m.value === effectiveModel) opt.selected = true;
       }
     } catch {
       this.modelSelectEl.empty();

@@ -21003,6 +21003,7 @@ var ChatView = class extends import_obsidian4.ItemView {
    * Refresh the model dropdown options for the current provider
    */
   async refreshModelSelect() {
+    var _a3;
     if (!this.modelSelectEl) return;
     this.modelSelectEl.empty();
     const config2 = this.plugin.settings.providers[this.currentProvider];
@@ -21011,12 +21012,22 @@ var ChatView = class extends import_obsidian4.ItemView {
     try {
       const models = await fetchModelsForProvider(this.currentProvider, config2);
       this.modelSelectEl.empty();
+      const isValid = !currentModel || models.some((m) => m.value === currentModel);
+      if (!isValid) {
+        const fallback = ((_a3 = models.find((m) => m.value !== "")) == null ? void 0 : _a3.value) || "";
+        if (config2) {
+          config2.model = fallback || void 0;
+          await this.plugin.saveSettings();
+        }
+        new import_obsidian4.Notice(`Model "${currentModel}" not available \u2014 switched to "${fallback || "default"}"`);
+      }
+      const effectiveModel = isValid ? currentModel : (config2 == null ? void 0 : config2.model) || "";
       for (const m of models) {
         const opt = this.modelSelectEl.createEl("option", {
           value: m.value,
           text: m.label
         });
-        if (m.value === currentModel) opt.selected = true;
+        if (m.value === effectiveModel) opt.selected = true;
       }
     } catch (e) {
       this.modelSelectEl.empty();
