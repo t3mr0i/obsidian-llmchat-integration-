@@ -1,0 +1,89 @@
+{
+  "name": "@temroi/cai",
+  "version": "0.9.1",
+  "description": "Your AI reads outdated docs and hallucinates. CAI catches that — drift detection, per-file context, and MCP server for Claude, Cursor, Copilot, and OpenCode",
+  "type": "module",
+  "bin": {
+    "cai": "dist/cli.js"
+  },
+  "files": [
+    ".tool-configs",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "LICENSE",
+    "README.md",
+    "ROUTER.md",
+    "SETUP.md",
+    "SYNC.md",
+    "context",
+    "dist",
+    "mascot",
+    "package.json",
+    "patterns",
+    "screenshots",
+    "setup.sh",
+    "sync.sh",
+    "tsup.config.ts",
+    "update.sh",
+    "visualize.sh"
+  ],
+  "keywords": [
+    "ai",
+    "context",
+    "scaffold",
+    "drift-detection",
+    "token",
+    "claude",
+    "cursor",
+    "copilot",
+    "opencode",
+    "mcp",
+    "agents",
+    "documentation",
+    "cli",
+    "llm",
+    "sync"
+  ],
+  "author": "CAI",
+  "license": "MIT",
+  "homepage": "https://github.com/t3mr0i/ContextCondense#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/t3mr0i/ContextCondense.git"
+  },
+  "bugs": {
+    "url": "https://github.com/t3mr0i/ContextCondense/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "prepack": "npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "chalk": "^5.4.1",
+    "commander": "^14.0.3",
+    "glob": "^13.0.6",
+    "remark-frontmatter": "^5.0.0",
+    "remark-gfm": "^4.0.1",
+    "remark-parse": "^11.0.0",
+    "simple-git": "^3.27.0",
+    "tree-sitter-wasms": "^0.1.13",
+    "unified": "^11.0.5",
+    "unist-util-visit": "^5.0.0",
+    "web-tree-sitter": "^0.24.7",
+    "yaml": "^2.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "tsup": "^8.4.0",
+    "typescript": "^6.0.2",
+    "vitest": "^4.1.2"
+  }
+}

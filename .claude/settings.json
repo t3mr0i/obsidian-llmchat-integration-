@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'Context was compacted. Re-read CLAUDE.md and .cai/ROUTER.md before continuing. Verify your current task and plan are still loaded.'"
+          }
+        ]
+      }
+    ]
+  }
+}
