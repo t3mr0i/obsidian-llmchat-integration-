@@ -1,7 +1,7 @@
 {
   "name": "@temroi/cai",
-  "version": "0.9.1",
-  "description": "Your AI reads outdated docs and hallucinates. CAI catches that — drift detection, per-file context, and MCP server for Claude, Cursor, Copilot, and OpenCode",
+  "version": "1.5.0",
+  "description": "The local-first harness for AI coding agents — drift detection, hot-path scoring, back-pressure verification, recurring-task patterns, correction learning, and a global pattern library for Claude Code, Cursor, Copilot, and OpenCode",
   "type": "module",
   "bin": {
     "cai": "dist/cli.js"
@@ -42,7 +42,19 @@
     "documentation",
     "cli",
     "llm",
-    "sync"
+    "sync",
+    "drift-detection",
+    "pattern-library",
+    "telemetry",
+    "hot-path",
+    "self-learning",
+    "claude-code",
+    "claude-md",
+    "harness",
+    "harness-engineering",
+    "agent-harness",
+    "back-pressure",
+    "coding-agent"
   ],
   "author": "CAI",
   "license": "MIT",

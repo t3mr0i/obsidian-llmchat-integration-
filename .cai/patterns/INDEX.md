@@ -4,8 +4,8 @@ Check here before starting any task — if a pattern exists, follow it.
 
 | Pattern | Use when |
 |---------|----------|
-| [add-provider.md](add-provider.md) | Adding a new LLM provider (CLI or local HTTP) — types, executor, parser, settings, detection |
-| [settings-persistence.md](settings-persistence.md) | Reading/writing plugin settings or chat sessions — cloud-sync-aware merge rules |
-| [local-llm-http.md](local-llm-http.md) | Talking to Ollama / OpenAI-compatible local servers — Node http only, normalize localhost |
-| [vault-rag.md](vault-rag.md) | Using or extending VaultSearch (MiniSearch RAG) — chunking, debounced re-indexing |
-| [debug-cli-spawn.md](debug-cli-spawn.md) | Debug — CLI subprocess failures (spawn ENOENT, empty response, ACP hang, hanging on stdin) |
+| [add-cli-provider.md](add-cli-provider.md) | Adding a new CLI-based LLM provider end-to-end (types, executor, parser, settings UI). |
+| [add-acp-support.md](add-acp-support.md) | Wiring an existing provider into the persistent ACP stdio executor. |
+| [settings-persistence.md](settings-persistence.md) | Adding or changing anything persisted to `data.json` without clobbering Obsidian Sync. |
+| [spawn-cli-shellpath.md](spawn-cli-shellpath.md) | Adding a new `child_process.spawn` / `exec` call from the plugin (PATH-safety required). |
+| [debug-cli-failure.md](debug-cli-failure.md) | Diagnosing a hung, errored, or empty-response CLI / ACP / local-server call. |

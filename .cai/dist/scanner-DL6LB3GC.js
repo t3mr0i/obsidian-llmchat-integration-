@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import {
   scanProjectModel
-} from "./chunk-OSCCDOHW.js";
+} from "./chunk-S2JQZXY2.js";
 
 // src/scanner/entry-points.ts
 import { globSync } from "glob";
@@ -506,4 +506,4 @@ Be precise about versions, paths, dependencies, workspace-specific commands, wor
 export {
   runScan
 };
-//# sourceMappingURL=scanner-VNBY4CWI.js.map
+//# sourceMappingURL=scanner-DL6LB3GC.js.map

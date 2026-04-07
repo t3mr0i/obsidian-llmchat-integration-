@@ -25,9 +25,19 @@ Then read this file fully before doing anything else in this session.
 
 ## Current Project State
 
-**obsidian-llm v0.3.0** — Obsidian desktop plugin (TypeScript + esbuild) that adds an in-editor chat panel against multiple LLM providers via user-installed CLIs (Claude, Gemini, Codex, OpenCode) and local HTTP servers (Ollama, LM Studio, vLLM, …). Persistent ACP sessions for stdio agents; one-shot CLI spawn for OpenCode; Node `http` for local servers (not `fetch`). Vault RAG via MiniSearch with heading-chunked, externally-stored content. Settings persist via `loadData`/`saveData` with merge-on-save for cloud sync. Tests are WebdriverIO E2E only — no unit tests.
+`obsidian-llm` v0.4.0 — desktop-only Obsidian community plugin "AI Chat Integration".
+Sidebar chat that talks to Claude / Gemini / Codex / OpenCode CLIs and to local LLM servers
+(Ollama / OpenAI-compatible). Three executors split by transport: `LLMExecutor` (CLI
+subprocess + stream-json), `AcpExecutor` (persistent ACP stdio session), `LocalLLMExecutor`
+(raw Node `http`). MiniSearch RAG over the vault via `VaultSearch`. Single CJS bundle built
+by esbuild.
 
-Recent work (per git log): centralized provider display names, MiniSearch RAG integration, autocomplete for note refs, auto-detect for local providers, chat session save optimization.
+What's working: all four CLI providers, ACP for claude/gemini/codex (OpenCode is CLI-only),
+local server auto-detect + auto-start for Ollama and LM Studio, vault RAG, chat tabs,
+cloud-sync-safe settings merge.
+
+Recent direction (from git log): fix OpenCode CLI error surfacing, reset stored model when
+not in fetched list, UI layout polish, local LLM auto-start.
 
 ## Routing Table
 
@@ -40,11 +50,11 @@ Load the relevant file based on the current task. Always load `context/architect
 | Writing or reviewing code | `context/conventions.md` |
 | Making a design decision | `context/decisions.md` |
 | Setting up or running the project | `context/setup.md` |
-| Adding or modifying a provider | `patterns/add-provider.md`, then `context/architecture.md` |
-| Adding to or debugging settings persistence | `patterns/settings-persistence.md` |
-| Adding/changing local LLM HTTP behavior | `patterns/local-llm-http.md` |
-| Adding a Vault RAG / search feature | `patterns/vault-rag.md` |
-| Diagnosing CLI subprocess failures | `patterns/debug-cli-spawn.md` |
+| Adding or changing a CLI provider | `patterns/add-cli-provider.md` |
+| Adding ACP support to a provider | `patterns/add-acp-support.md` |
+| Persisting plugin settings or sessions | `patterns/settings-persistence.md` |
+| Spawning a CLI from the plugin | `patterns/spawn-cli-shellpath.md` |
+| Debugging a hung / failed CLI call | `patterns/debug-cli-failure.md` |
 | Any specific task | Check `patterns/INDEX.md` for a matching pattern |
 
 ## Task Protocol

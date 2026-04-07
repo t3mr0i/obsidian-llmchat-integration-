@@ -1,15 +1,19 @@
 #!/usr/bin/env node
 import {
-  findScaffoldFiles,
-  runDriftCheck
-} from "./chunk-MM7NAXI3.js";
-import {
   estimateTokens,
   stripFrontmatter
 } from "./chunk-TBA32Z4B.js";
 import {
+  findScaffoldFiles,
+  runDriftCheck
+} from "./chunk-QSCBXJG5.js";
+import {
   scanProjectModel
-} from "./chunk-OSCCDOHW.js";
+} from "./chunk-S2JQZXY2.js";
+import {
+  appendQuery
+} from "./chunk-XAVW3U2U.js";
+import "./chunk-WX2YGCKP.js";
 
 // src/mcp/server.ts
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -262,11 +266,27 @@ async function startMcpServer(config) {
         description: "Verify project docs match actual codebase. Returns drift score and issues. Run this before making architectural changes or when you suspect docs are outdated.",
         inputSchema: { type: "object", properties: {} }
       },
+      {
+        name: "cai_pattern_suggest",
+        description: "Suggest patterns from the user's global pattern library that match this project's stack and dependencies. Call this BEFORE starting a new task \u2014 if a relevant pattern exists, follow it instead of improvising. Returns up to 5 patterns ranked by stack and dependency overlap.",
+        inputSchema: { type: "object", properties: {} }
+      },
       ...getDynamicTools(projectModel)
     ]
   }));
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
     const { name, arguments: args } = req.params;
+    const result = await handleToolCall(name, args);
+    const filePath = args?.path ?? args?.file;
+    const responseText = result.content?.[0]?.type === "text" ? result.content[0].text : "";
+    appendQuery(projectRoot, {
+      tool: name,
+      file: filePath,
+      tokens: estimateTokens(responseText)
+    });
+    return result;
+  });
+  async function handleToolCall(name, args) {
     if (name === "cai_list_context") {
       const files = cache.getFileList();
       const rows = files.map((absPath) => {
@@ -311,7 +331,6 @@ ${headings}`;
         content = rawContent;
         modeLabel = "full";
       }
-      const tokens = estimateTokens(content);
       return {
         content: [
           {
@@ -345,6 +364,33 @@ ${r.excerpt}
         ]
       };
     }
+    if (name === "cai_pattern_suggest") {
+      try {
+        const { findMatching } = await import("./matching-QQS2CJGZ.js");
+        const matches = findMatching(projectModel).slice(0, 5);
+        if (matches.length === 0) {
+          return {
+            content: [{
+              type: "text",
+              text: "No matching patterns in the user's pattern library.\nIf this kind of task recurs, suggest the user share a pattern with: cai pattern share <name>"
+            }]
+          };
+        }
+        const lines = [`Found ${matches.length} matching pattern${matches.length !== 1 ? "s" : ""}:`, ""];
+        for (const m of matches) {
+          lines.push(`**${m.entry.name}** (score ${m.score})`);
+          lines.push(`  ${m.entry.description}`);
+          if (m.reasons.length > 0) lines.push(`  \u2192 ${m.reasons.join(" \xB7 ")}`);
+          lines.push(`  Install with: cai pattern install ${m.entry.hash}`);
+          lines.push("");
+        }
+        return { content: [{ type: "text", text: lines.join("\n") }] };
+      } catch (err) {
+        return {
+          content: [{ type: "text", text: `Pattern suggest failed: ${err.message}` }]
+        };
+      }
+    }
     if (name === "cai_check_drift") {
       cache.invalidate();
       const report = await runDriftCheck(config);
@@ -368,11 +414,11 @@ ${issues || "No issues."}`
       return { content: [{ type: "text", text: dynamicResult }] };
     }
     throw new Error(`Unknown tool: ${name}`);
-  });
+  }
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
 export {
   startMcpServer
 };
-//# sourceMappingURL=server-IXLTEIGS.js.map
+//# sourceMappingURL=server-627G67YL.js.map

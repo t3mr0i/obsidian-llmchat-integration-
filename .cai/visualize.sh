@@ -1042,6 +1042,141 @@ HTML_PAGE = r'''<!DOCTYPE html>
     font-weight: 500;
   }
 
+  /* ─── About button + modal ─── */
+  #about-button {
+    position: fixed;
+    top: 20px;
+    right: 24px;
+    z-index: 200;
+    background: rgba(22, 27, 34, 0.85);
+    border: 1px solid #30363d;
+    color: #c9d1d9;
+    padding: 8px 14px;
+    border-radius: 999px;
+    font: 500 12px/1 -apple-system, system-ui, sans-serif;
+    cursor: pointer;
+    backdrop-filter: blur(8px);
+    transition: all 0.15s ease;
+    letter-spacing: 0.3px;
+  }
+  #about-button:hover {
+    background: rgba(25, 68, 241, 0.2);
+    border-color: #1944F1;
+    color: #ffffff;
+  }
+  #about-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+  }
+  #about-modal-backdrop.open { display: flex; }
+  #about-modal {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    width: min(720px, 92vw);
+    max-height: 88vh;
+    overflow-y: auto;
+    padding: 36px 40px 32px;
+    position: relative;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+    color: #c9d1d9;
+    font: 14px/1.6 -apple-system, system-ui, sans-serif;
+  }
+  #about-modal h2 {
+    font-size: 22px;
+    color: #ffffff;
+    margin: 0 0 4px;
+    font-weight: 700;
+    letter-spacing: -0.4px;
+  }
+  #about-modal .about-tagline {
+    color: #8b949e;
+    font-size: 13px;
+    margin-bottom: 24px;
+  }
+  #about-modal h3 {
+    font-size: 14px;
+    color: #ffffff;
+    margin: 24px 0 10px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    text-transform: uppercase;
+  }
+  #about-modal p { margin: 0 0 12px; }
+  #about-modal .loops {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 16px 0 8px;
+  }
+  #about-modal .loop {
+    background: #161b22;
+    border: 1px solid #21262d;
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  #about-modal .loop-title {
+    color: #58a6ff;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-bottom: 4px;
+  }
+  #about-modal .loop-desc {
+    font-size: 13px;
+    color: #c9d1d9;
+    margin-bottom: 6px;
+    line-height: 1.5;
+  }
+  #about-modal .loop-cmd {
+    font: 11px/1.3 ui-monospace, monospace;
+    color: #2ea043;
+    background: #0d1117;
+    padding: 3px 7px;
+    border-radius: 4px;
+    display: inline-block;
+  }
+  #about-modal .commands {
+    background: #161b22;
+    border: 1px solid #21262d;
+    border-radius: 8px;
+    padding: 14px 16px;
+    font: 12px/1.7 ui-monospace, monospace;
+  }
+  #about-modal .commands .cmd { color: #58a6ff; }
+  #about-modal .commands .desc { color: #8b949e; }
+  #about-modal .about-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: transparent;
+    border: none;
+    color: #8b949e;
+    font-size: 24px;
+    cursor: pointer;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #about-modal .about-close:hover { background: #21262d; color: #c9d1d9; }
+  #about-modal .footer-note {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid #21262d;
+    font-size: 12px;
+    color: #8b949e;
+  }
+
   /* ─── Progress Bar ─── */
   #progress-bar-container {
     position: fixed;
@@ -1763,6 +1898,63 @@ HTML_PAGE = r'''<!DOCTYPE html>
 <div id="header">
   <h1><span>CAI</span></h1>
   <p>scaffold visualizer</p>
+</div>
+
+<button id="about-button" type="button">What is CAI?</button>
+
+<div id="about-modal-backdrop">
+  <div id="about-modal">
+    <button class="about-close" type="button" aria-label="Close">&times;</button>
+    <h2>CAI — the AI context system that grows with your project</h2>
+    <div class="about-tagline">Catches drift before Claude hallucinates. Learns the patterns you use over and over. Notices the corrections you give twice.</div>
+
+    <p>Most AI tools are static: you write CLAUDE.md once, the AI reads it forever, and the docs slowly drift from reality. CAI turns your setup into <strong>four feedback loops</strong> that keep your AI honest — all running locally, all opt-in.</p>
+
+    <div class="loops">
+      <div class="loop">
+        <div class="loop-title">Code → Scaffold</div>
+        <div class="loop-desc">Detects drift between docs and the real codebase. Walks git history to find <em>why</em> a path went missing.</div>
+        <div class="loop-cmd">cai check</div>
+      </div>
+      <div class="loop">
+        <div class="loop-title">Scaffold → AI</div>
+        <div class="loop-desc">Tracks which docs Claude actually queries through MCP. Weights drift by what's hot, not by what's biggest.</div>
+        <div class="loop-cmd">cai stats</div>
+      </div>
+      <div class="loop">
+        <div class="loop-title">AI → You</div>
+        <div class="loop-desc">Records your prompts locally, finds the corrections you give over and over, suggests them as CLAUDE.md rules.</div>
+        <div class="loop-cmd">cai learn review</div>
+      </div>
+      <div class="loop">
+        <div class="loop-title">You → Code</div>
+        <div class="loop-desc">Watches your last 50 commits, clusters recurring task types, drafts pattern files with the actual file paths already filled in.</div>
+        <div class="loop-cmd">cai pattern recurring</div>
+      </div>
+    </div>
+
+    <h3>Plus a global pattern library</h3>
+    <p>Share a good pattern from one project (<code>cai pattern share</code>) and it shows up automatically in similar projects (<code>cai pattern suggest</code>) — matched by stack and shared dependencies. Lives at <code>~/.cai/</code>, override with <code>$CAI_HOME</code>.</p>
+
+    <h3>Quick reference</h3>
+    <div class="commands">
+      <div><span class="cmd">cai check</span>            <span class="desc">— drift report with hot-path weighted score</span></div>
+      <div><span class="cmd">cai fix</span>              <span class="desc">— deterministic auto-fixes (no AI)</span></div>
+      <div><span class="cmd">cai sync</span>             <span class="desc">— let AI fix the rest</span></div>
+      <div><span class="cmd">cai health</span>           <span class="desc">— freshness, token budget, hot files</span></div>
+      <div><span class="cmd">cai stats</span>            <span class="desc">— MCP query telemetry</span></div>
+      <div><span class="cmd">cai learn enable</span>     <span class="desc">— start recording prompts (opt-in, local)</span></div>
+      <div><span class="cmd">cai learn review</span>     <span class="desc">— find recurring corrections in your prompts</span></div>
+      <div><span class="cmd">cai pattern recurring</span><span class="desc"> — auto-draft patterns from commit history</span></div>
+      <div><span class="cmd">cai pattern share &lt;name&gt;</span><span class="desc">— promote a pattern to the global library</span></div>
+      <div><span class="cmd">cai pattern suggest</span>  <span class="desc">— library patterns matching this project</span></div>
+      <div><span class="cmd">cai visualize</span>        <span class="desc">— this graph (you're here)</span></div>
+    </div>
+
+    <div class="footer-note">
+      None of this is automatic. CAI suggests, you decide. The day CAI starts writing patterns and rules without asking, it becomes another static tool that drifts from reality.
+    </div>
+  </div>
 </div>
 
 <div id="nav-simulator">
@@ -3829,6 +4021,23 @@ function escapeJs(str) {
 function openNodeFile(path) {
   fetch('/api/open?path=' + encodeURIComponent(path), { method: 'POST' }).catch(() => {});
 }
+
+// About modal — open on button click, close on backdrop click / × / Escape
+(function setupAboutModal() {
+  const btn = document.getElementById('about-button');
+  const backdrop = document.getElementById('about-modal-backdrop');
+  const modal = document.getElementById('about-modal');
+  const closeBtn = modal && modal.querySelector('.about-close');
+  if (!btn || !backdrop || !modal || !closeBtn) return;
+
+  function open() { backdrop.classList.add('open'); }
+  function close() { backdrop.classList.remove('open'); }
+
+  btn.addEventListener('click', open);
+  closeBtn.addEventListener('click', close);
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+})();
 
 // Handle resize
 window.addEventListener('resize', () => {

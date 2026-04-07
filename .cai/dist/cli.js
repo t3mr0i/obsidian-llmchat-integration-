@@ -11,10 +11,20 @@ import {
 } from "./chunk-55Z3WHTN.js";
 import {
   runSync
-} from "./chunk-AWGJUVUQ.js";
+} from "./chunk-2YRKNIYO.js";
+import {
+  ensureCaiHooks,
+  ensureLearnHook,
+  ensureMcpRegistered
+} from "./chunk-5VILQC62.js";
 import {
   generateRules
-} from "./chunk-7GLRTQA4.js";
+} from "./chunk-KGHVTBGH.js";
+import {
+  estimateFileTokens,
+  stripFrontmatter,
+  writeIfChanged
+} from "./chunk-TBA32Z4B.js";
 import {
   AVAILABLE_DRIFT_CHECKERS,
   DEFAULT_STALENESS,
@@ -26,164 +36,44 @@ import {
   parseFrontmatter,
   runDriftCheck,
   syncToolConfigs
-} from "./chunk-MM7NAXI3.js";
-import {
-  estimateFileTokens,
-  stripFrontmatter,
-  writeIfChanged
-} from "./chunk-TBA32Z4B.js";
+} from "./chunk-QSCBXJG5.js";
 import {
   scanProjectModel
-} from "./chunk-OSCCDOHW.js";
+} from "./chunk-S2JQZXY2.js";
+import {
+  aggregateByFile,
+  readQueries
+} from "./chunk-XAVW3U2U.js";
+import {
+  readHistory,
+  summarizeHistory
+} from "./chunk-WX2YGCKP.js";
+import {
+  enableLearn,
+  isLearnEnabled
+} from "./chunk-CBJHHV5O.js";
 
 // src/cli.ts
-import chalk8 from "chalk";
+import chalk9 from "chalk";
 import { Command } from "commander";
 import { existsSync as existsSync11 } from "fs";
 import { join as join10 } from "path";
-import { spawnSync as spawnSync4 } from "child_process";
+import { spawnSync as spawnSync3 } from "child_process";
 
 // src/bootstrap.ts
 import chalk from "chalk";
 import {
   cpSync,
-  existsSync as existsSync2,
-  mkdirSync as mkdirSync2,
-  readFileSync as readFileSync2,
+  existsSync,
+  mkdirSync,
+  readFileSync,
   readdirSync,
   rmSync,
-  writeFileSync as writeFileSync2
+  writeFileSync
 } from "fs";
-import { dirname, join as join2, resolve } from "path";
+import { dirname, join, resolve } from "path";
 import { fileURLToPath } from "url";
-import { spawnSync as spawnSync2 } from "child_process";
-
-// src/mcp/install.ts
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
-import { join } from "path";
-import { homedir } from "os";
 import { spawnSync } from "child_process";
-function isMcpRegistered(settingsPath) {
-  if (!existsSync(settingsPath)) return false;
-  try {
-    const raw = readFileSync(settingsPath, "utf8");
-    const json = JSON.parse(raw);
-    const servers = json.mcpServers;
-    return Boolean(servers?.cai);
-  } catch {
-    return false;
-  }
-}
-function writeDirectly(settingsPath) {
-  let json = {};
-  if (existsSync(settingsPath)) {
-    try {
-      json = JSON.parse(readFileSync(settingsPath, "utf8"));
-    } catch {
-    }
-  }
-  const servers = json.mcpServers ?? {};
-  servers.cai = { command: "cai", args: ["mcp", "start"] };
-  json.mcpServers = servers;
-  mkdirSync(join(settingsPath, ".."), { recursive: true });
-  writeFileSync(settingsPath, JSON.stringify(json, null, 2) + "\n", "utf8");
-}
-function ensureMcpRegistered(projectRoot) {
-  const projectSettings = join(projectRoot, ".claude", "settings.json");
-  const globalSettings = join(homedir(), ".claude", "settings.json");
-  if (isMcpRegistered(projectSettings) || isMcpRegistered(globalSettings)) {
-    return { status: "already_registered" };
-  }
-  const result = spawnSync("claude", ["mcp", "add", "cai", "--", "cai", "mcp", "start"], {
-    cwd: projectRoot,
-    stdio: "pipe"
-  });
-  if (result.error) {
-    const code = result.error.code;
-    if (code === "ENOENT") {
-      try {
-        writeDirectly(projectSettings);
-        return {
-          status: "registered",
-          message: "written to .claude/settings.json (claude CLI not found)"
-        };
-      } catch (err) {
-        return { status: "claude_not_found" };
-      }
-    }
-    return { status: "failed", message: result.error.message };
-  }
-  const stderr = result.stderr?.toString() ?? "";
-  if (result.status !== 0 && stderr.toLowerCase().includes("already")) {
-    return { status: "already_registered" };
-  }
-  if (result.status !== 0) {
-    try {
-      writeDirectly(projectSettings);
-      return { status: "registered" };
-    } catch {
-      return { status: "failed", message: stderr.trim() || "unknown error" };
-    }
-  }
-  return { status: "registered" };
-}
-function ensurePostCompactHook(projectRoot) {
-  return ensureCaiHooks(projectRoot) > 0;
-}
-function ensureCaiHooks(projectRoot) {
-  const settingsPath = join(projectRoot, ".claude", "settings.json");
-  let json = {};
-  if (existsSync(settingsPath)) {
-    try {
-      json = JSON.parse(readFileSync(settingsPath, "utf8"));
-    } catch {
-    }
-  }
-  const hooks = json.hooks ?? {};
-  let installed = 0;
-  if (hooks.postCompact) {
-    delete hooks.postCompact;
-  }
-  if (hooks.preToolUse) {
-    delete hooks.preToolUse;
-  }
-  if (!hooks.PreCompact) {
-    hooks.PreCompact = [
-      {
-        matcher: "",
-        hooks: [
-          {
-            type: "command",
-            command: "echo 'Context was compacted. Re-read CLAUDE.md and .cai/ROUTER.md before continuing. Verify your current task and plan are still loaded.'"
-          }
-        ]
-      }
-    ];
-    installed++;
-  }
-  if (!hooks.PreToolUse) {
-    hooks.PreToolUse = [
-      {
-        matcher: "Bash",
-        hooks: [
-          {
-            type: "command",
-            command: "jq -r '.tool_input.command // empty' | grep -qE 'git +push.*--force' && { echo 'BLOCKED: Force push detected.' >&2; exit 2; } || exit 0"
-          }
-        ]
-      }
-    ];
-    installed++;
-  }
-  if (installed > 0 || Object.keys(hooks).length > 0) {
-    json.hooks = hooks;
-    mkdirSync(join(settingsPath, ".."), { recursive: true });
-    writeFileSync(settingsPath, JSON.stringify(json, null, 2) + "\n", "utf8");
-  }
-  return installed;
-}
-
-// src/bootstrap.ts
 var BOOTSTRAP_ENTRIES = [
   ".tool-configs",
   "AGENTS.md",
@@ -208,29 +98,34 @@ var BOOTSTRAP_ENTRIES = [
 function runBootstrap(opts = {}) {
   const sourceRoot = opts.sourceRoot ?? getPackageRoot();
   const projectRoot = resolve(opts.targetDir ?? process.cwd());
-  const destination = join2(projectRoot, ".cai");
+  const destination = join(projectRoot, ".cai");
   if (sourceRoot === destination) {
     throw new Error("Refusing to bootstrap CAI into itself.");
   }
-  if (existsSync2(destination)) {
+  if (existsSync(destination)) {
     const hasContent = readdirSync(destination).length > 0;
     if (hasContent && !opts.force) {
       throw new Error(`.cai already exists in ${projectRoot}. Use --force to replace it.`);
     }
     rmSync(destination, { recursive: true, force: true });
   }
-  mkdirSync2(destination, { recursive: true });
+  mkdirSync(destination, { recursive: true });
   const copied = [];
   for (const entry of BOOTSTRAP_ENTRIES) {
-    const from = join2(sourceRoot, entry);
-    if (!existsSync2(from)) continue;
-    const to = join2(destination, entry);
+    const from = join(sourceRoot, entry);
+    if (!existsSync(from)) continue;
+    const to = join(destination, entry);
     cpSync(from, to, { recursive: true });
     copied.push(entry);
   }
   stripTemplateComments(destination);
   const mcp = ensureMcpRegistered(projectRoot);
-  const hookInstalled = ensurePostCompactHook(projectRoot);
+  const hooksInstalled = ensureCaiHooks(projectRoot);
+  const learnWasOff = !isLearnEnabled(projectRoot);
+  if (learnWasOff) {
+    enableLearn(projectRoot);
+    ensureLearnHook(projectRoot);
+  }
   let rulesGenerated = 0;
   try {
     const config = { projectRoot, scaffoldRoot: destination, settings: {} };
@@ -245,7 +140,8 @@ function runBootstrap(opts = {}) {
     mcpStatus: mcp.status,
     rulesGenerated,
     skillsGenerated,
-    postCompactHook: hookInstalled
+    hooksInstalled,
+    learnEnabled: learnWasOff
   };
 }
 function printBootstrapResult(result) {
@@ -270,8 +166,15 @@ function printBootstrapResult(result) {
   if (result.skillsGenerated && result.skillsGenerated > 0) {
     console.log(chalk.green(`  \u2713 ${result.skillsGenerated} skill${result.skillsGenerated !== 1 ? "s" : ""} generated`) + dim(" \u2014 use /cai-check and /cai-sync in Claude Code"));
   }
-  if (result.postCompactHook) {
-    console.log(chalk.green(`  \u2713 PreCompact hook installed`) + dim(" \u2014 Claude re-reads context after compaction"));
+  if (result.hooksInstalled && result.hooksInstalled > 0) {
+    console.log(
+      chalk.green(`  \u2713 ${result.hooksInstalled} Claude Code hook${result.hooksInstalled !== 1 ? "s" : ""} installed`) + dim(" \u2014 PreCompact, PreToolUse safety, Stop verify")
+    );
+  }
+  if (result.learnEnabled) {
+    console.log(
+      chalk.green(`  \u2713 Correction recording enabled`) + dim(" \u2014 local-only, gitignored, run cai learn forget to wipe")
+    );
   }
   console.log();
   if (result.setupRan) {
@@ -282,11 +185,11 @@ function printBootstrapResult(result) {
   console.log();
 }
 function runBootstrappedSetup(projectRoot) {
-  const setupScript = join2(projectRoot, ".cai", "setup.sh");
-  if (!existsSync2(setupScript)) {
+  const setupScript = join(projectRoot, ".cai", "setup.sh");
+  if (!existsSync(setupScript)) {
     throw new Error(`No setup script found at ${setupScript}`);
   }
-  const result = spawnSync2("bash", [setupScript], {
+  const result = spawnSync("bash", [setupScript], {
     cwd: projectRoot,
     stdio: "inherit"
   });
@@ -300,15 +203,15 @@ function runBootstrappedSetup(projectRoot) {
 function stripTemplateComments(scaffoldDir) {
   const dirs = ["", "context", "patterns"];
   for (const sub of dirs) {
-    const dir = sub ? join2(scaffoldDir, sub) : scaffoldDir;
-    if (!existsSync2(dir)) continue;
+    const dir = sub ? join(scaffoldDir, sub) : scaffoldDir;
+    if (!existsSync(dir)) continue;
     for (const entry of readdirSync(dir)) {
       if (!entry.endsWith(".md")) continue;
-      const filePath = join2(dir, entry);
-      const content = readFileSync2(filePath, "utf8");
+      const filePath = join(dir, entry);
+      const content = readFileSync(filePath, "utf8");
       const stripped = stripCommentsPreservingMarkers(content);
       if (stripped !== content) {
-        writeFileSync2(filePath, stripped, "utf8");
+        writeFileSync(filePath, stripped, "utf8");
       }
     }
   }
@@ -350,7 +253,7 @@ function stripCommentsPreservingMarkers(content) {
   return out.join("\n").replace(/\n{3,}/g, "\n\n");
 }
 function generateSkills(projectRoot) {
-  const skillsDir = join2(projectRoot, ".claude", "skills");
+  const skillsDir = join(projectRoot, ".claude", "skills");
   let count = 0;
   const skills = [
     {
@@ -380,11 +283,11 @@ description: "Fix all drift issues \u2014 safe auto-fixes first, then AI-assiste
   ];
   for (const skill of skills) {
     try {
-      const dir = join2(skillsDir, skill.name);
-      const filePath = join2(dir, "SKILL.md");
-      if (existsSync2(filePath)) continue;
-      mkdirSync2(dir, { recursive: true });
-      writeFileSync2(filePath, skill.content, "utf8");
+      const dir = join(skillsDir, skill.name);
+      const filePath = join(dir, "SKILL.md");
+      if (existsSync(filePath)) continue;
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(filePath, skill.content, "utf8");
       count++;
     } catch {
     }
@@ -396,7 +299,7 @@ function getPackageRoot() {
 }
 
 // src/config.ts
-import { existsSync as existsSync3, readFileSync as readFileSync3 } from "fs";
+import { existsSync as existsSync2, readFileSync as readFileSync2 } from "fs";
 import { resolve as resolve2, dirname as dirname2 } from "path";
 var PRIMARY_SCAFFOLD_DIR = ".cai";
 var LEGACY_SCAFFOLD_DIR = ".context-condensing";
@@ -464,7 +367,7 @@ function findNearestScaffoldProjectRoot(dir) {
 function findProjectRoot(dir) {
   let current = resolve2(dir);
   while (true) {
-    if (existsSync3(resolve2(current, ".git"))) {
+    if (existsSync2(resolve2(current, ".git"))) {
       return current;
     }
     const parent = dirname2(current);
@@ -474,11 +377,11 @@ function findProjectRoot(dir) {
 }
 function findScaffoldRoot(projectRoot) {
   const primaryDir = resolve2(projectRoot, PRIMARY_SCAFFOLD_DIR);
-  if (existsSync3(primaryDir)) return primaryDir;
+  if (existsSync2(primaryDir)) return primaryDir;
   const legacyDir = resolve2(projectRoot, LEGACY_SCAFFOLD_DIR);
-  if (existsSync3(legacyDir)) return legacyDir;
+  if (existsSync2(legacyDir)) return legacyDir;
   const contextDir = resolve2(projectRoot, "context");
-  if (existsSync3(contextDir)) return projectRoot;
+  if (existsSync2(contextDir)) return projectRoot;
   return null;
 }
 function loadSettings(projectRoot, scaffoldRoot) {
@@ -492,9 +395,9 @@ function loadSettings(projectRoot, scaffoldRoot) {
     candidates.unshift(resolve2(scaffoldRoot, "config.json"));
   }
   for (const path of candidates) {
-    if (!existsSync3(path)) continue;
+    if (!existsSync2(path)) continue;
     try {
-      const parsed = JSON.parse(readFileSync3(path, "utf-8"));
+      const parsed = JSON.parse(readFileSync2(path, "utf-8"));
       return typeof parsed === "object" && parsed !== null ? parsed : {};
     } catch (err) {
       process.stderr.write(`Warning: could not parse config at ${path}: ${err.message}
@@ -507,7 +410,7 @@ function loadSettings(projectRoot, scaffoldRoot) {
 
 // src/doctor.ts
 import { relative, resolve as resolve3 } from "path";
-import { existsSync as existsSync4, readFileSync as readFileSync4 } from "fs";
+import { existsSync as existsSync3, readFileSync as readFileSync3 } from "fs";
 var statusIcon = {
   ok: "\u2714",
   warn: "\u26A0",
@@ -582,7 +485,7 @@ function runDoctor(config) {
     });
   }
   const hookPath = resolve3(config.projectRoot, ".git", "hooks", "post-commit");
-  if (!existsSync4(hookPath)) {
+  if (!existsSync3(hookPath)) {
     checks.push({
       name: "post-commit",
       status: "info",
@@ -590,7 +493,7 @@ function runDoctor(config) {
       advice: "Run 'cai watch' to auto-check drift after every commit."
     });
   } else {
-    const hookContent = readFileSync4(hookPath, "utf-8");
+    const hookContent = readFileSync3(hookPath, "utf-8");
     if (hookContent.includes(HOOK_MARKERS.start)) {
       checks.push({
         name: "post-commit",
@@ -614,9 +517,9 @@ function runDoctor(config) {
     }
   }
   const settingsPath = resolve3(config.projectRoot, ".claude", "settings.json");
-  if (existsSync4(settingsPath)) {
+  if (existsSync3(settingsPath)) {
     try {
-      const settings = JSON.parse(readFileSync4(settingsPath, "utf-8"));
+      const settings = JSON.parse(readFileSync3(settingsPath, "utf-8"));
       const hooks = settings.hooks;
       if (hooks?.PreCompact) {
         checks.push({
@@ -698,8 +601,8 @@ function findIsolatedWorkspaces(project) {
 
 // src/fix.ts
 import chalk2 from "chalk";
-import { existsSync as existsSync5, readFileSync as readFileSync5, writeFileSync as writeFileSync3 } from "fs";
-import { basename, join as join3 } from "path";
+import { existsSync as existsSync4, readFileSync as readFileSync4, writeFileSync as writeFileSync2 } from "fs";
+import { basename, join as join2 } from "path";
 import { globSync } from "glob";
 var FIXABLE_ISSUES = /* @__PURE__ */ new Map([
   ["TOOL_CONFIG_OUT_OF_SYNC", "sync-tool-configs"],
@@ -870,18 +773,18 @@ function addScriptDocumentationStubs(config, issues) {
   if (scripts.length === 0) return null;
   const uniqueScripts = [...new Set(scripts)].sort();
   const relativeDocPath = pickScriptDocPath(config);
-  const absoluteDocPath = join3(config.scaffoldRoot, relativeDocPath);
-  if (!existsSync5(absoluteDocPath)) return null;
-  const content = readFileSync5(absoluteDocPath, "utf8");
+  const absoluteDocPath = join2(config.scaffoldRoot, relativeDocPath);
+  if (!existsSync4(absoluteDocPath)) return null;
+  const content = readFileSync4(absoluteDocPath, "utf8");
   const updated = injectScriptBullets(content, uniqueScripts);
   if (updated === content) return relativeDocPath;
-  writeFileSync3(absoluteDocPath, updated, "utf8");
+  writeFileSync2(absoluteDocPath, updated, "utf8");
   return relativeDocPath;
 }
 function findUndocumentedScripts(config, issues) {
   const relativeDocPath = pickScriptDocPath(config);
-  const absoluteDocPath = join3(config.scaffoldRoot, relativeDocPath);
-  if (!existsSync5(absoluteDocPath)) return [];
+  const absoluteDocPath = join2(config.scaffoldRoot, relativeDocPath);
+  if (!existsSync4(absoluteDocPath)) return [];
   return [
     ...new Set(
       issues.filter((issue) => issue.code === "UNDOCUMENTED_SCRIPT").map((issue) => issue.message.match(/Script "(.+?)"/)?.[1] ?? null).filter((value) => Boolean(value))
@@ -891,7 +794,7 @@ function findUndocumentedScripts(config, issues) {
 function pickScriptDocPath(config) {
   const preferred = ["context/setup.md", "SETUP.md"];
   for (const relativePath of preferred) {
-    if (existsSync5(join3(config.scaffoldRoot, relativePath))) {
+    if (existsSync4(join2(config.scaffoldRoot, relativePath))) {
       return relativePath;
     }
   }
@@ -930,12 +833,12 @@ function normalizePathReferences(config, issues) {
   const targets = findPathNormalizationTargets(config, issues);
   const changed = /* @__PURE__ */ new Set();
   for (const target of targets) {
-    const absolutePath = join3(config.scaffoldRoot, target.file);
-    if (!existsSync5(absolutePath)) continue;
-    const content = readFileSync5(absolutePath, "utf8");
+    const absolutePath = join2(config.scaffoldRoot, target.file);
+    if (!existsSync4(absolutePath)) continue;
+    const content = readFileSync4(absolutePath, "utf8");
     const updated = replacePathReference(content, target);
     if (updated === content) continue;
-    writeFileSync3(absolutePath, updated, "utf8");
+    writeFileSync2(absolutePath, updated, "utf8");
     changed.add(target.file);
   }
   return [...changed].sort();
@@ -1004,6 +907,8 @@ function replacePathReferenceInLine(line, from, to) {
 
 // src/reporter.ts
 import chalk3 from "chalk";
+import { existsSync as existsSync5, readFileSync as readFileSync5 } from "fs";
+import { join as join3 } from "path";
 var icon = {
   error: chalk3.red("\u2716"),
   warning: chalk3.yellow("\u26A0"),
@@ -1111,6 +1016,13 @@ function reportConsole(report, opts = {}) {
       } else if (issue.message && issue.message !== label) {
         console.log(`     ${chalk3.dim(issue.message)}`);
       }
+      if (issue.gitContext) {
+        const gc = issue.gitContext;
+        const reason = gc.renamedTo ? `renamed \u2192 ${chalk3.cyan(gc.renamedTo)}` : `deleted`;
+        console.log(
+          `     ${chalk3.dim("history")}        ${reason} in ${chalk3.cyan(gc.commit)} ${chalk3.dim(`(${gc.ago})`)} ${chalk3.dim(gc.message)}`
+        );
+      }
       const advice = getAdvice(issue);
       if (advice) {
         console.log(`     ${icon.info} ${chalk3.dim(advice)}`);
@@ -1186,6 +1098,12 @@ function printSummary(report) {
   console.log(
     chalk3.bold(`  Drift score: ${color(`${report.score}/100`)}`) + chalk3.dim(`  \xB7  ${report.filesChecked} file${report.filesChecked !== 1 ? "s" : ""} checked`)
   );
+  if (report.usedTelemetry && typeof report.weightedScore === "number" && report.weightedScore !== report.score) {
+    const wColor = report.weightedScore >= 80 ? chalk3.green : report.weightedScore >= 50 ? chalk3.yellow : chalk3.red;
+    console.log(
+      chalk3.dim(`  Hot-path weighted: `) + wColor(`${report.weightedScore}/100`) + chalk3.dim(`  \xB7 counts queries from last 7 days`)
+    );
+  }
   if (errors === 0 && warnings === 0) {
     console.log(`  ${icon.ok} ${chalk3.green("Scaffold is accurate \u2014 no drift detected.")}`);
   } else if (errors > 0) {
@@ -1200,6 +1118,17 @@ function printSummary(report) {
   } else {
     console.log(chalk3.dim(`  ${warnings} warning${warnings !== 1 ? "s" : ""} \u2014 scaffold may be slightly out of date.`));
     console.log(chalk3.dim(`  \u2192 `) + chalk3.white("cai sync --warnings") + chalk3.dim(" to address them"));
+  }
+  printTrendHint();
+}
+function printTrendHint() {
+  try {
+    const path = join3(process.cwd(), ".cai", ".cache", "drift-history.jsonl");
+    if (!existsSync5(path)) return;
+    const lines = readFileSync5(path, "utf8").split("\n").filter(Boolean);
+    if (lines.length < 3) return;
+    console.log(chalk3.dim(`  \u2192 `) + chalk3.white("cai check --history") + chalk3.dim(` to see how the score is trending (${lines.length} runs)`));
+  } catch {
   }
 }
 function printDiagnostics(report) {
@@ -1244,7 +1173,7 @@ function groupByFile(issues) {
 }
 
 // src/update.ts
-import { cpSync as cpSync2, existsSync as existsSync6, mkdirSync as mkdirSync3, rmSync as rmSync2 } from "fs";
+import { cpSync as cpSync2, existsSync as existsSync6, mkdirSync as mkdirSync2, rmSync as rmSync2 } from "fs";
 import { basename as basename2, dirname as dirname3, join as join4, resolve as resolve4 } from "path";
 import { fileURLToPath as fileURLToPath2 } from "url";
 var UPDATEABLE_SCAFFOLD_ENTRIES = [
@@ -1292,14 +1221,18 @@ function runUpdate(opts) {
     if (existsSync6(to)) {
       rmSync2(to, { recursive: true, force: true });
     } else {
-      mkdirSync3(dirname3(to), { recursive: true });
+      mkdirSync2(dirname3(to), { recursive: true });
     }
     cpSync2(from, to, { recursive: true });
     updated.push(entry);
   }
   const projectRoot = resolve4(scaffoldRoot, "..");
   const mcp = ensureMcpRegistered(projectRoot);
-  ensurePostCompactHook(projectRoot);
+  ensureCaiHooks(projectRoot);
+  if (!isLearnEnabled(projectRoot)) {
+    enableLearn(projectRoot);
+    ensureLearnHook(projectRoot);
+  }
   let rulesGenerated = 0;
   try {
     const config = { projectRoot, scaffoldRoot, settings: {} };
@@ -1359,24 +1292,24 @@ import { readFileSync as readFileSync7, readdirSync as readdirSync3, existsSync 
 import { resolve as resolve5, join as join7, basename as basename4 } from "path";
 
 // src/clipboard.ts
-import { spawnSync as spawnSync3 } from "child_process";
-import { writeFileSync as writeFileSync4 } from "fs";
+import { spawnSync as spawnSync2 } from "child_process";
+import { writeFileSync as writeFileSync3 } from "fs";
 import { join as join5 } from "path";
 import { tmpdir } from "os";
 function copyToClipboard(text) {
   if (process.platform === "darwin") {
-    const r = spawnSync3("pbcopy", { input: text });
+    const r = spawnSync2("pbcopy", { input: text });
     return r.status === 0 && !r.error;
   }
   for (const [cmd, args] of [
     ["xclip", ["-selection", "clipboard"]],
     ["xsel", ["--clipboard", "--input"]]
   ]) {
-    const r = spawnSync3(cmd, args, { input: text });
+    const r = spawnSync2(cmd, args, { input: text });
     if (r.status === 0 && !r.error) return true;
   }
   if (process.platform === "win32") {
-    const r = spawnSync3("clip", { input: text, shell: true });
+    const r = spawnSync2("clip", { input: text, shell: true });
     return r.status === 0 && !r.error;
   }
   return false;
@@ -1387,7 +1320,7 @@ function copyToClipboardOrFile(text, filename = "cai-prompt.md") {
   }
   try {
     const fallbackPath = join5(tmpdir(), filename);
-    writeFileSync4(fallbackPath, text, "utf-8");
+    writeFileSync3(fallbackPath, text, "utf-8");
     return { ok: false, fallbackPath };
   } catch {
     return { ok: false, fallbackPath: null };
@@ -1395,7 +1328,7 @@ function copyToClipboardOrFile(text, filename = "cai-prompt.md") {
 }
 
 // src/codex/index.ts
-import { existsSync as existsSync7, mkdirSync as mkdirSync4, readdirSync as readdirSync2, readFileSync as readFileSync6, statSync, writeFileSync as writeFileSync5 } from "fs";
+import { existsSync as existsSync7, mkdirSync as mkdirSync3, readdirSync as readdirSync2, readFileSync as readFileSync6, statSync, writeFileSync as writeFileSync4 } from "fs";
 import { basename as basename3, dirname as dirname4, extname, join as join6, relative as relative2 } from "path";
 import chalk4 from "chalk";
 var SKIP_DIRS = /* @__PURE__ */ new Set([
@@ -1601,12 +1534,12 @@ async function runCodex(config, opts = {}) {
   const moduleFiles = await collectModuleFiles(projectRoot, scanDirs, { useTreeSitter: true });
   const content = renderModules(moduleFiles, projectRoot);
   const outputDir = join6(config.scaffoldRoot, "codex");
-  mkdirSync4(outputDir, { recursive: true });
+  mkdirSync3(outputDir, { recursive: true });
   const outputPath = join6(outputDir, "modules.md");
   let written = false;
   const existing = existsSync7(outputPath) ? readFileSync6(outputPath, "utf-8") : null;
   if (existing !== content) {
-    writeFileSync5(outputPath, content, "utf-8");
+    writeFileSync4(outputPath, content, "utf-8");
     written = true;
   }
   const exportCount = moduleFiles.reduce((sum, f) => sum + f.exports.length, 0);
@@ -1672,12 +1605,12 @@ async function runRepoBrief(config) {
   lines.push("");
   const content = lines.join("\n");
   const outputDir = join6(config.scaffoldRoot, "codex");
-  mkdirSync4(outputDir, { recursive: true });
+  mkdirSync3(outputDir, { recursive: true });
   const outputPath = join6(outputDir, "repo-brief.md");
   let written = false;
   const existing = existsSync7(outputPath) ? readFileSync6(outputPath, "utf-8") : null;
   if (existing !== content) {
-    writeFileSync5(outputPath, content, "utf-8");
+    writeFileSync4(outputPath, content, "utf-8");
     written = true;
   }
   return { outputPath, lines: content.split("\n").length, written };
@@ -2006,7 +1939,7 @@ function getProjectName(projectRoot) {
 }
 
 // src/pattern/capture.ts
-import { readFileSync as readFileSync8, existsSync as existsSync9, mkdirSync as mkdirSync5 } from "fs";
+import { readFileSync as readFileSync8, existsSync as existsSync9, mkdirSync as mkdirSync4 } from "fs";
 import { join as join8 } from "path";
 import chalk5 from "chalk";
 async function runPatternCapture(config) {
@@ -2039,7 +1972,7 @@ ${err.message}`
   const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
   const filename = `suggested-${taskType}-${today}.md`;
   const patternsDir = join8(config.scaffoldRoot, "patterns");
-  if (!existsSync9(patternsDir)) mkdirSync5(patternsDir, { recursive: true });
+  if (!existsSync9(patternsDir)) mkdirSync4(patternsDir, { recursive: true });
   const patternPath = join8(patternsDir, filename);
   const content = buildPatternDraft(taskType, changedFiles, diffStat, diffContent, today);
   writeIfChanged(patternPath, content);
@@ -2070,7 +2003,7 @@ function detectTaskType(files, diff) {
   if (newFiles >= 2) return "new-feature";
   return "general-change";
 }
-function buildPatternDraft(taskType, changedFiles, diffStat, diffContent, today) {
+function buildPatternDraft(taskType, changedFiles, _diffStat, diffContent, today) {
   const diffLines = diffContent.split("\n");
   const hunks = diffLines.filter((l) => l.startsWith("diff --git") || l.startsWith("@@")).slice(0, 10).join("\n");
   const fileList = changedFiles.slice(0, 10).map((f) => `- ${f}`).join("\n");
@@ -2207,13 +2140,35 @@ async function runHealth(config) {
     largestFiles: [...files].sort((a, b) => b.tokens - a.tokens).slice(0, 3).filter((f) => f.tokens >= TOKEN_FILE_LARGE).map((f) => ({ file: f.file, tokens: f.tokens }))
   };
   const claudeMdBudget = analyzeClaudeMdBudget(projectRoot);
+  const TELEMETRY_DAYS = 7;
+  const queries = readQueries(projectRoot, { sinceMs: Date.now() - TELEMETRY_DAYS * 24 * 60 * 60 * 1e3 });
+  const aggregations = aggregateByFile(queries);
+  const staleSet = new Set(files.filter((f) => f.status !== "fresh").map((f) => f.file));
+  const hotFiles = aggregations.slice(0, 10).map((a) => ({
+    file: a.file,
+    hits: a.hits,
+    tokens: a.tokens,
+    hasDrift: staleSet.has(a.file)
+  }));
   const stalePenalty = files.filter((f) => f.status === "stale").length * 10;
   const warnPenalty = files.filter((f) => f.status === "warn").length * 3;
   const gapPenalty = Math.min(30, gaps.reduce((sum, g) => sum + Math.min(10, g.uncoveredCount), 0));
   const overallScore = Math.max(0, 100 - stalePenalty - warnPenalty - gapPenalty);
-  return { files, gaps, overallScore, tokenBudget, claudeMdBudget };
+  const historyEntries = readHistory(projectRoot);
+  const trendSummary = summarizeHistory(historyEntries);
+  const driftTrend = trendSummary ? {
+    current: trendSummary.current,
+    delta: trendSummary.delta,
+    best: trendSummary.best,
+    average: trendSummary.average,
+    sparkline: trendSummary.sparkline,
+    runs: trendSummary.count
+  } : null;
+  return { files, gaps, overallScore, tokenBudget, claudeMdBudget, hotFiles, telemetryDays: TELEMETRY_DAYS, driftTrend };
 }
+var CLAUDE_MD_WARN_LINES = 100;
 var CLAUDE_MD_MAX_LINES = 300;
+var CLAUDE_MD_WARN_INSTRUCTIONS = 60;
 var CLAUDE_MD_MAX_INSTRUCTIONS = 150;
 function analyzeClaudeMdBudget(projectRoot) {
   const claudeMdPath = join9(projectRoot, "CLAUDE.md");
@@ -2230,7 +2185,7 @@ function analyzeClaudeMdBudget(projectRoot) {
     const trimmed = l.trim();
     return /^[-*]\s/.test(trimmed) || /^\d+\.\s/.test(trimmed);
   }).length;
-  const status = lineCount > CLAUDE_MD_MAX_LINES || instructions > CLAUDE_MD_MAX_INSTRUCTIONS ? "critical" : lineCount > CLAUDE_MD_MAX_LINES * 0.7 || instructions > CLAUDE_MD_MAX_INSTRUCTIONS * 0.7 ? "warn" : "ok";
+  const status = lineCount > CLAUDE_MD_MAX_LINES || instructions > CLAUDE_MD_MAX_INSTRUCTIONS ? "critical" : lineCount > CLAUDE_MD_WARN_LINES || instructions > CLAUDE_MD_WARN_INSTRUCTIONS ? "warn" : "ok";
   return { lines: lineCount, instructions, status };
 }
 function buildCoverageGaps(uncovered) {
@@ -2287,10 +2242,33 @@ function printHealth(report) {
     const bIcon = b.status === "ok" ? chalk6.green("\u2714") : b.status === "warn" ? chalk6.yellow("\u26A0") : chalk6.red("\u2716");
     const bColor = b.status === "ok" ? chalk6.green : b.status === "warn" ? chalk6.yellow : chalk6.red;
     console.log(chalk6.dim("  \u2500\u2500\u2500 CLAUDE.md instruction budget \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"));
-    console.log(`  ${bIcon} ${bColor(`${b.lines} lines`)}${chalk6.dim(` (max ~${CLAUDE_MD_MAX_LINES})`)}  ${bColor(`${b.instructions} instructions`)}${chalk6.dim(` (max ~${CLAUDE_MD_MAX_INSTRUCTIONS})`)}`);
-    if (b.status !== "ok") {
-      console.log(`     ${chalk6.cyan("\u2139")} ${chalk6.dim("Claude has ~150 instruction slots after its system prompt. Exceeding this dilutes compliance.")}`);
-      console.log(`     ${chalk6.cyan("\u2139")} ${chalk6.dim("Move details to .cai/context/ files and keep CLAUDE.md under 300 lines.")}`);
+    console.log(`  ${bIcon} ${bColor(`${b.lines} lines`)}${chalk6.dim(` (warn ~${CLAUDE_MD_WARN_LINES}, max ~${CLAUDE_MD_MAX_LINES})`)}  ${bColor(`${b.instructions} instructions`)}${chalk6.dim(` (warn ~${CLAUDE_MD_WARN_INSTRUCTIONS}, max ~${CLAUDE_MD_MAX_INSTRUCTIONS})`)}`);
+    if (b.status === "warn") {
+      console.log(`     ${chalk6.cyan("\u2139")} ${chalk6.dim("OpenAI/HumanLayer recommend keeping CLAUDE.md under ~60 lines \u2014 every rule above that dilutes compliance.")}`);
+      console.log(`     ${chalk6.cyan("\u2139")} ${chalk6.dim("Move details to .cai/context/ files (queried via MCP on demand) instead.")}`);
+    } else if (b.status === "critical") {
+      console.log(`     ${chalk6.cyan("\u2139")} ${chalk6.dim("Claude has ~150 instruction slots after its system prompt. You're past that \u2014 many rules are being dropped.")}`);
+      console.log(`     ${chalk6.cyan("\u2139")} ${chalk6.dim("Move details to .cai/context/ files and keep CLAUDE.md under 100 lines.")}`);
+    }
+    console.log();
+  }
+  if (report.driftTrend) {
+    const t = report.driftTrend;
+    const sColor = (s) => s >= 80 ? chalk6.green : s >= 50 ? chalk6.yellow : chalk6.red;
+    const arrow = t.delta === null ? "" : t.delta > 0 ? chalk6.green(`\u25B2 +${t.delta}`) : t.delta < 0 ? chalk6.red(`\u25BC ${t.delta}`) : chalk6.dim("\u25C7 no change");
+    console.log(chalk6.dim(`  \u2500\u2500\u2500 Drift trend (${t.runs} run${t.runs !== 1 ? "s" : ""}) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500`));
+    console.log(`  current ${sColor(t.current)(`${t.current}/100`)}  ${arrow}  ${chalk6.dim(`avg ${t.average} \xB7 best ${t.best}`)}`);
+    console.log(`  trend   ${chalk6.cyan(t.sparkline)}  ${chalk6.dim("(last 30 runs)")}`);
+    console.log();
+  }
+  if (report.hotFiles.length > 0) {
+    console.log(chalk6.dim(`  \u2500\u2500\u2500 Hot files (last ${report.telemetryDays} days) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500`));
+    console.log(chalk6.dim("  Files Claude actually queries through MCP. Drift here hurts most."));
+    for (const h of report.hotFiles) {
+      const driftBadge = h.hasDrift ? chalk6.red(" \u26A0 drift") : "";
+      console.log(
+        `  ${chalk6.cyan(h.file.padEnd(36))} ${chalk6.dim(`${h.hits} hits \xB7 ~${h.tokens.toLocaleString()}t`)}${driftBadge}`
+      );
     }
     console.log();
   }
@@ -2346,7 +2324,7 @@ function scoreLabel(score) {
   if (score >= 50) return "needs attention \u2014 some files are behind";
   return "critical \u2014 scaffold is significantly out of date";
 }
-function formatAge(days, commits, status) {
+function formatAge(days, commits, _status) {
   const parts = [];
   if (days !== null) {
     if (days === 0) parts.push("updated today");
@@ -2461,17 +2439,30 @@ async function runMenu(config) {
     console.log(cyan("  \u2500\u2500\u2500 What do you want to do? \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"));
   }
   console.log();
-  console.log(`  ${cyan("1")}  ${b("Auto-fix everything")}   ${dim("\xB7 safe fixes + AI sync in one go")}`);
-  console.log(`  ${cyan("2")}  ${b("Safe fixes only")}       ${dim("\xB7 deterministic repairs, no AI")}`);
-  console.log(`  ${cyan("3")}  ${b("AI sync")}               ${dim("\xB7 let Claude fix remaining drift")}`);
-  console.log(`  ${cyan("4")}  ${b("Export prompts")}        ${dim("\xB7 write .md files to paste manually")}`);
-  console.log(`  ${cyan("5")}  ${b("Health report")}         ${dim("\xB7 freshness, coverage gaps, score")}`);
-  console.log(`  ${cyan("6")}  ${b("View issues")}           ${dim("\xB7 full drift report")}`);
-  console.log(`  ${cyan("7")}  ${b("Exit")}`);
+  console.log(dim("  Fix drift"));
+  console.log(`  ${cyan("1")}  ${b("Auto-fix everything")}     ${dim("\xB7 safe fixes + AI sync in one go")}`);
+  console.log(`  ${cyan("2")}  ${b("Safe fixes only")}         ${dim("\xB7 deterministic repairs, no AI")}`);
+  console.log(`  ${cyan("3")}  ${b("AI sync")}                 ${dim("\xB7 let Claude fix remaining drift")}`);
+  console.log(`  ${cyan("4")}  ${b("View issues")}             ${dim("\xB7 full drift report")}`);
+  console.log();
+  console.log(dim("  Verify (back-pressure)"));
+  console.log(`  ${cyan("5")}  ${b("cai verify")}              ${dim("\xB7 typecheck + build + drift")}`);
+  console.log();
+  console.log(dim("  Insights"));
+  console.log(`  ${cyan("6")}  ${b("Health report")}           ${dim("\xB7 freshness, coverage, hot files")}`);
+  console.log(`  ${cyan("7")}  ${b("Drift trend (history)")}   ${dim("\xB7 score over time + sparkline")}`);
+  console.log(`  ${cyan("8")}  ${b("Telemetry stats")}         ${dim("\xB7 what Claude actually queries")}`);
+  console.log();
+  console.log(dim("  Learning"));
+  console.log(`  ${cyan("9")}  ${b("Review corrections")}      ${dim("\xB7 recurring corrections you give Claude")}`);
+  console.log(`  ${cyan("10")} ${b("Suggest patterns")}        ${dim("\xB7 library matches for this project")}`);
+  console.log(`  ${cyan("11")} ${b("Recurring tasks")}         ${dim("\xB7 auto-draft patterns from commit history")}`);
+  console.log();
+  console.log(`  ${cyan("0")}  ${b("Exit")}`);
   console.log();
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   const choice = await new Promise((resolve6) => {
-    rl.question("  Choice [1-7]: ", (answer) => {
+    rl.question("  Choice [0-11]: ", (answer) => {
       rl.close();
       resolve6(answer.trim());
     });
@@ -2490,17 +2481,116 @@ async function runMenu(config) {
       await runSync(config, {});
       break;
     case "4":
-      await runSync(config, { export: true });
+      reportConsole(report, { verbose: true });
       break;
     case "5": {
+      const { runVerify, printVerifyResult } = await import("./verify-HNFYNJZZ.js");
+      const result = await runVerify(config);
+      printVerifyResult(result);
+      break;
+    }
+    case "6": {
       const health = await runHealth(config);
       printHealth(health);
       break;
     }
-    case "6":
-      reportConsole(report, { verbose: true });
+    case "7": {
+      const { readHistory: readHistory2, summarizeHistory: summarizeHistory2 } = await import("./history-RGXCZ2B5.js");
+      const entries = readHistory2(config.projectRoot);
+      const summary = summarizeHistory2(entries);
+      if (!summary) {
+        console.log(dim(`  No drift history yet. Run cai check a few times to build a trend.`));
+      } else {
+        const sColor = (s) => s >= 80 ? chalk7.green : s >= 50 ? chalk7.yellow : chalk7.red;
+        console.log(`  Current: ${sColor(summary.current)(`${summary.current}/100`)}  ${dim(`avg ${summary.average} \xB7 best ${summary.best} \xB7 worst ${summary.worst}`)}`);
+        console.log(`  Trend:   ${cyan(summary.sparkline)}  ${dim("(last 30 runs)")}`);
+      }
+      console.log();
       break;
-    case "7":
+    }
+    case "8": {
+      const { readQueries: readQueries2, aggregateByFile: aggregateByFile2, aggregateByTool } = await import("./query-log-25URGTCX.js");
+      const sinceMs = Date.now() - 7 * 24 * 60 * 60 * 1e3;
+      const queries = readQueries2(config.projectRoot, { sinceMs });
+      if (queries.length === 0) {
+        console.log(dim(`  No MCP queries in the last 7 days. Telemetry starts when Claude calls the cai MCP server.`));
+      } else {
+        console.log(`  ${queries.length} queries in the last 7 days`);
+        const tools = aggregateByTool(queries).slice(0, 5);
+        for (const t of tools) {
+          console.log(`    ${cyan(t.tool.padEnd(28))} ${t.hits}`);
+        }
+        const files = aggregateByFile2(queries).slice(0, 5);
+        if (files.length > 0) {
+          console.log();
+          console.log(dim("  Hot files:"));
+          for (const f of files) {
+            console.log(`    ${cyan(f.file.padEnd(40))} ${f.hits} hits`);
+          }
+        }
+      }
+      console.log();
+      break;
+    }
+    case "9": {
+      const { readPrompts } = await import("./recorder-YC26GMYW.js");
+      const { detectCorrections, clusterCorrections, suggestRule } = await import("./corrections-6OUZA6Y3.js");
+      const sinceMs = Date.now() - 14 * 24 * 60 * 60 * 1e3;
+      const prompts = readPrompts(config.projectRoot, { sinceMs });
+      if (prompts.length === 0) {
+        console.log(dim(`  No recorded prompts. Run ${chalk7.white("cai learn enable")} to start recording.`));
+      } else {
+        const clusters = clusterCorrections(detectCorrections(prompts));
+        if (clusters.length === 0) {
+          console.log(dim(`  ${prompts.length} prompts recorded \xB7 0 recurring corrections yet.`));
+        } else {
+          console.log(`  ${clusters.length} recurring correction${clusters.length !== 1 ? "s" : ""}:`);
+          for (const c of clusters.slice(0, 5)) {
+            console.log(`    ${cyan(c.id)}  ${chalk7.green(`${c.count}\xD7`)}  ${c.example}`);
+            console.log(`            ${dim("\u2192 " + suggestRule(c))}`);
+          }
+          console.log();
+          console.log(dim(`  Apply one with: ${chalk7.white("cai learn write-rule <id>")}`));
+        }
+      }
+      console.log();
+      break;
+    }
+    case "10": {
+      const { findMatching } = await import("./matching-QQS2CJGZ.js");
+      const { scanProjectModel: scanProjectModel2 } = await import("./manifest-6HT3FZTU.js");
+      const project = scanProjectModel2(config.projectRoot);
+      const matches = findMatching(project);
+      if (matches.length === 0) {
+        console.log(dim(`  No matching patterns in your library. Share patterns with: ${chalk7.white("cai pattern share <name>")}`));
+      } else {
+        console.log(`  ${matches.length} matching pattern${matches.length !== 1 ? "s" : ""}:`);
+        for (const m of matches.slice(0, 5)) {
+          console.log(`    ${cyan(m.entry.hash)}  ${b(m.entry.name)}  ${chalk7.green(`score ${m.score}`)}`);
+          console.log(`            ${dim(m.entry.description)}`);
+        }
+      }
+      console.log();
+      break;
+    }
+    case "11": {
+      const { readRecentCommits, clusterCommits } = await import("./cluster-EEXGHMFP.js");
+      const commits = readRecentCommits(config.projectRoot);
+      const clusters = clusterCommits(commits);
+      if (clusters.length === 0) {
+        console.log(dim(`  No recurring task types in the last 30 days.`));
+      } else {
+        console.log(`  ${clusters.length} recurring task type${clusters.length !== 1 ? "s" : ""}:`);
+        for (const c of clusters) {
+          console.log(`    ${cyan(c.taskType.padEnd(20))} ${chalk7.green(`${c.commits.length}\xD7`)}`);
+        }
+        console.log();
+        console.log(dim(`  Draft pattern files with: ${chalk7.white("cai pattern recurring --write")}`));
+      }
+      console.log();
+      break;
+    }
+    case "0":
     default:
       console.log(dim("  Bye. Run cai anytime to come back."));
       console.log();
@@ -2511,13 +2601,65 @@ function countAffectedFiles(report) {
   return new Set(report.issues.map((i) => i.file)).size;
 }
 
+// src/utils/errors.ts
+import chalk8 from "chalk";
+var HINTS = [
+  {
+    pattern: /no cai scaffold|no \.cai|cannot find scaffold|no\s+ROUTER\.md/i,
+    hint: () => `Run ${chalk8.white("cai setup")} to bootstrap the scaffold in this project.`
+  },
+  {
+    pattern: /no git repository|not a git repository|fatal:\s+not a git/i,
+    hint: () => `This command needs a git repository. Run ${chalk8.white("git init")} first.`
+  },
+  {
+    pattern: /git: command not found|spawn git enoent/i,
+    hint: () => `git is not installed or not in your PATH.`
+  },
+  {
+    pattern: /pattern .* already exists/i,
+    hint: () => `Use a different name, or delete the existing pattern file.`
+  },
+  {
+    pattern: /pattern file not found|no matching pattern/i,
+    hint: () => `Run ${chalk8.white("cai pattern library")} to see what's available.`
+  },
+  {
+    pattern: /no cluster with id|no recorded prompts|no recurring/i,
+    hint: () => `Run ${chalk8.white("cai learn enable")} and use Claude for a few days, then try again.`
+  },
+  {
+    pattern: /CLAUDE\.md not found/i,
+    hint: () => `Run ${chalk8.white("cai setup")} to generate CLAUDE.md.`
+  },
+  {
+    pattern: /EACCES|permission denied/i,
+    hint: () => `Permission denied. Check that you can write to this directory.`
+  },
+  {
+    pattern: /ENOSPC/i,
+    hint: () => `No space left on device.`
+  }
+];
+function printError(err) {
+  const message = err instanceof Error ? err.message : String(err);
+  const cleaned = message.replace(/^Error:\s*/i, "");
+  console.error(`${chalk8.red("\u2716")} ${cleaned}`);
+  for (const { pattern, hint } of HINTS) {
+    if (pattern.test(cleaned)) {
+      console.error(`  ${chalk8.dim("\u2192")} ${chalk8.dim(hint(cleaned))}`);
+      return;
+    }
+  }
+}
+
 // src/cli.ts
 import { createRequire } from "module";
 var program = new Command();
 var _require = createRequire(import.meta.url);
 var _pkg = _require("../package.json");
 program.name("cai").description("CLI engine for CAI \xB7 Coherence AI \u2014 drift detection, pre-analysis, and targeted sync").version(_pkg.version);
-program.command("check").description("Detect drift between scaffold files and codebase reality").option("--json", "Output full drift report as JSON").option("--quiet", "Single-line summary only").option("--verbose", "Print detailed drift diagnostics").option("--explain <query>", "Explain matching drift issues by code, file, or message").option("--only <checkers>", "Run only the listed checkers (comma-separated)").option("--skip <checkers>", "Skip the listed checkers (comma-separated)").option("--stale-days <days>", "Override staleness warning threshold in days", Number).option("--stale-commits <count>", "Override staleness warning threshold in commits", Number).option("--incremental", "Only check scaffold files that have uncommitted changes").option("--fast", "Skip slow checkers (staleness) for faster CI runs").option("--fix", "Run sync to fix any issues found").option("--tokens", "Show token cost per scaffold context file").action(async (opts) => {
+program.command("check").description("Detect drift between scaffold files and codebase reality").option("--json", "Output full drift report as JSON").option("--quiet", "Single-line summary only").option("--verbose", "Print detailed drift diagnostics").option("--explain <query>", "Explain matching drift issues by code, file, or message").option("--only <checkers>", "Run only the listed checkers (comma-separated)").option("--skip <checkers>", "Skip the listed checkers (comma-separated)").option("--stale-days <days>", "Override staleness warning threshold in days", Number).option("--stale-commits <count>", "Override staleness warning threshold in commits", Number).option("--incremental", "Only check scaffold files that have uncommitted changes").option("--fast", "Skip slow checkers (staleness) for faster CI runs").option("--fix", "Run sync to fix any issues found").option("--tokens", "Show token cost per scaffold context file").option("--history", "Show drift score trend over time").action(async (opts) => {
   try {
     if (opts.explain && (opts.json || opts.quiet)) {
       throw new Error("--explain cannot be combined with --json or --quiet");
@@ -2527,11 +2669,47 @@ program.command("check").description("Detect drift between scaffold files and co
       printTokenReport(config2);
       return;
     }
+    if (opts.history) {
+      const config2 = findConfig();
+      const { readHistory: readHistory2, summarizeHistory: summarizeHistory2 } = await import("./history-RGXCZ2B5.js");
+      const entries = readHistory2(config2.projectRoot);
+      const summary = summarizeHistory2(entries);
+      if (!summary) {
+        console.log(chalk9.dim(`No drift history yet \u2014 run ${chalk9.white("cai check")} a few times to build a trend.`));
+        return;
+      }
+      if (opts.json) {
+        console.log(JSON.stringify({ entries, summary }, null, 2));
+        return;
+      }
+      const color = (s) => s >= 80 ? chalk9.green : s >= 50 ? chalk9.yellow : chalk9.red;
+      const arrow = summary.delta === null ? "" : summary.delta > 0 ? chalk9.green(`\u25B2 +${summary.delta}`) : summary.delta < 0 ? chalk9.red(`\u25BC ${summary.delta}`) : chalk9.dim("\u25C7 no change");
+      console.log();
+      console.log(chalk9.bold(`  Drift score history \u2014 ${summary.count} run${summary.count !== 1 ? "s" : ""}`));
+      console.log();
+      console.log(`  ${chalk9.dim("current")}    ${color(summary.current)(`${summary.current}/100`)}  ${arrow}`);
+      console.log(`  ${chalk9.dim("best")}       ${color(summary.best)(`${summary.best}/100`)}`);
+      console.log(`  ${chalk9.dim("worst")}      ${color(summary.worst)(`${summary.worst}/100`)}`);
+      console.log(`  ${chalk9.dim("average")}    ${color(summary.average)(`${summary.average}/100`)}`);
+      console.log();
+      console.log(`  ${chalk9.dim("trend")}      ${chalk9.cyan(summary.sparkline)}  ${chalk9.dim("(last 30 runs)")}`);
+      console.log();
+      const recent = entries.slice(-5).reverse();
+      console.log(chalk9.dim("  Recent runs"));
+      for (const e of recent) {
+        const when = new Date(e.ts).toISOString().replace("T", " ").slice(0, 16);
+        const scoreStr = e.weightedScore !== void 0 ? `${e.score}/${e.weightedScore}` : `${e.score}`;
+        const issues = `${e.errors}E ${e.warnings}W`;
+        console.log(`    ${chalk9.dim(when)}   ${color(e.score)(scoreStr.padEnd(8))}  ${chalk9.dim(issues)}`);
+      }
+      console.log();
+      return;
+    }
     const config = findConfig();
     const only = parseCheckerList(opts.only);
     const skip = parseCheckerList(opts.skip);
     const effectiveSkip = opts.fast ? [...skip ?? [], "staleness"] : skip;
-    const { runDriftCheck: runDriftCheck2 } = await import("./drift-LESBRCLP.js");
+    const { runDriftCheck: runDriftCheck2 } = await import("./drift-N3R76GS6.js");
     const report = await runDriftCheck2(config, {
       verbose: (opts.verbose || Boolean(opts.explain)) && !opts.json && !opts.quiet,
       staleDays: opts.staleDays,
@@ -2553,7 +2731,7 @@ program.command("check").description("Detect drift between scaffold files and co
       printFixResult(fixResult);
       const postFixReport = await runDriftCheck2(config, { staleDays: opts.staleDays, staleCommits: opts.staleCommits, only, skip });
       if (postFixReport.issues.some((i) => i.severity === "error")) {
-        const { runSync: runSync2 } = await import("./sync-SIWSYH7T.js");
+        const { runSync: runSync2 } = await import("./sync-W5772P34.js");
         await runSync2(config, {});
       }
       return;
@@ -2568,14 +2746,14 @@ program.command("check").description("Detect drift between scaffold files and co
     const hasErrors = report.issues.some((i) => i.severity === "error");
     if (hasErrors && isNonInteractive) process.exit(1);
   } catch (err) {
-    console.error(err.message);
+    printError(err);
     process.exit(1);
   }
 });
 program.command("init").description("Scan codebase and generate pre-analysis brief for AI").option("--json", "Output scanner brief as JSON").action(async (opts) => {
   try {
     const config = findConfig();
-    const { runScan } = await import("./scanner-VNBY4CWI.js");
+    const { runScan } = await import("./scanner-DL6LB3GC.js");
     const result = await runScan(config, { jsonOnly: opts.json });
     if (opts.json) {
       console.log(JSON.stringify(result, null, 2));
@@ -2583,7 +2761,7 @@ program.command("init").description("Scan codebase and generate pre-analysis bri
       console.log(result);
     }
   } catch (err) {
-    console.error(err.message);
+    printError(err);
     process.exit(1);
   }
 });
@@ -2597,7 +2775,7 @@ program.command("setup [dir]").description("Bootstrap .cai scaffold and run firs
     result.setupRan = true;
     printBootstrapResult(result);
   } catch (err) {
-    console.error(err.message);
+    printError(err);
     process.exit(1);
   }
 });
@@ -2613,7 +2791,7 @@ program.command("bootstrap [dir]", { hidden: true }).description("Install a loca
     }
     printBootstrapResult(result);
   } catch (err) {
-    console.error(err.message);
+    printError(err);
     process.exit(1);
   }
 });
@@ -2627,7 +2805,7 @@ program.command("doctor").description("Inspect scaffold, manifests, tool configs
       printDoctor(report);
     }
   } catch (err) {
-    console.error(err.message);
+    printError(err);
     process.exit(1);
   }
 });
@@ -2643,7 +2821,7 @@ program.command("update").description("Refresh CAI infrastructure inside the cur
     }
     printUpdateResult(result);
   } catch (err) {
-    console.error(err.message);
+    printError(err);
     process.exit(1);
   }
 });
@@ -2660,18 +2838,18 @@ program.command("fix").description("Auto-fix drifted scaffold docs (tool configs
       await runGuidedFlow(config);
     }
   } catch (err) {
-    console.error(err.message);
+    printError(err);
     process.exit(1);
   }
 });
 program.command("sync").description("Run drift check, then build targeted prompts for AI to fix flagged files").option("--dry-run", "Show what would be synced without executing").option("--warnings", "Include warning-only files (by default only errors are synced)").option("--export", "Write one prompt file per drifted file into .cai/sync-queue/").option("--format <fmt>", "Prompt format: markdown (default) or xml (recommended for Claude)").action(async (opts) => {
   try {
     const config = findConfig();
-    const { runSync: runSync2 } = await import("./sync-SIWSYH7T.js");
+    const { runSync: runSync2 } = await import("./sync-W5772P34.js");
     const format = opts.format === "xml" ? "xml" : "markdown";
     await runSync2(config, { dryRun: opts.dryRun, includeWarnings: opts.warnings, export: opts.export, format });
   } catch (err) {
-    console.error(err.message);
+    printError(err);
     process.exit(1);
   }
 });
@@ -2682,7 +2860,7 @@ patternCmd.command("add <name>").description("Create a new pattern file and add 
     const { runPatternAdd } = await import("./pattern-E3ZPPUGI.js");
     await runPatternAdd(config, name);
   } catch (err) {
-    console.error(err.message);
+    printError(err);
     process.exit(1);
   }
 });
@@ -2692,7 +2870,204 @@ patternCmd.command("capture").description("Analyze last commit and draft a patte
     const result = await runPatternCapture(config);
     printPatternCaptureResult(result);
   } catch (err) {
-    console.error(err.message);
+    printError(err);
+    process.exit(1);
+  }
+});
+patternCmd.command("share <name>").description("Share a local pattern to your global library (~/.cai/patterns/)").action(async (name) => {
+  try {
+    const config = findConfig();
+    const { addToLibrary, libraryRoot } = await import("./library-YNCFTNZJ.js");
+    const { scanProjectModel: scanProjectModel2 } = await import("./manifest-6HT3FZTU.js");
+    const patternPath = join10(config.scaffoldRoot, "patterns", `${name}.md`);
+    const project = scanProjectModel2(config.projectRoot);
+    const entry = addToLibrary(patternPath, project, config.projectRoot);
+    console.log(chalk9.green(`\u2713 Shared ${chalk9.cyan(entry.name)} to library`));
+    console.log(chalk9.dim(`  hash: ${entry.hash}`));
+    console.log(chalk9.dim(`  ${libraryRoot()}`));
+  } catch (err) {
+    printError(err);
+    process.exit(1);
+  }
+});
+patternCmd.command("library").description("List all patterns in your global library (use --where for sync setup)").option("--json", "Output as JSON").option("--where", "Show the library path and how to sync it across devices").option("--history <name>", "Show all versions of a specific pattern").action(async (opts) => {
+  try {
+    const { listLibrary, libraryRoot, libraryStats, listVersions } = await import("./library-YNCFTNZJ.js");
+    if (opts.history) {
+      const versions = listVersions(opts.history).sort((a, b) => (b.version ?? 1) - (a.version ?? 1));
+      if (versions.length === 0) {
+        console.log(chalk9.dim(`No pattern named "${opts.history}" in your library.`));
+        return;
+      }
+      console.log();
+      console.log(chalk9.bold(`  ${opts.history} \u2014 ${versions.length} version${versions.length !== 1 ? "s" : ""}`));
+      console.log();
+      for (const v of versions) {
+        const versionLabel = v.version !== void 0 ? `v${v.version}` : "v1";
+        const date = v.createdAt.split("T")[0];
+        console.log(`  ${chalk9.green(versionLabel.padEnd(5))}  ${chalk9.cyan(v.hash)}  ${chalk9.dim(date)}`);
+        console.log(`         ${chalk9.dim(v.description)}`);
+      }
+      console.log();
+      console.log(chalk9.dim(`  Install a specific version with: ${chalk9.white("cai pattern install <hash>")}`));
+      console.log();
+      return;
+    }
+    if (opts.where) {
+      const root = libraryRoot();
+      const usingEnv = Boolean(process.env.CAI_HOME);
+      console.log();
+      console.log(chalk9.bold(`  Pattern library location`));
+      console.log(`  ${chalk9.cyan(root)}  ${usingEnv ? chalk9.dim("(from CAI_HOME)") : chalk9.dim("(default ~/.cai)")}`);
+      console.log();
+      console.log(chalk9.bold(`  Sync across devices`));
+      console.log(chalk9.dim(`  Point CAI_HOME at a folder your cloud provider syncs:`));
+      console.log();
+      console.log(chalk9.dim(`    # Dropbox`));
+      console.log(`    export CAI_HOME=~/Dropbox/.cai`);
+      console.log();
+      console.log(chalk9.dim(`    # iCloud Drive`));
+      console.log(`    export CAI_HOME=~/Library/Mobile\\ Documents/com~apple~CloudDocs/.cai`);
+      console.log();
+      console.log(chalk9.dim(`    # Syncthing / Resilio / etc \u2014 any synced folder works`));
+      console.log(`    export CAI_HOME=~/Sync/.cai`);
+      console.log();
+      console.log(chalk9.dim(`  Add the export to your shell config (.zshrc / .bashrc) and re-open the terminal.`));
+      console.log(chalk9.dim(`  Patterns are content-hashed, so simultaneous shares from two machines never collide.`));
+      console.log();
+      return;
+    }
+    const entries = listLibrary();
+    if (opts.json) {
+      console.log(JSON.stringify(entries, null, 2));
+      return;
+    }
+    if (entries.length === 0) {
+      console.log(chalk9.dim(`No patterns in library yet.`));
+      console.log(chalk9.dim(`  ${libraryRoot()}`));
+      console.log(chalk9.dim(`  Share one with: ${chalk9.white("cai pattern share <name>")}`));
+      console.log(chalk9.dim(`  Set up cross-device sync: ${chalk9.white("cai pattern library --where")}`));
+      return;
+    }
+    const stats = libraryStats();
+    console.log(chalk9.bold(`
+  CAI pattern library \u2014 ${entries.length} pattern${entries.length !== 1 ? "s" : ""}`));
+    console.log(chalk9.dim(`  ${libraryRoot()}  \xB7  ${(stats.bytes / 1024).toFixed(1)} KB
+`));
+    for (const e of entries) {
+      const stack = e.stack ? chalk9.dim(`[${e.stack}]`) : "";
+      const versionLabel = e.version && e.version > 1 ? chalk9.green(`v${e.version}`) : chalk9.dim(`v${e.version ?? 1}`);
+      console.log(`  ${chalk9.cyan(e.hash)}  ${versionLabel}  ${chalk9.bold(e.name.padEnd(28))}  ${stack}`);
+      console.log(`                  ${chalk9.dim(e.description)}`);
+    }
+    console.log();
+    console.log(chalk9.dim(`  Sync across devices: ${chalk9.white("cai pattern library --where")}`));
+    console.log();
+  } catch (err) {
+    printError(err);
+    process.exit(1);
+  }
+});
+patternCmd.command("suggest").description("Suggest patterns from your library that match this project").option("--json", "Output as JSON").action(async (opts) => {
+  try {
+    const config = findConfig();
+    const { findMatching } = await import("./matching-QQS2CJGZ.js");
+    const { scanProjectModel: scanProjectModel2 } = await import("./manifest-6HT3FZTU.js");
+    const project = scanProjectModel2(config.projectRoot);
+    const matches = findMatching(project);
+    if (opts.json) {
+      console.log(JSON.stringify(matches, null, 2));
+      return;
+    }
+    if (matches.length === 0) {
+      console.log(chalk9.dim(`No matching patterns in your library.`));
+      console.log(chalk9.dim(`  Share patterns from other projects with: ${chalk9.white("cai pattern share <name>")}`));
+      return;
+    }
+    console.log(chalk9.bold(`
+  Suggested patterns for this project \u2014 ${matches.length} match${matches.length !== 1 ? "es" : ""}
+`));
+    for (const m of matches.slice(0, 10)) {
+      console.log(`  ${chalk9.cyan(m.entry.hash)}  ${chalk9.bold(m.entry.name.padEnd(28))}  ${chalk9.green(`score ${m.score}`)}`);
+      console.log(`              ${chalk9.dim(m.entry.description)}`);
+      if (m.reasons.length > 0) {
+        console.log(`              ${chalk9.dim("\u2192 " + m.reasons.join("  \xB7  "))}`);
+      }
+    }
+    console.log();
+    console.log(chalk9.dim(`  Install one with: ${chalk9.white("cai pattern install <hash|name>")}`));
+    console.log();
+  } catch (err) {
+    printError(err);
+    process.exit(1);
+  }
+});
+patternCmd.command("recurring").description("Find recurring task types in your commit history and draft patterns for them").option("--write", "Write the drafts to .cai/patterns/ instead of just listing them").action(async (opts) => {
+  try {
+    const config = findConfig();
+    const { readRecentCommits, clusterCommits } = await import("./cluster-EEXGHMFP.js");
+    const { buildSuggestionDraft } = await import("./auto-suggest-XNB5JANJ.js");
+    const commits = readRecentCommits(config.projectRoot);
+    const clusters = clusterCommits(commits);
+    if (clusters.length === 0) {
+      console.log(chalk9.dim(`No recurring task types found in the last 30 days.`));
+      console.log(chalk9.dim(`  Need at least 3 commits of the same kind for a cluster.`));
+      return;
+    }
+    console.log(chalk9.bold(`
+  Recurring task types \u2014 ${clusters.length} cluster${clusters.length !== 1 ? "s" : ""}
+`));
+    const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    const { writeFileSync: writeFileSync5, existsSync: existsSync12, mkdirSync: mkdirSync5 } = await import("fs");
+    for (const c of clusters) {
+      console.log(`  ${chalk9.cyan(c.taskType.padEnd(20))} ${chalk9.green(`${c.commits.length}\xD7`)}  ${chalk9.dim(`last seen ${c.lastSeen.split("T")[0]}`)}`);
+      if (c.commonFiles.length > 0) {
+        console.log(`    ${chalk9.dim("recurring files: " + c.commonFiles.slice(0, 3).join(", "))}`);
+      }
+      if (opts.write) {
+        const filename = `recurring-${c.taskType}-${today}.md`;
+        const dest = join10(config.scaffoldRoot, "patterns", filename);
+        if (existsSync12(dest)) {
+          console.log(`    ${chalk9.yellow("\u26A0")} ${chalk9.dim(`skipped: ${filename} already exists`)}`);
+        } else {
+          mkdirSync5(join10(config.scaffoldRoot, "patterns"), { recursive: true });
+          writeFileSync5(dest, buildSuggestionDraft(c, today), "utf8");
+          console.log(`    ${chalk9.green("\u2713")} ${chalk9.dim(`wrote ${filename}`)}`);
+        }
+      }
+    }
+    console.log();
+    if (!opts.write) {
+      console.log(chalk9.dim(`  Run with ${chalk9.white("--write")} to draft pattern files for each cluster.`));
+      console.log();
+    }
+  } catch (err) {
+    printError(err);
+    process.exit(1);
+  }
+});
+patternCmd.command("install <query>").description("Install a library pattern into this project (by hash or name)").action(async (query) => {
+  try {
+    const config = findConfig();
+    const { findEntry, readEntryContent } = await import("./library-YNCFTNZJ.js");
+    const entry = findEntry(query);
+    if (!entry) {
+      console.error(chalk9.red(`No matching pattern in library: ${query}`));
+      console.error(chalk9.dim(`  Run: ${chalk9.white("cai pattern library")} to see what's available`));
+      process.exit(1);
+    }
+    const dest = join10(config.scaffoldRoot, "patterns", `${entry.name}.md`);
+    const { existsSync: existsSync12, writeFileSync: writeFileSync5 } = await import("fs");
+    if (existsSync12(dest)) {
+      console.error(chalk9.red(`Pattern already exists: ${dest}`));
+      console.error(chalk9.dim(`  Delete or rename it first.`));
+      process.exit(1);
+    }
+    writeFileSync5(dest, readEntryContent(entry.hash), "utf8");
+    console.log(chalk9.green(`\u2713 Installed ${entry.name} \u2192 ${dest}`));
+    console.log(chalk9.dim(`  Run ${chalk9.white("cai fix")} to update patterns/INDEX.md`));
+  } catch (err) {
+    printError(err);
     process.exit(1);
   }
 });
@@ -2706,18 +3081,112 @@ program.command("watch").description("Install post-commit hook for automatic dri
       threshold: opts.threshold
     });
   } catch (err) {
-    console.error(err.message);
+    printError(err);
     process.exit(1);
   }
 });
-program.command("session").description("Generate focused session-start prompt from current git state").option("--print", "Print the prompt instead of copying to clipboard").option("--focus <topic>", "Select context files relevant to a specific topic (e.g. auth, api, deploy)").action(async (opts) => {
+program.command("session").description("Generate focused session-start prompt from current git state").option("--print", "Print the prompt instead of copying to clipboard").option("--focus <topic>", "Select context files relevant to a specific topic (e.g. auth, api, deploy)").option("--auto", "Hook mode: emit a tiny JSON context block on stdout for Claude Code's UserPromptSubmit hook (silent on errors)").action(async (opts) => {
   try {
+    if (opts.auto) {
+      const { runSessionAuto } = await import("./session-auto-GMRPIB3P.js");
+      let projectRoot = process.cwd();
+      try {
+        projectRoot = findConfig().projectRoot;
+      } catch {
+      }
+      process.stdout.write(runSessionAuto(projectRoot));
+      return;
+    }
     const config = findConfig();
     const result = await runSession(config, { copy: !opts.print, focus: opts.focus });
     printSessionResult(result);
     if (opts.print) console.log(result.prompt);
   } catch (err) {
-    console.error(err.message);
+    printError(err);
+    process.exit(1);
+  }
+});
+program.command("verify").description("Run typecheck + build + drift check (the cheap pre-commit checks)").option("--json", "Machine-readable output for hook integration").option("--hook", "Hook mode: silent on success, shows failures, exits 2 on failure").option("--skip-drift", "Skip the drift check step").action(async (opts) => {
+  try {
+    const config = findConfig();
+    const { runVerify, printVerifyResult } = await import("./verify-HNFYNJZZ.js");
+    const result = await runVerify(config, { skipDrift: opts.skipDrift });
+    if (opts.json) {
+      console.log(JSON.stringify(result, null, 2));
+    } else if (opts.hook) {
+      if (result.passed) return;
+      console.error("cai verify failed:");
+      for (const step of result.steps) {
+        if (step.status !== "failed") continue;
+        console.error(`
+[${step.name}] ${step.command}`);
+        if (step.output) console.error(step.output);
+      }
+      process.exit(2);
+    } else {
+      printVerifyResult(result);
+    }
+    if (!result.passed && !opts.json) process.exit(1);
+  } catch (err) {
+    printError(err);
+    process.exit(1);
+  }
+});
+program.command("verify-install-hook").description("Install the Claude Code Stop hook for cai verify (back-pressure)").action(async () => {
+  try {
+    const config = findConfig();
+    const { ensureVerifyHook } = await import("./install-3ZGW2L5Y.js");
+    const result = ensureVerifyHook(config.projectRoot);
+    const msg = result === "installed" ? "installed" : result === "merged" ? "merged with existing Stop hooks" : "already present";
+    console.log(chalk9.green(`\u2713 cai verify Stop hook ${msg}`));
+    console.log(chalk9.dim(`  After every agent stop, Claude Code will run cai verify.`));
+    console.log(chalk9.dim(`  If verification fails, the agent re-engages to fix the issue.`));
+  } catch (err) {
+    printError(err);
+    process.exit(1);
+  }
+});
+program.command("verify-uninstall-hook").description("Remove the Claude Code Stop hook for cai verify").action(async () => {
+  try {
+    const config = findConfig();
+    const { removeVerifyHook } = await import("./install-3ZGW2L5Y.js");
+    const removed = removeVerifyHook(config.projectRoot);
+    if (removed) {
+      console.log(chalk9.green(`\u2713 cai verify Stop hook removed`));
+    } else {
+      console.log(chalk9.dim(`No cai verify Stop hook found in .claude/settings.json`));
+    }
+  } catch (err) {
+    printError(err);
+    process.exit(1);
+  }
+});
+program.command("session-install-hook").description("Install the Claude Code UserPromptSubmit hook for cai session --auto").action(async () => {
+  try {
+    const config = findConfig();
+    const { ensureSessionAutoHook } = await import("./install-3ZGW2L5Y.js");
+    const result = ensureSessionAutoHook(config.projectRoot);
+    const msg = result === "installed" ? "installed" : result === "merged" ? "merged with existing UserPromptSubmit hooks" : "already present";
+    console.log(chalk9.green(`\u2713 cai session --auto hook ${msg}`));
+    console.log(chalk9.dim(`  Each user prompt now gets a tiny context block (uncommitted files, recent commits, hot files).`));
+    console.log(chalk9.dim(`  Edit .claude/settings.json to inspect or remove.`));
+  } catch (err) {
+    printError(err);
+    process.exit(1);
+  }
+});
+program.command("session-uninstall-hook").description("Remove the Claude Code UserPromptSubmit hook for cai session --auto").action(async () => {
+  try {
+    const config = findConfig();
+    const { removeSessionAutoHook } = await import("./install-3ZGW2L5Y.js");
+    const removed = removeSessionAutoHook(config.projectRoot);
+    if (removed) {
+      console.log(chalk9.green(`\u2713 cai session --auto hook removed`));
+    } else {
+      console.log(chalk9.dim(`No cai session --auto hook found in .claude/settings.json`));
+    }
+  } catch (err) {
+    printError(err);
     process.exit(1);
   }
 });
@@ -2731,18 +3200,274 @@ program.command("health").description("Context quality dashboard \u2014 freshnes
       printHealth(report);
     }
   } catch (err) {
-    console.error(err.message);
+    printError(err);
+    process.exit(1);
+  }
+});
+var learnCmd = program.command("learn").description("Session recorder \u2014 learn from your corrections to Claude (local-only, on by default)");
+learnCmd.command("enable").description("Start recording user prompts (auto-installs the Claude Code hook)").option("--no-hook", "Skip the Claude Code hook installation").action(async (opts) => {
+  try {
+    const config = findConfig();
+    const { enableLearn: enableLearn2 } = await import("./recorder-YC26GMYW.js");
+    const { ensureLearnHook: ensureLearnHook2 } = await import("./install-3ZGW2L5Y.js");
+    enableLearn2(config.projectRoot);
+    console.log(chalk9.green(`\u2713 Recording enabled`));
+    console.log(chalk9.dim(`  Prompts will be stored in .cai/.cache/sessions.jsonl (gitignored)`));
+    console.log(chalk9.dim(`  Nothing leaves your machine. Run ${chalk9.white("cai learn forget")} to wipe everything.`));
+    if (opts.hook !== false) {
+      try {
+        const result = ensureLearnHook2(config.projectRoot);
+        const msg = result === "installed" ? "Claude Code hook installed" : result === "merged" ? "Claude Code hook added (merged with existing UserPromptSubmit hooks)" : "Claude Code hook already in place";
+        console.log(chalk9.green(`\u2713 ${msg}`));
+      } catch (err) {
+        console.log(chalk9.yellow(`\u26A0 Could not install Claude Code hook automatically: ${err.message}`));
+        console.log(chalk9.dim(`  Run ${chalk9.white("cai learn install-hook")} later to retry.`));
+      }
+    } else {
+      console.log(chalk9.dim(`  Hook install skipped \u2014 run ${chalk9.white("cai learn install-hook")} when ready.`));
+    }
+  } catch (err) {
+    printError(err);
+    process.exit(1);
+  }
+});
+learnCmd.command("install-hook").description("Install the Claude Code UserPromptSubmit hook for recording").action(async () => {
+  try {
+    const config = findConfig();
+    const { ensureLearnHook: ensureLearnHook2 } = await import("./install-3ZGW2L5Y.js");
+    const result = ensureLearnHook2(config.projectRoot);
+    const msg = result === "installed" ? "installed" : result === "merged" ? "merged with existing UserPromptSubmit hooks" : "already present";
+    console.log(chalk9.green(`\u2713 Claude Code hook ${msg}`));
+    console.log(chalk9.dim(`  Edit .claude/settings.json to inspect or remove.`));
+  } catch (err) {
+    printError(err);
+    process.exit(1);
+  }
+});
+learnCmd.command("disable").description("Stop recording and remove the Claude Code hook (existing log is preserved)").action(async () => {
+  try {
+    const config = findConfig();
+    const { disableLearn } = await import("./recorder-YC26GMYW.js");
+    const { removeLearnHook } = await import("./install-3ZGW2L5Y.js");
+    disableLearn(config.projectRoot);
+    const removed = removeLearnHook(config.projectRoot);
+    console.log(chalk9.green(`\u2713 Recording disabled`));
+    if (removed) {
+      console.log(chalk9.dim(`  Claude Code hook removed`));
+    }
+  } catch (err) {
+    printError(err);
+    process.exit(1);
+  }
+});
+learnCmd.command("status").description("Show whether recording is active and how many prompts are logged").action(async () => {
+  try {
+    const config = findConfig();
+    const { sessionLogStats } = await import("./recorder-YC26GMYW.js");
+    const stats = sessionLogStats(config.projectRoot);
+    const state = stats.enabled ? chalk9.green("enabled") : chalk9.dim("disabled");
+    console.log(`  Recording: ${state}`);
+    console.log(chalk9.dim(`  Logged prompts: ${stats.entries}`));
+    console.log(chalk9.dim(`  Log size: ${(stats.bytes / 1024).toFixed(1)} KB`));
+  } catch (err) {
+    printError(err);
+    process.exit(1);
+  }
+});
+learnCmd.command("forget").description("Delete all recorded prompts (irreversible)").action(async () => {
+  try {
+    const config = findConfig();
+    const { forgetLearn } = await import("./recorder-YC26GMYW.js");
+    const result = forgetLearn(config.projectRoot);
+    console.log(chalk9.green(`\u2713 Forgotten`));
+    console.log(chalk9.dim(`  Deleted ${(result.deletedBytes / 1024).toFixed(1)} KB`));
+  } catch (err) {
+    printError(err);
+    process.exit(1);
+  }
+});
+learnCmd.command("review").description("Show recurring corrections in your recent prompts").option("--days <n>", "Look back N days (default: 14)", "14").option("--stack <type>", "Only show corrections from prompts in this stack (e.g. package.json, go.mod, current)").action(async (opts) => {
+  try {
+    const config = findConfig();
+    const { readPrompts } = await import("./recorder-YC26GMYW.js");
+    const { detectCorrections, clusterCorrections, suggestRule } = await import("./corrections-6OUZA6Y3.js");
+    const days = parseInt(opts.days, 10);
+    const sinceMs = Date.now() - days * 24 * 60 * 60 * 1e3;
+    const prompts = readPrompts(config.projectRoot, { sinceMs });
+    let stackFilter = opts.stack;
+    if (stackFilter === "current") {
+      const { scanProjectModel: scanProjectModel2 } = await import("./manifest-6HT3FZTU.js");
+      stackFilter = scanProjectModel2(config.projectRoot).rootManifest?.type ?? void 0;
+      if (!stackFilter) {
+        console.log(chalk9.yellow(`\u26A0 No manifest detected in this project \u2014 falling back to all stacks.`));
+      }
+    }
+    if (prompts.length === 0) {
+      console.log(chalk9.dim(`No recorded prompts in the last ${days} days.`));
+      console.log(chalk9.dim(`  Run ${chalk9.white("cai learn enable")} to start recording.`));
+      return;
+    }
+    const corrections = detectCorrections(prompts, { stack: stackFilter });
+    const clusters = clusterCorrections(corrections);
+    const stackLabel = stackFilter ? chalk9.dim(` \xB7 stack: ${stackFilter}`) : "";
+    console.log(chalk9.bold(`
+  Session review \u2014 last ${days} days`) + stackLabel);
+    console.log(chalk9.dim(`  ${prompts.length} prompts \xB7 ${corrections.length} look like corrections \xB7 ${clusters.length} recurring
+`));
+    if (clusters.length === 0) {
+      console.log(chalk9.dim(`  No recurring corrections detected. Either you're not correcting Claude often,`));
+      console.log(chalk9.dim(`  or each correction is unique. The recorder needs repeats to find patterns.`));
+      return;
+    }
+    console.log(chalk9.bold("  Recurring corrections \u2014 consider adding these to CLAUDE.md:\n"));
+    for (const c of clusters.slice(0, 10)) {
+      console.log(`  ${chalk9.cyan(c.id)}  ${chalk9.green(`${c.count}\xD7`)}  ${c.example}  ${chalk9.dim(`[${c.signal}]`)}`);
+      console.log(`          ${chalk9.dim("\u2192 suggested rule:")} ${chalk9.white(suggestRule(c))}`);
+    }
+    console.log();
+    console.log(chalk9.dim(`  Apply one with: ${chalk9.white("cai learn write-rule <id>")}`));
+    console.log();
+  } catch (err) {
+    printError(err);
+    process.exit(1);
+  }
+});
+learnCmd.command("write-rule <id>").description("Append a learned rule to CLAUDE.md under a managed section").option("--days <n>", "Look back N days for the cluster (default: 14)", "14").action(async (id, opts) => {
+  try {
+    const config = findConfig();
+    const { readPrompts } = await import("./recorder-YC26GMYW.js");
+    const { detectCorrections, clusterCorrections, findClusterById, suggestRule, appendLearnedRule } = await import("./corrections-6OUZA6Y3.js");
+    const { existsSync: existsSync12, readFileSync: readFileSync10, writeFileSync: writeFileSync5 } = await import("fs");
+    const days = parseInt(opts.days, 10);
+    const sinceMs = Date.now() - days * 24 * 60 * 60 * 1e3;
+    const prompts = readPrompts(config.projectRoot, { sinceMs });
+    const corrections = detectCorrections(prompts);
+    const clusters = clusterCorrections(corrections);
+    const cluster = findClusterById(clusters, id);
+    if (!cluster) {
+      console.error(chalk9.red(`No cluster with id "${id}" in the last ${days} days.`));
+      console.error(chalk9.dim(`  Run ${chalk9.white("cai learn review")} to see current cluster ids.`));
+      process.exit(1);
+    }
+    const claudeMdPath = join10(config.projectRoot, "CLAUDE.md");
+    if (!existsSync12(claudeMdPath)) {
+      console.error(chalk9.red(`CLAUDE.md not found at ${claudeMdPath}`));
+      console.error(chalk9.dim(`  Run ${chalk9.white("cai setup")} first.`));
+      process.exit(1);
+    }
+    const before = readFileSync10(claudeMdPath, "utf8");
+    const rule = suggestRule(cluster);
+    if (before.includes(rule)) {
+      console.log(chalk9.yellow(`\u26A0 Rule already present in CLAUDE.md \u2014 nothing to do.`));
+      return;
+    }
+    const after = appendLearnedRule(before, rule);
+    writeFileSync5(claudeMdPath, after, "utf8");
+    console.log(chalk9.green(`\u2713 Added to CLAUDE.md`));
+    console.log(`  ${chalk9.dim("rule:")} ${chalk9.white(rule)}`);
+    console.log(`  ${chalk9.dim("cluster:")} ${cluster.count}\xD7 "${cluster.example}"`);
+    console.log(chalk9.dim(`  Section: <!-- cai:learn-start --> ... <!-- cai:learn-end -->`));
+  } catch (err) {
+    printError(err);
+    process.exit(1);
+  }
+});
+learnCmd.command("watch").description("Live tail your session log \u2014 get a toast each time you give a recurring correction").action(async () => {
+  try {
+    const config = findConfig();
+    const { isLearnEnabled: isLearnEnabled2 } = await import("./recorder-YC26GMYW.js");
+    if (!isLearnEnabled2(config.projectRoot)) {
+      console.log(chalk9.yellow(`\u26A0 Recording is not enabled.`));
+      console.log(chalk9.dim(`  Run ${chalk9.white("cai learn enable")} first.`));
+      return;
+    }
+    const { watchLearnLog } = await import("./watch-CIWADTR7.js");
+    await watchLearnLog({ projectRoot: config.projectRoot });
+  } catch (err) {
+    printError(err);
+    process.exit(1);
+  }
+});
+learnCmd.command("record").description("Internal: read a prompt from stdin (called by Claude Code's UserPromptSubmit hook)").action(async () => {
+  try {
+    const config = findConfig();
+    const { recordPrompt, isLearnEnabled: isLearnEnabled2 } = await import("./recorder-YC26GMYW.js");
+    if (!isLearnEnabled2(config.projectRoot)) {
+      return;
+    }
+    const chunks = [];
+    for await (const chunk of process.stdin) {
+      chunks.push(chunk);
+    }
+    const raw = Buffer.concat(chunks).toString("utf8").trim();
+    if (!raw) return;
+    let prompt = raw;
+    try {
+      const parsed = JSON.parse(raw);
+      prompt = parsed.prompt ?? parsed.user_prompt ?? raw;
+    } catch {
+    }
+    let stack;
+    try {
+      const { scanProjectModel: scanProjectModel2 } = await import("./manifest-6HT3FZTU.js");
+      stack = scanProjectModel2(config.projectRoot).rootManifest?.type ?? void 0;
+    } catch {
+    }
+    recordPrompt(config.projectRoot, prompt, { source: "claude-code-hook", stack });
+  } catch {
+  }
+});
+program.command("stats").description("Show MCP query telemetry \u2014 which context files Claude actually reads").option("--days <n>", "Look back N days (default: 7)", "7").option("--json", "Output as JSON").action(async (opts) => {
+  try {
+    const config = findConfig();
+    const { readQueries: readQueries2, aggregateByFile: aggregateByFile2, aggregateByTool } = await import("./query-log-25URGTCX.js");
+    const days = parseInt(opts.days, 10);
+    const sinceMs = Date.now() - days * 24 * 60 * 60 * 1e3;
+    const queries = readQueries2(config.projectRoot, { sinceMs });
+    if (opts.json) {
+      console.log(JSON.stringify({
+        days,
+        totalQueries: queries.length,
+        byFile: aggregateByFile2(queries),
+        byTool: aggregateByTool(queries)
+      }, null, 2));
+      return;
+    }
+    if (queries.length === 0) {
+      console.log(chalk9.dim(`No MCP queries logged in the last ${days} days.`));
+      console.log(chalk9.dim(`Telemetry starts collecting once Claude calls the cai MCP server.`));
+      return;
+    }
+    console.log(chalk9.bold(`
+  CAI telemetry \u2014 last ${days} days`));
+    console.log(chalk9.dim(`  ${queries.length} queries
+`));
+    const byTool = aggregateByTool(queries);
+    console.log(chalk9.bold("  Top tools"));
+    for (const t of byTool.slice(0, 5)) {
+      console.log(`    ${t.tool.padEnd(28)} ${chalk9.cyan(String(t.hits))}`);
+    }
+    const byFile = aggregateByFile2(queries);
+    if (byFile.length > 0) {
+      console.log(chalk9.bold("\n  Hot files"));
+      for (const f of byFile.slice(0, 10)) {
+        console.log(`    ${f.file.padEnd(40)} ${chalk9.cyan(`${f.hits} hits`)}  ${chalk9.dim(`~${f.tokens} tokens`)}`);
+      }
+    }
+    console.log();
+  } catch (err) {
+    printError(err);
     process.exit(1);
   }
 });
 program.command("rules").description("Generate .claude/rules/ from scaffold context (path-scoped, lazy-loaded)").action(async () => {
   try {
     const config = findConfig();
-    const { generateRules: generateRules2, printRulesResult } = await import("./rules-AGI5JN35.js");
+    const { generateRules: generateRules2, printRulesResult } = await import("./rules-QVKBJ2MA.js");
     const result = generateRules2(config);
     printRulesResult(result);
   } catch (err) {
-    console.error(err.message);
+    printError(err);
     process.exit(1);
   }
 });
@@ -2750,10 +3475,10 @@ var mcpCmd = program.command("mcp").description("Start the CAI MCP server for li
 mcpCmd.command("start").description("Start the MCP server (stdio transport \u2014 for use via MCP config)").action(async () => {
   try {
     const config = findConfig();
-    const { startMcpServer } = await import("./server-IXLTEIGS.js");
+    const { startMcpServer } = await import("./server-627G67YL.js");
     await startMcpServer(config);
   } catch (err) {
-    console.error(err.message);
+    printError(err);
     process.exit(1);
   }
 });
@@ -2761,11 +3486,11 @@ mcpCmd.command("install").description("Print the MCP config snippet to add to Cl
   try {
     const config = findConfig();
     console.log();
-    console.log(chalk8.bold("  Add CAI as an MCP server in Claude Code:"));
+    console.log(chalk9.bold("  Add CAI as an MCP server in Claude Code:"));
     console.log();
-    console.log(chalk8.dim("  In your project's .claude/settings.json (or ~/.claude/settings.json):"));
+    console.log(chalk9.dim("  In your project's .claude/settings.json (or ~/.claude/settings.json):"));
     console.log();
-    console.log(chalk8.cyan(`  {
+    console.log(chalk9.cyan(`  {
     "mcpServers": {
       "cai": {
         "command": "cai",
@@ -2775,31 +3500,31 @@ mcpCmd.command("install").description("Print the MCP config snippet to add to Cl
     }
   }`));
     console.log();
-    console.log(chalk8.dim("  Or run in terminal: ") + chalk8.white("claude mcp add cai -- cai mcp start"));
+    console.log(chalk9.dim("  Or run in terminal: ") + chalk9.white("claude mcp add cai -- cai mcp start"));
     console.log();
-    console.log(chalk8.dim("  Once installed, Claude can query your scaffold on-demand:"));
-    console.log(chalk8.dim("  \xB7 list_scaffold \u2014 see all files with token costs"));
-    console.log(chalk8.dim("  \xB7 search('auth') \u2014 find relevant sections without loading full files"));
-    console.log(chalk8.dim("  \xB7 get_file('.cai/context/architecture.md') \u2014 targeted file load"));
-    console.log(chalk8.dim("  \xB7 check_drift() \u2014 run drift check from within a Claude session"));
+    console.log(chalk9.dim("  Once installed, Claude can query your scaffold on-demand:"));
+    console.log(chalk9.dim("  \xB7 list_scaffold \u2014 see all files with token costs"));
+    console.log(chalk9.dim("  \xB7 search('auth') \u2014 find relevant sections without loading full files"));
+    console.log(chalk9.dim("  \xB7 get_file('.cai/context/architecture.md') \u2014 targeted file load"));
+    console.log(chalk9.dim("  \xB7 check_drift() \u2014 run drift check from within a Claude session"));
     console.log();
   } catch (err) {
-    console.error(err.message);
+    printError(err);
     process.exit(1);
   }
 });
 mcpCmd.action(() => {
   try {
     console.log();
-    console.log(chalk8.bold("  cai mcp") + chalk8.dim(" \u2014 live context queries for Claude"));
+    console.log(chalk9.bold("  cai mcp") + chalk9.dim(" \u2014 live context queries for Claude"));
     console.log();
-    console.log(`  ${chalk8.cyan("cai mcp start")}    Start the MCP server (used by Claude automatically)`);
-    console.log(`  ${chalk8.cyan("cai mcp install")}  Show setup instructions`);
+    console.log(`  ${chalk9.cyan("cai mcp start")}    Start the MCP server (used by Claude automatically)`);
+    console.log(`  ${chalk9.cyan("cai mcp install")}  Show setup instructions`);
     console.log();
-    console.log(chalk8.dim("  Quick setup: ") + chalk8.white(`claude mcp add cai -- cai mcp start`));
+    console.log(chalk9.dim("  Quick setup: ") + chalk9.white(`claude mcp add cai -- cai mcp start`));
     console.log();
   } catch (err) {
-    console.error(err.message);
+    printError(err);
     process.exit(1);
   }
 });
@@ -2821,7 +3546,7 @@ program.command("sync-configs").description("Copy the primary tool config to all
       console.log(`  ${file}`);
     }
   } catch (err) {
-    console.error(err.message);
+    printError(err);
     process.exit(1);
   }
 });
@@ -2834,7 +3559,7 @@ program.command("visualize").description("Launch interactive scaffold graph in t
     }
     runScript("bash", [script], config.projectRoot);
   } catch (err) {
-    console.error(err.message);
+    printError(err);
     process.exit(1);
   }
 });
@@ -2843,7 +3568,7 @@ program.command("menu").description("Interactive guided menu \u2014 check, fix, 
     const config = findConfig();
     await runMenu(config);
   } catch (err) {
-    console.error(err.message);
+    printError(err);
     process.exit(1);
   }
 });
@@ -2856,7 +3581,7 @@ program.command("codex").description("Generate .cai/codex/modules.md \u2014 comp
     const briefResult = await runRepoBrief(config);
     printRepoBriefResult(briefResult);
   } catch (err) {
-    console.error(err.message);
+    printError(err);
     process.exit(1);
   }
 });
@@ -2865,7 +3590,7 @@ program.command("commands").description("Alias for help").action(printHelp);
 program.configureHelp({ sortSubcommands: false, helpWidth: 80 });
 program.helpCommand(false);
 program.on("command:*", () => {
-  console.error(chalk8.red(`
+  console.error(chalk9.red(`
   Unknown command: ${program.args[0]}
 `));
   printHelp();
@@ -2877,16 +3602,16 @@ if (process.argv.length === 2) {
   program.parse();
 }
 function runScript(cmd, args, cwd) {
-  const result = spawnSync4(cmd, args, { cwd, stdio: "inherit" });
+  const result = spawnSync3(cmd, args, { cwd, stdio: "inherit" });
   if (result.error) throw result.error;
   if (result.status !== null && result.status !== 0 && result.status !== 130 && result.status !== 143) {
     throw new Error(`Process exited with code ${result.status}`);
   }
 }
 function printHelp() {
-  const b = chalk8.bold;
-  const dim = chalk8.dim;
-  const cyan = chalk8.cyan;
+  const b = chalk9.bold;
+  const dim = chalk9.dim;
+  const cyan = chalk9.cyan;
   const w = 24;
   const row = (cmd, desc) => `  ${cyan(cmd.padEnd(w))}${dim(desc)}`;
   console.log();
@@ -2908,7 +3633,15 @@ function printHelp() {
   console.log(row("cai menu", "Guided menu \u2014 check, fix, sync, health in one place"));
   console.log();
   console.log(dim("  \u2500\u2500\u2500 Insights \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"));
-  console.log(row("cai health", "Context quality: freshness, coverage, recommendations"));
+  console.log(row("cai health", "Context quality: freshness, coverage, hot files"));
+  console.log(row("cai verify", "Back-pressure: typecheck + build + drift after every agent stop"));
+  console.log(row("cai stats", "MCP query telemetry \u2014 which files Claude actually reads"));
+  console.log(row("cai check --history", "Drift score trend over time with sparkline"));
+  console.log(row("cai learn review", "Find recurring corrections in your prompts (opt-in)"));
+  console.log(row("cai learn watch", "Live-tail new corrections as they happen"));
+  console.log(row("cai pattern suggest", "Suggest patterns from your global library"));
+  console.log(row("cai pattern recurring", "Find recurring task types in commit history"));
+  console.log(row("cai session --auto", "Hook-mode session context for Claude Code"));
   console.log(row("cai visualize", "Open interactive scaffold graph in browser"));
   console.log(row("cai doctor", "Diagnose scaffold, configs, and workspace"));
   console.log(row("cai init", "Pre-scan codebase, build AI brief"));
@@ -2921,7 +3654,18 @@ function printHelp() {
   console.log(row("cai watch --uninstall", "Remove the post-commit hook"));
   console.log(row("cai pattern add <name>", "Create a new pattern file"));
   console.log(row("cai pattern capture", "Auto-draft pattern from last commit"));
+  console.log(row("cai pattern share <name>", "Promote a pattern to the global library"));
+  console.log(row("cai pattern library", "List your global pattern library"));
+  console.log(row("cai pattern install <name>", "Install a library pattern into this project"));
   console.log(row("cai sync-configs", "Re-sync all tool config files"));
+  console.log();
+  console.log(dim("  \u2500\u2500\u2500 Hooks (advanced) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"));
+  console.log(row("cai session-install-hook", "Install UserPromptSubmit hook for cai session --auto"));
+  console.log(row("cai session-uninstall-hook", "Remove the cai session --auto hook"));
+  console.log(row("cai verify-install-hook", "Install Stop hook for cai verify (also auto-installed)"));
+  console.log(row("cai verify-uninstall-hook", "Remove the cai verify Stop hook"));
+  console.log(row("cai learn install-hook", "Install UserPromptSubmit hook for cai learn record"));
+  console.log(row("cai learn forget", "Wipe all recorded prompts (irreversible)"));
   console.log();
 }
 function parseCheckerList(input) {

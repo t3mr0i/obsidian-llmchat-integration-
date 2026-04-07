@@ -1,24 +1,21 @@
 ---
 name: stack
-description: Technology stack — TypeScript + esbuild Obsidian plugin, ACP SDK, MiniSearch, WebdriverIO E2E. Load when picking libraries or hitting version constraints.
+description: Technology stack, library choices, and version constraints for the obsidian-llm plugin. Load when working with libraries, build tooling, or making tech decisions.
 triggers:
   - "library"
   - "package"
   - "dependency"
   - "esbuild"
+  - "obsidian api"
   - "minisearch"
   - "acp"
-  - "webdriverio"
-  - "obsidian api"
 edges:
-  - target: decisions.md
-    condition: when the reasoning behind a tech choice is needed
-  - target: conventions.md
-    condition: when understanding how a library is used in this codebase
-  - target: architecture.md
-    condition: when seeing where a library plugs into the component flow
-  - target: setup.md
-    condition: when you need install commands or version prerequisites for the toolchain
+  - target: context/decisions.md
+    condition: when the reasoning behind a tech choice is needed (CJS, no fetch, no unit tests)
+  - target: context/architecture.md
+    condition: when understanding which component owns which library
+  - target: context/setup.md
+    condition: when installing or running the toolchain
 last_updated: 2026-04-07
 ---
 
@@ -26,41 +23,56 @@ last_updated: 2026-04-07
 
 ## Core Technologies
 
-- **TypeScript** `^5.0.0` — strict typing throughout `src/`.
-- **Obsidian Plugin API** (`obsidian` `latest` devDep) — `Plugin`, `ItemView`, `MarkdownRenderer`, `PluginSettingTab`, `FuzzySuggestModal`, `WorkspaceLeaf`, vault events.
-- **esbuild** `^0.25.12` — single bundler (`esbuild.config.mjs`). Output: `main.js`, format `cjs`, target `es2018`, entry `main.ts`. Externals: `obsidian`, `electron`, `@codemirror/*`, `@lezer/*`, Node builtins.
-- **Node.js** — runs inside Obsidian's Electron renderer. Uses `child_process.spawn` (CLI executors) and `http` (local LLM executor) directly.
+- **TypeScript 5.x** (`typescript ^5.0.0`). `tsconfig.json`: `target: ES6`, `module: ESNext`,
+  `moduleResolution: node`, `strictNullChecks: true`, `noImplicitAny: true`,
+  `isolatedModules: true`, `inlineSourceMap: true`. Type-only check via
+  `tsc -noEmit -skipLibCheck` runs as part of `npm run build`.
+- **esbuild 0.25.x** as the only bundler. Single-entry build: `main.ts` → `main.js`
+  (CJS, target `es2018`, treeshake on). See `esbuild.config.mjs`.
+- **Node.js / Electron runtime** (Obsidian's embedded Chromium + Node). Plugin uses Node
+  `child_process.spawn` / `exec` and the raw Node `http` module.
+- **Obsidian Plugin API** — provided by the host application at runtime, not bundled. Listed
+  as devDependency `obsidian: latest` for typings only and marked `external` in
+  `esbuild.config.mjs`.
 
 ## Key Libraries
 
-- **`@agentclientprotocol/sdk` `^0.13.1`** — Agent Client Protocol. Used in `src/executor/AcpExecutor.ts` for persistent sessions with claude/gemini/codex. Requires Web streams (Node streams are wrapped via `nodeToWebReadable`/`nodeToWebWritable`).
-- **`minisearch` `^7.2.0`** — BM25 full-text index for the vault. Used in `src/utils/vaultSearch.ts`. Configured with field boosts: `title:3, heading:2, tags:2, content:1`. Content is stored in a separate `Map`, not in MiniSearch's `storeFields`, to avoid doubling RAM.
-- **`zod` `^4.3.6`** — Runtime schema validation (declared dependency).
+- **`@agentclientprotocol/sdk` ^0.13.1** — Agent Client Protocol SDK. Used by
+  `src/executor/AcpExecutor.ts` to keep a long-lived stdio session with Claude / Gemini /
+  Codex ACP adapters. Provides `ClientSideConnection`, `ndJsonStream`, and the session
+  notification / model state types.
+- **`minisearch` ^7.2.0** — Tiny BM25 full-text search. Used by `src/utils/vaultSearch.ts`
+  to index vault notes (split into heading-level chunks) for RAG, instead of stuffing whole
+  notes into prompts.
+- **`zod` ^4.3.6** — Schema validation. Declared as a dep; reach for it before hand-rolling
+  validators when parsing CLI / HTTP responses.
 
-## Test / Build Tooling
+## Dev / Test Libraries
 
-- **WebdriverIO** `^9.23.x` (`@wdio/cli`, `@wdio/local-runner`, `@wdio/mocha-framework`, `@wdio/spec-reporter`, `@wdio/globals`) — E2E test runner.
-- **`wdio-obsidian-service` / `wdio-obsidian-reporter` `^2.2.x`** — launches Obsidian for E2E.
-- **Mocha** (via `@wdio/mocha-framework`) + `@types/mocha` — test framework.
-- **`expect-webdriverio` `^5.6.3`** — assertions.
-- **`builtin-modules` `^3.3.0`** — supplies the externals list for esbuild.
-- **`tslib` `^2.4.0`** — TypeScript runtime helpers.
-- **Package manager:** npm (no lockfile-enforced alternative).
+- **`wdio-obsidian-service` ^2.2.1** + **`wdio-obsidian-reporter` ^2.2.1** —
+  WebdriverIO service that boots a real Obsidian instance for e2e testing.
+- **`@wdio/*` ^9.23** — WDIO local runner, mocha framework, spec reporter.
+- **`@types/mocha` ^10**, **`expect-webdriverio` ^5.6** — test types and matchers.
+- **`builtin-modules` ^3.3** — supplies the Node builtin list for esbuild's `external`.
+- **`tslib` ^2.4** — TS helper runtime.
 
 ## What We Deliberately Do NOT Use
 
-- **No `fetch()` for local LLM servers** — `LocalLLMExecutor` uses Node `http` directly to bypass Electron fetch issues on macOS. See `decisions.md`.
-- **No unit-test framework** (Jest, Vitest, Mocha-as-unit). Only WebdriverIO E2E specs under `test/specs/`.
-- **No linter / formatter wired into `package.json` scripts.** No ESLint, no Prettier script. (Some `eslint-disable` comments exist in source but there is no project-level config.)
-- **No second bundler.** Only esbuild. No Vite, Webpack, Rollup, swc.
-- **No native Anthropic/OpenAI/Google SDKs.** All cloud calls go through user-installed CLIs.
-- **No mobile build** — `manifest.json` declares `isDesktopOnly: true`.
-- **No state library** (Redux, Zustand). State is held on view/executor instances and persisted via `loadData`/`saveData`.
+- **No `fetch` for local-server calls.** `LocalLLMExecutor` uses raw Node `http` because
+  Electron's fetch implementation has misbehaved against `localhost` LLM servers — see
+  `decisions.md`.
+- **No CommonJS/ESM dual build.** Output is CJS only; Obsidian's plugin loader expects it.
+- **No unit-test framework** (no jest / vitest / mocha standalone). Only WebdriverIO e2e.
+- **No CSS framework / UI library.** Plain DOM via Obsidian's API and `styles.css`.
+- **No Anthropic / OpenAI / Google SDKs.** The plugin never holds API keys; it spawns the
+  user's installed CLI tools instead.
+- **No mobile / cross-platform polyfills.** `isDesktopOnly: true` in `manifest.json`.
 
 ## Version Constraints
 
-- **Obsidian:** `minAppVersion: 1.0.0` in `manifest.json`.
-- **Node types:** `@types/node ^20.19.30` — assume Node 20+ APIs available.
-- **TypeScript target:** `es2018` (esbuild target, not necessarily `tsconfig`).
-- **Plugin id / version:** `obsidian-llm` / `0.3.0` (from `package.json` and `manifest.json` — keep these in sync on release).
-- **Author:** Kai Detmers (`manifest.json`).
+- **Node `>=20`** for the build (matches `@types/node ^20.19.30`).
+- **Obsidian `minAppVersion: 1.0.0`** declared in `manifest.json`.
+- **Plugin version `0.4.0`** (kept in sync between `package.json` and `manifest.json`).
+- **esbuild target `es2018`** — Obsidian's Electron is modern, but `es2018` is the
+  established floor for the community plugin ecosystem.
+- **Format `cjs`** — required by Obsidian's plugin loader.

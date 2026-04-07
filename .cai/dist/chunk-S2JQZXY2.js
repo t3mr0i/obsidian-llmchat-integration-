@@ -336,6 +336,7 @@ function parseCargoSection(content, sectionName) {
 }
 
 export {
+  scanManifest,
   scanProjectModel
 };
-//# sourceMappingURL=chunk-OSCCDOHW.js.map
+//# sourceMappingURL=chunk-S2JQZXY2.js.map

@@ -1,22 +1,20 @@
 ---
 name: setup
-description: Dev setup and commands for the Obsidian LLM Chat plugin — install, build, link into a vault, run E2E.
+description: Dev environment setup, build, deploy-to-vault, and e2e test commands for obsidian-llm. Load when setting up the project for the first time or running it locally.
 triggers:
   - "setup"
   - "install"
-  - "getting started"
   - "build"
-  - "dev mode"
-  - "test"
-  - "e2e"
+  - "dev"
+  - "deploy"
   - "wdio"
+  - "test"
+  - "how do I run"
 edges:
-  - target: stack.md
-    condition: when specific technology versions or tooling details are needed
-  - target: architecture.md
-    condition: when understanding which file the build entry points to
-  - target: decisions.md
-    condition: when wondering why no unit tests / why E2E only
+  - target: context/stack.md
+    condition: when specific tool versions or library details are needed
+  - target: context/architecture.md
+    condition: when understanding which file the build is producing or where it lands
 last_updated: 2026-04-07
 ---
 
@@ -24,12 +22,19 @@ last_updated: 2026-04-07
 
 ## Prerequisites
 
-- **Node.js 20+** (`@types/node ^20.19.30`).
-- **npm** (no other package manager configured).
-- **Obsidian** desktop app (≥ `1.0.0`). Plugin is desktop-only (`isDesktopOnly: true`).
-- **At least one provider** for actual use:
-  - Cloud: install one of `claude` (`@anthropic-ai/claude-code`), `codex` (`@openai/codex`), `opencode`, `gemini` CLIs.
-  - Local: Ollama, LM Studio, vLLM, llama.cpp, MLX, LocalAI, Jan, or text-generation-webui.
+- **Node.js >= 20** (`@types/node ^20.19.30`).
+- **npm** (the lockfile is `package-lock.json`).
+- **Obsidian desktop** (>= 1.0.0). The plugin is desktop-only — `isDesktopOnly: true`.
+- **An LLM provider on your machine.** At least one of:
+  - `claude` CLI (`npm install -g @anthropic-ai/claude-code`)
+  - `gemini` CLI
+  - `codex` CLI (`npm install -g @openai/codex`)
+  - `opencode` CLI
+  - A local server: Ollama, LM Studio, MLX, vLLM, llama.cpp, etc. — auto-detected via
+    `src/utils/autoDetect.ts`.
+- **macOS users:** install CLIs into a location your shell PATH already knows about
+  (homebrew or nvm). The plugin re-derives PATH via your login shell at startup
+  (`src/utils/shellPath.ts`), so anything in `~/.zshrc` / `~/.bashrc` is fine.
 
 ## First-time Setup
 
@@ -37,47 +42,65 @@ last_updated: 2026-04-07
 git clone https://github.com/t3mr0i/obsidian-llmchat-integration-.git
 cd obsidian-llmchat-integration-
 npm install
-npm run build
 ```
 
-Then link/copy the build artifacts into a test vault:
+To have `npm run dev` auto-deploy build artefacts into one or more vaults, create a
+`deploy-targets.json` at the repo root:
 
+```json
+{
+  "dirs": [
+    "/Users/me/MyVault/.obsidian/plugins/obsidian-llm",
+    "/Users/me/SecondVault/.obsidian/plugins/obsidian-llm"
+  ]
+}
 ```
-<your-vault>/.obsidian/plugins/obsidian-llm/
-  main.js
-  manifest.json
-  styles.css
-```
 
-For active development, run `npm run dev` (esbuild watch mode) and either symlink the plugin folder or copy on save. Reload the plugin in Obsidian (Settings → Community Plugins → reload) after each rebuild.
-
-## Environment Variables
-
-There are no plugin-managed environment variables. Authentication for cloud providers is handled by the underlying CLIs (`claude`, `gemini`, `codex`, `opencode`) — configure them via their own setup commands.
-
-`getShellEnv()` (`src/utils/shellPath.ts`) inherits the user's interactive shell `PATH` so spawned CLIs are findable when Obsidian is launched from Finder/Dock.
+Or set `OBSIDIAN_PLUGIN_DIRS` (colon-separated paths). See `esbuild.config.mjs:49`
+(`getDeployDirs`) for the resolution logic. If neither is set, the build runs but does not
+deploy — you can copy `main.js`, `manifest.json`, `styles.css` into the vault plugin folder
+manually.
 
 ## Common Commands
 
 | Command | What it does |
-|---------|--------------|
-| `npm run dev` | esbuild watch — rebuilds `main.js` on change. No typecheck. |
-| `npm run build` | `tsc -noEmit -skipLibCheck` then production esbuild bundle. Use before commit. |
-| `npm run test:e2e` | Full E2E build + WebdriverIO run (`./wdio.conf.ts`). |
-| `npm run test:e2e:fast` | E2E, only `test/specs/plugin.e2e.ts`. |
-| `npm run test:e2e:claude` | E2E filtered by `@claude` mocha grep tag. |
-| `npm run test:e2e:gemini` | E2E filtered by `@gemini` mocha grep tag. |
-| `npm run test:e2e:providers` | E2E filtered by `@provider`. |
-| `npm run test:e2e:files` | E2E filtered by `@files`. |
-| `npm run wdio` | Raw `wdio run ./wdio.conf.ts` without rebuild. |
+|---|---|
+| `npm run dev` | esbuild watch + auto-deploy on each rebuild. Use this while developing. |
+| `npm run build` | Type-check (`tsc -noEmit -skipLibCheck`) then production esbuild and deploy once. |
+| `npm run test:e2e` | Build, then run the full WebdriverIO suite against a real Obsidian. |
+| `npm run test:e2e:fast` | Build + run only `test/specs/plugin.e2e.ts`. |
+| `npm run test:e2e:claude` | Run only mocha tests tagged `@claude`. |
+| `npm run test:e2e:gemini` | Run only mocha tests tagged `@gemini`. |
+| `npm run test:e2e:providers` | Run only `@provider`-tagged tests. |
+| `npm run test:e2e:files` | Run only `@files`-tagged tests. |
+| `npm run wdio` | Run WDIO directly without rebuilding. |
 
-There is no `npm test`, no lint script, no format script. Typechecking happens only as part of `npm run build`.
+## Environment Variables
+
+- `OBSIDIAN_PLUGIN_DIRS` — colon-separated list of plugin directories to auto-deploy build
+  output into. Read in `esbuild.config.mjs`.
+- `SHELL` — used by `src/utils/shellPath.ts` to pick the user's shell when resolving PATH.
+  Defaults to `/bin/zsh`.
+
+This plugin **does not** read provider API keys from env. Authentication is handled by
+each user-installed CLI or local server.
 
 ## Common Issues
 
-- **`spawn claude ENOENT` (or any other CLI):** Obsidian was launched with an empty `PATH` (typical when launched from Finder). `getShellEnv` should handle this — verify the CLI works in a terminal first, then check that the user's shell rc file actually exports the CLI's directory.
-- **Local LLM connection refused / hangs:** make sure the URL uses `127.0.0.1`, not `localhost`. `LocalLLMExecutor.normalizeUrl` does this automatically; if you bypassed it somewhere, that is the bug.
-- **Settings revert after enabling a provider:** likely a code path saved with `saveData(this.settings)` directly instead of going through `LLMPlugin.saveSettings()`. The merge step is what protects cloud-synced state — see `decisions.md`.
-- **OpenCode ACP behaving oddly:** OpenCode ACP is intentionally disabled at load time (HTTP transport, not stdio). If you re-enabled it, expect failures.
-- **MiniSearch eats RAM on a large vault:** confirm chunk content is in `chunkContent` Map, not in MiniSearch `storeFields`. Indexing is supposed to be batched via `requestIdleCallback`.
-- **E2E never finds the ribbon icon:** check that `npm run build` actually produced a fresh `main.js` and that the test vault points at it. The first `before` block in `plugin.e2e.ts` waits 30s for the workspace; if that times out, the plugin failed to load — check the Obsidian dev console.
+- **`Failed to spawn claude: ENOENT`** — the CLI is not on PATH from inside Obsidian. Make
+  sure your shell rc file (`~/.zshrc` / `~/.bashrc`) puts the CLI directory on PATH; the
+  plugin re-derives PATH from a login shell. Restart Obsidian to bust the
+  `getShellPATH()` cache.
+- **`Process was killed by SIGTERM` after exactly N seconds** — hit `defaultTimeout` (or
+  the per-provider timeout). Increase in settings, or enable Debug mode to see the last
+  stdout/stderr chunk before the kill.
+- **Local server "Cannot reach server"** — make sure you set the URL to `127.0.0.1`, not
+  `localhost`. The plugin normalises this in code (`normalizeUrl`), but copy-pasted URLs in
+  custom fields may still surprise you.
+- **Settings disappeared after Obsidian Sync** — check that you only ever wrote to
+  `data.json` via `saveSettings` / `saveChatSessions`. Direct `saveData` writes bypass
+  `mergeBeforeSave` and lose remote changes.
+- **OpenCode + ACP toggle is greyed-out / off** — intentional. OpenCode ACP is HTTP-only,
+  not stdio. See decisions.md.
+- **e2e tests cannot find Obsidian binary** — `wdio-obsidian-service` downloads it on first
+  run; ensure network access and disk space. The wdio config lives at `wdio.conf.ts`.

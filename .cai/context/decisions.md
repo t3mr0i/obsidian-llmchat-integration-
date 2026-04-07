@@ -1,21 +1,26 @@
 ---
 name: decisions
-description: Key architectural decisions for this plugin — why ACP for some providers, why http not fetch, why merge-on-save, why MiniSearch, why no unit tests.
+description: Architectural and technical decisions for the obsidian-llm plugin with reasoning. Load when making design choices or understanding why something is built a certain way.
 triggers:
   - "why do we"
   - "why is it"
   - "decision"
   - "alternative"
-  - "trade-off"
+  - "we chose"
+  - "rationale"
 edges:
-  - target: architecture.md
-    condition: when a decision relates to system structure (executors, view ownership)
-  - target: stack.md
-    condition: when a decision relates to a specific library or version
-  - target: conventions.md
-    condition: when a decision is enforced as a coding rule
-  - target: setup.md
-    condition: when a decision affects how to build, run, or test the project
+  - target: context/architecture.md
+    condition: when a decision relates to system structure or component boundaries
+  - target: context/stack.md
+    condition: when a decision relates to a library or build choice
+  - target: context/conventions.md
+    condition: when a decision is enforced by a coding convention
+  - target: patterns/add-acp-support.md
+    condition: when justifying which providers can/can't use ACP (OpenCode case)
+  - target: patterns/settings-persistence.md
+    condition: when justifying mergeBeforeSave and the cloud-sync-safe persistence rule
+  - target: patterns/spawn-cli-shellpath.md
+    condition: when justifying the shell PATH workaround for macOS GUI apps
 last_updated: 2026-04-07
 ---
 
@@ -23,35 +28,78 @@ last_updated: 2026-04-07
 
 ## Decision Log
 
-### Cloud LLMs go through user-installed CLIs, not SDKs
-We do not bundle `@anthropic-ai/sdk`, OpenAI SDK, etc. The plugin shells out to `claude`, `gemini`, `codex`, `opencode`. **Why:** users already configure auth in those CLIs (API keys, OAuth, MFA) and we inherit that for free, no key handling, no auth UI, no key storage in `data.json`. **Trade-off:** users must install the CLI separately; we have to parse multiple bespoke output formats; PATH discovery is fragile (mitigated by `shellPath.ts`).
+### Shell out to user-installed CLIs instead of bundling vendor SDKs
+- **Why:** the user already authenticates `claude`, `gemini`, `codex`, `opencode` CLIs on
+  their machine. Bundling SDKs would force us to handle API keys, billing, rate limits, and
+  per-vendor auth flows inside an Obsidian plugin. Using the CLI also lets us inherit the
+  user's chosen model defaults and any local config.
+- **Trade-off:** we depend on the user keeping the CLI installed and on PATH. Mitigated by
+  `autoDetectProviders` and clear error messages from `parseErrorMessage`.
 
-### ACP enabled for claude/gemini/codex; OpenCode stays on CLI mode
-`ACP_SUPPORTED_PROVIDERS = ["claude", "gemini", "codex"]` (`src/types.ts`). OpenCode also speaks ACP but over **HTTP**, not stdio, and the HTTP transport has been unreliable for our use. There is even an explicit migration in `LLMPlugin.loadSettings` that force-disables `providers.opencode.useAcp`. **Why:** ACP gives us persistent sessions and richer progress events, but only for stdio agents. **How to apply:** when adding a new provider, only set ACP if it speaks stdio ACP.
+### Resolve `$PATH` via login shell on macOS
+- **Why:** GUI apps launched from Finder/Dock on macOS do not inherit the user's shell PATH
+  (homebrew, nvm, asdf, cargo, …). Without this, every CLI spawn fails with `ENOENT`.
+- **How:** `src/utils/shellPath.ts` runs `$SHELL -ilc 'echo $PATH'` once and caches it. Every
+  `spawn` in `LLMExecutor` / `AcpExecutor` / `autoDetect` uses `getShellEnv()`.
+- **Alternatives considered:** asking the user to launch Obsidian from a terminal (terrible
+  UX); hard-coding common paths only (works on most Macs but breaks on nvm).
 
-### `LocalLLMExecutor` uses Node `http`, not `fetch`
-`src/executor/LocalLLMExecutor.ts` calls `http.request` directly. **Why:** Electron/Obsidian's `fetch` has misbehaved against local HTTP servers on macOS (CORS-style preflight quirks, hanging on `localhost`). `http` is reliable and gives us streaming. **Related rule:** also normalize `localhost` → `127.0.0.1` in `normalizeUrl` to dodge DNS resolution issues.
+### Cloud-sync-safe `mergeBeforeSave` for `data.json`
+- **Why:** Obsidian Sync replicates `data.json` between devices. If we just call
+  `saveData(this.settings)`, settings the user changed on another device get clobbered.
+- **How:** `LLMPlugin.mergeBeforeSave` (`main.ts:350`) re-reads `data.json` from disk before
+  every save and merges per-provider configs and chat sessions by id. In-memory wins
+  per-field, but extra keys from disk are preserved.
+- **Constraint:** never write to `data.json` outside `saveSettings` / `saveChatSessions`.
+  See user memory `feedback_merge_not_overwrite`.
 
-### Settings save merges with disk before writing
-`LLMPlugin.saveSettings()` calls `mergeBeforeSave()` (`main.ts`), which re-reads `data.json` and merges in-memory state with whatever may have arrived via cloud sync (Obsidian Sync, iCloud, Syncthing). **Why:** without this, enabling a provider on one device would silently overwrite the other device's configuration on next save. **How to apply:** never call `saveData(this.settings)` directly — always go through `saveSettings`. Chat sessions take a fast path (`saveChatSessions`) and skip the merge because they are local-only.
+### OpenCode uses CLI mode, not ACP
+- **Why:** OpenCode's ACP transport is HTTP-based, not stdio. Our `AcpExecutor` is built
+  around `@agentclientprotocol/sdk`'s stdio `ClientSideConnection`. The CLI mode is more
+  reliable for OpenCode anyway.
+- **Where it's enforced:** `ACP_SUPPORTED_PROVIDERS = ["claude", "gemini", "codex"]` in
+  `src/types.ts:62` and an in-place migration that flips `useAcp` off for OpenCode in
+  `LLMPlugin.loadSettings` (`main.ts:310`).
 
-### MiniSearch with content stored outside the index
-`VaultSearch` keeps chunk content in a separate `Map` (`chunkContent`) and only stores `path/title/heading` in MiniSearch's `storeFields`. **Why:** MiniSearch keeps `storeFields` in memory; storing 2KB chunks for an entire vault would double RAM. We pay one map lookup at retrieval time instead.
+### Raw Node `http` for local LLM servers (not Electron `fetch`)
+- **Why:** Electron's fetch implementation has caused intermittent failures against
+  `localhost` LLM servers (Ollama / LM Studio) — DNS resolution and connection-reuse quirks.
+  Node's `http` module is predictable and lets us stream chunks line-by-line.
+- **Companion decision:** rewrite `localhost` → `127.0.0.1` in `normalizeUrl`
+  (`LocalLLMExecutor.ts:21`) to dodge IPv6 / DNS edge cases entirely.
 
-### Vault is chunked by heading, max 2000 chars
-`MAX_CHUNK_CHARS = 2000`, splits on heading. **Why:** balances retrieval precision (small enough to surface the right section) against index overhead. Combined with the no-truncation rule (never truncate input to the LLM), this is how we feed long notes into prompts — RAG retrieves only relevant chunks.
+### MiniSearch RAG over prompt truncation
+- **Why:** vault notes can be huge. Truncating before sending to the model loses context
+  silently. Indexing the vault and retrieving the relevant heading-level chunks gives the
+  model focused context without hitting prompt limits. Reinforced by user memory
+  `feedback_no_truncation`.
+- **How:** `src/utils/vaultSearch.ts` splits notes by headings (`MAX_CHUNK_CHARS = 2000`),
+  indexes them in MiniSearch with field boosts (title 3, heading 2, tags 2, content 1),
+  and stores chunk text in a separate `Map` to avoid doubling RAM in the index.
 
-### Re-indexing is debounced 1s on file modify
-`MODIFY_DEBOUNCE_MS = 1000`. **Why:** Obsidian fires `modify` on every keystroke save during auto-save; without debounce we thrashed the index.
+### Stream-JSON output format for Claude
+- **Why:** Claude's `--output-format stream-json` emits one JSON event per line, giving us
+  intermediate `assistant` / `content_block_delta` / `message_delta` events. We parse them
+  in `parseClaudeOutput` (`LLMExecutor.ts:48`) to surface progress (thinking, tool use,
+  tokens) in the UI without waiting for the full response.
 
-### No unit tests, only WebdriverIO E2E
-`test/specs/*.e2e.ts` driven by `wdio-obsidian-service`. **Why:** the plugin is mostly UI integration and subprocess orchestration — unit tests would be heavy on mocking and light on signal. E2E inside a real Obsidian gives the only assurance that matters: "does it actually work in the host."
+### Single CJS bundle via esbuild
+- **Why:** Obsidian's plugin loader requires CommonJS. esbuild handles tree-shaking and
+  inline source maps in dev. No webpack / rollup overhead.
+- **Constraint:** `obsidian` and CodeMirror packages are marked `external` — Obsidian
+  injects them at runtime.
 
-### One bundled `main.js` via esbuild, no second build step
-`esbuild.config.mjs` produces a single CJS bundle. `tsc` is run only as `--noEmit` for typechecking before the esbuild prod build. **Why:** Obsidian loads a single `main.js`; multi-file builds add nothing; esbuild is fast enough for watch mode.
+### E2E-only test strategy
+- **Why:** the hard parts of this plugin live at integration boundaries (subprocess spawn,
+  CLI parsing, ACP stream handling, Obsidian DOM). Unit tests of the parsers in isolation
+  would not catch the actual failure modes. WebdriverIO + `wdio-obsidian-service` boots a
+  real Obsidian and exercises the full UI.
 
-### `PROVIDER_DISPLAY_NAMES` lives in `src/types.ts` only
-Earlier the settings tab had its own copy. The recent commit `fce0418` centralized this. **Why:** divergence between the settings dropdown and the chat view dropdown caused user-visible inconsistency.
+### Auto-start local server when models are present
+- **Why:** Ollama and LM Studio are commonly installed but not always running. Detecting
+  models on disk and starting the server in the background turns "I have Ollama installed"
+  into a working provider with zero clicks. See `LLMPlugin.autoDetect` (`main.ts:193`) and
+  `startLocalServer` in `src/utils/autoDetect.ts`.
 
 ## Token Optimization
 

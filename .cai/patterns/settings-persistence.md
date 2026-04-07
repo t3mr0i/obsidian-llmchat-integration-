@@ -1,89 +1,113 @@
 ---
 name: settings-persistence
-description: How to read/write plugin settings and chat sessions safely with cloud-sync-aware merge.
+description: How to add new settings or persisted state without clobbering Obsidian Sync changes from another device. Always-required when touching data.json.
 triggers:
-  - "save settings"
+  - "settings"
+  - "persistence"
   - "data.json"
-  - "loadData"
-  - "saveData"
-  - "merge"
-  - "cloud sync"
+  - "save"
+  - "migration"
 edges:
-  - target: ../context/decisions.md
-    condition: when you need to know why merge-on-save exists
   - target: ../context/conventions.md
-    condition: when adding a new settings field and need to follow the rules
+    condition: when reviewing the verify checklist for a settings change
+  - target: ../context/decisions.md
+    condition: when justifying why mergeBeforeSave exists
 last_updated: 2026-04-07
 ---
 
-# Settings Persistence
+# Add or change persisted plugin state
 
-## Anchor — relevant code
+## Anchor
 
-`main.ts` (`LLMPlugin`):
+`main.ts:350` — `mergeBeforeSave` re-reads `data.json` from disk and merges per-provider
+configs and chat sessions, so settings written by another device via Obsidian Sync survive:
 
 ```ts
-async saveSettings() {
-  const merged = await this.mergeBeforeSave();
-  await this.saveData(merged);
-  this.executor?.updateSettings(this.settings);
-  this.updateStatusBar();
-}
-
-async saveChatSessions(sessions: ChatSession[]) {
-  this.chatSessions = sessions;
-  // Skip full merge for session saves — sessions are only modified locally,
-  // so a lightweight save is sufficient and avoids extra disk reads.
-  await this.saveData({ ...this.settings, _chatSessions: this.chatSessions });
-}
-
 private async mergeBeforeSave(): Promise<Record<string, unknown>> {
   const disk = (await this.loadData()) as any ?? {};
-  // …merges providers field-by-field, prefers in-memory but keeps unknown disk keys…
-  // …merges chat sessions by id, preferring the version with most messages…
+  // Merge provider configs: in-memory wins per-field, but keep extra disk keys
+  const mergedProviders: Record<string, ProviderConfig> = {};
+  const allProviderKeys = new Set([
+    ...Object.keys(this.settings.providers ?? {}),
+    ...Object.keys(disk.providers ?? {}),
+  ]);
+  for (const key of allProviderKeys) {
+    const mem = (this.settings.providers as Record<string, ProviderConfig>)[key];
+    const ext = (disk.providers as Record<string, ProviderConfig> | undefined)?.[key];
+    if (mem && ext) {
+      mergedProviders[key] = { ...ext, ...mem };
+    } else {
+      mergedProviders[key] = mem ?? ext;
+    }
+  }
+  // ... merge chat sessions by id ...
+  return { ...disk, ...this.settings, providers: mergedProviders, _chatSessions: mergedSessions };
 }
 ```
 
 ## Context
 
-`data.json` lives inside the user's vault and may be **synced across devices** via Obsidian Sync, iCloud, Syncthing, or Dropbox. A naïve `saveData(this.settings)` would overwrite changes made on the other device since this device last loaded.
-
-There are **two write paths**:
-
-1. **Settings writes (`saveSettings`)** — go through `mergeBeforeSave`, which re-reads `data.json` and merges providers/chat sessions before writing. Slower but safe across devices.
-2. **Session writes (`saveChatSessions`)** — bypass the merge. Sessions are only ever modified locally inside this `ChatView`, and the merge cost on every keystroke would be wasteful.
+Read `context/decisions.md` → "Cloud-sync-safe `mergeBeforeSave`" and the
+`feedback_merge_not_overwrite` user memory. The principle is: **`data.json` is shared
+state**, not exclusively ours. We must always read-then-write, never just write.
 
 ## Steps
 
-To **add a new settings field**:
+### Add a new top-level setting
+1. Add the field to `LLMPluginSettings` in `src/types.ts`.
+2. Add a default to `DEFAULT_SETTINGS` (also in `src/types.ts`).
+3. If older saved data may not have the field, add an in-place migration in
+   `LLMPlugin.loadSettings` (`main.ts:287`) next to the existing migrations.
+4. Add UI for it in `src/settings/SettingsTab.ts`.
+5. Always save via `await this.plugin.saveSettings()` — never call `saveData` directly.
 
-1. Add the field to `LLMPluginSettings` in `src/types.ts` and supply a default in `DEFAULT_SETTINGS`.
-2. If the shape of an existing field changes, add a migration in `LLMPlugin.loadSettings()` (look at how `systemPrompt` string → file migration is handled, or how `defaultTimeout` is back-filled).
-3. UI to flip the field goes in `SettingsTab.ts`. The handler **must call `await this.plugin.saveSettings()`** — never `saveData` directly.
-4. If the field is per-provider, add it to `ProviderConfig` and the merge in `mergeBeforeSave` will pick it up automatically (it merges providers field-by-field).
+### Add a new per-provider setting
+1. Add the field to `ProviderConfig` in `src/types.ts`.
+2. If a provider needs a non-default value, set it in `DEFAULT_PROVIDER_CONFIGS`.
+3. The merge in `mergeBeforeSave` already handles per-provider field merging — no new
+   code needed there.
+4. Add UI in the relevant section of `SettingsTab.ts`.
 
-To **read settings** in a new module: import `LLMPluginSettings` from `src/types.ts` and accept it via constructor. Don't reach back to `LLMPlugin.app` for it.
+### Add new persisted state next to settings (e.g. another `_xxx` key)
+1. Mirror the `_chatSessions` pattern: store under a leading-underscore key alongside
+   settings in the returned object from `mergeBeforeSave`.
+2. Add a merge step in `mergeBeforeSave` that reconciles disk vs in-memory by id (or by
+   whatever uniqueness key applies).
+3. Provide a `saveXxx` method on `LLMPlugin` that uses the lightweight save path
+   (`saveChatSessions` is the template) or the merge path, depending on whether the data
+   could conflict with another device.
 
 ## Gotchas
 
-- **The `_chatSessions` key is intentional.** It's stored alongside settings in the same `data.json`. Any write that goes through `mergeBeforeSave` re-merges it; the fast `saveChatSessions` path also preserves it because it spreads `this.settings` first.
-- **Don't call `saveData(this.settings)` from a feature path.** If you need a fast save, copy the `saveChatSessions` pattern, otherwise use `saveSettings`.
-- **Migrations are silent — they just patch the in-memory object.** They do not call `saveData`. The next normal save flushes the migration.
-- **The merge prefers in-memory per field but keeps unknown disk keys.** This is how forward compatibility works: an older client opening a `data.json` written by a newer client will not destroy the new keys.
-- **Chat session merge prefers the version with more messages.** If both devices appended different turns to the same session id, you'll get the longer one — the other branch is lost. (Acceptable trade-off; sessions are not collaborative documents.)
+- **Calling `saveData(this.settings)` directly bypasses the merge** and silently destroys
+  remote changes the user made on another device. Always go through `saveSettings` or a
+  dedicated `saveXxx` that re-reads disk.
+- **The lightweight `saveChatSessions` path skips full merge** (see comment in
+  `main.ts:338`). It is safe only because chat sessions are written exclusively from this
+  device's view. Do not use it for state that can change remotely.
+- **Migrations must be idempotent.** They run on every `loadSettings`. Don't push to an
+  array unconditionally.
+- **`Object.assign({}, DEFAULT_SETTINGS, loadedData ?? {})`** in `loadSettings` does a
+  shallow merge — nested objects (e.g. per-provider) won't gain new default fields
+  automatically. If you add a nested field, write an explicit migration.
 
 ## Verify
 
-- [ ] No new direct `saveData(...)` call in your diff (`grep -n "saveData(" main.ts src/`).
-- [ ] Settings UI handlers `await this.plugin.saveSettings()`.
-- [ ] If you added a new top-level setting, it has a default in `DEFAULT_SETTINGS` and survives a load → save → load round-trip.
-- [ ] If you added a per-provider field, enabling it on one device and saving from a second device does not erase it.
+- [ ] Save the setting, edit `data.json` on disk to add an unrelated key, save again from
+      the plugin, check that the unrelated key survived.
+- [ ] Save the setting on device A while a different value exists on disk (simulate
+      Obsidian Sync), confirm the disk value is preserved when not touched in memory.
+- [ ] Reload the plugin and confirm the setting comes back.
+- [ ] Migration runs only when needed (no warning toast on a fresh install or repeated
+      reload).
 
 ## Debug
 
-- Suspected loss of cloud-synced state: add a `console.log(disk)` and `console.log(this.settings)` at the top of `mergeBeforeSave`, reproduce on both devices, compare.
-- Settings appear to revert: confirm there is no second save path that bypasses the merge. Search the codebase for `saveData(`.
+- `console.log(await this.loadData())` in `loadSettings` to see what arrived on disk.
+- Diff `data.json` before and after a save to confirm only intended keys changed.
+- If a setting "disappeared", search the codebase for any direct `saveData(` call —
+  there should be none outside `mergeBeforeSave` and the lightweight `saveChatSessions`.
 
 ## After This Task
-- [ ] If you changed the persistence format (new top-level key, new migration), update `.cai/context/decisions.md`.
-- [ ] Update `.cai/context/conventions.md` verify checklist if you introduced a new persistence rule.
+- [ ] Update `.cai/ROUTER.md` "Current Project State" if the new state changes capability.
+- [ ] Update `.cai/context/architecture.md` if you added a new top-level persisted key.

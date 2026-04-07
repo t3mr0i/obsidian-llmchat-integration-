@@ -1,7 +1,14 @@
 #!/usr/bin/env node
 import {
   scanProjectModel
-} from "./chunk-OSCCDOHW.js";
+} from "./chunk-S2JQZXY2.js";
+import {
+  aggregateByFile,
+  readQueries
+} from "./chunk-XAVW3U2U.js";
+import {
+  appendHistory
+} from "./chunk-WX2YGCKP.js";
 
 // src/drift/index.ts
 import { resolve as resolve7, relative as relative3 } from "path";
@@ -474,8 +481,8 @@ function buildWorkspaceScriptLookup(project) {
     const scripts = new Set(Object.keys(workspace.manifest.scripts));
     const aliases = /* @__PURE__ */ new Set([workspace.path]);
     if (workspace.manifest.name) aliases.add(workspace.manifest.name);
-    const basename2 = workspace.path.split("/").pop();
-    if (basename2) aliases.add(basename2);
+    const basename = workspace.path.split("/").pop();
+    if (basename) aliases.add(basename);
     for (const alias of aliases) {
       lookup.set(alias, scripts);
     }
@@ -1093,7 +1100,7 @@ function addAliasEntries(entries, name, version) {
 // src/drift/checkers/edges.ts
 import { existsSync as existsSync2 } from "fs";
 import { resolve as resolve2 } from "path";
-function checkEdges(frontmatter, filePath, source, projectRoot, scaffoldRoot) {
+function checkEdges(frontmatter, _filePath, source, projectRoot, scaffoldRoot) {
   if (!frontmatter?.edges) return [];
   const issues = [];
   for (const edge of frontmatter.edges) {
@@ -1380,8 +1387,8 @@ function getGit(cwd) {
 }
 async function getGitDiff(paths, cwd) {
   try {
-    const git = getGit(cwd);
-    return await git.diff(["HEAD~2", "HEAD", "--", ...paths]);
+    const git2 = getGit(cwd);
+    return await git2.diff(["HEAD~2", "HEAD", "--", ...paths]);
   } catch {
     return "";
   }
@@ -1440,8 +1447,8 @@ async function batchFileGitInfo(filePaths, cwd) {
 }
 async function getChangedFiles(cwd) {
   try {
-    const git = getGit(cwd);
-    const status = await git.status();
+    const git2 = getGit(cwd);
+    const status = await git2.status();
     return [
       ...status.modified,
       ...status.created,
@@ -1483,7 +1490,7 @@ async function checkStalenessBatch(filePaths, cwd, thresholds) {
 
 // src/drift/checkers/tool-configs.ts
 import { existsSync as existsSync6, mkdirSync, readFileSync as readFileSync7, writeFileSync } from "fs";
-import { dirname as dirname2, resolve as resolve6 } from "path";
+import { dirname, resolve as resolve6 } from "path";
 
 // src/utils/merge.ts
 var CAI_START = "<!-- cai:start -->";
@@ -1587,7 +1594,7 @@ function syncToolConfigs(projectRoot) {
   const skipped = [relativeToProject(projectRoot, primary.path)];
   const caiContent = extractCaiSection(primary.content) ?? primary.content;
   for (const target of configs.slice(1)) {
-    mkdirSync(dirname2(target.path), { recursive: true });
+    mkdirSync(dirname(target.path), { recursive: true });
     const existing = existsSync6(target.path) ? readFileSync7(target.path, "utf-8") : null;
     const merged = mergeWithMarkers(existing, caiContent);
     const final = merged.endsWith("\n") ? merged : merged + "\n";
@@ -1687,8 +1694,8 @@ function buildWorkspaceAliases(workspaces) {
   return workspaces.flatMap((workspace) => {
     const identifiers = /* @__PURE__ */ new Set([workspace.path]);
     if (workspace.manifest.name) identifiers.add(workspace.manifest.name);
-    const basename2 = workspace.path.split("/").pop();
-    if (basename2) identifiers.add(basename2);
+    const basename = workspace.path.split("/").pop();
+    if (basename) identifiers.add(basename);
     return [...identifiers].filter(Boolean).map((identifier) => ({
       workspace,
       pattern: new RegExp(`(^|[^A-Za-z0-9@/_-])${escapeRegExp(identifier)}([^A-Za-z0-9@/_-]|$)`, "i")
@@ -1908,6 +1915,112 @@ async function runCheckerRegistry(context, registry = createDriftRegistry()) {
   return { issues: allIssues, summaries };
 }
 
+// src/git/blame.ts
+import { execFileSync } from "child_process";
+var cache = /* @__PURE__ */ new Map();
+function git(cwd, args) {
+  try {
+    return execFileSync("git", args, {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      maxBuffer: 4 * 1024 * 1024
+    });
+  } catch {
+    return "";
+  }
+}
+function parseRelative(rel) {
+  return rel.trim();
+}
+function findDeletionCommit(projectRoot, relPath) {
+  const cacheKey = `${projectRoot}:${relPath}`;
+  if (cache.has(cacheKey)) return cache.get(cacheKey) ?? null;
+  const log = git(projectRoot, [
+    "log",
+    "--diff-filter=D",
+    "--follow",
+    "-1",
+    "--format=%H|%s|%ar",
+    "--",
+    relPath
+  ]);
+  if (!log.trim()) {
+    cache.set(cacheKey, null);
+    return null;
+  }
+  const [commit, message, ago] = log.trim().split("|");
+  if (!commit) {
+    cache.set(cacheKey, null);
+    return null;
+  }
+  const nameStatus = git(projectRoot, ["show", "--name-status", "--format=", commit]);
+  let renamedTo;
+  for (const line of nameStatus.split("\n")) {
+    if (line.startsWith("R")) {
+      const parts = line.split("	");
+      if (parts.length >= 3 && parts[1] === relPath) {
+        renamedTo = parts[2];
+        break;
+      }
+    }
+  }
+  const info = {
+    commit: commit.slice(0, 7),
+    message,
+    ago: parseRelative(ago),
+    renamedTo
+  };
+  cache.set(cacheKey, info);
+  return info;
+}
+
+// src/drift/severity.ts
+var TYPE_WEIGHT = {
+  // High: AI immediately fails or hallucinates
+  MISSING_PATH: 3,
+  DEAD_COMMAND: 3,
+  // Medium: AI may use wrong API or version
+  DEPENDENCY_MISSING: 2,
+  VERSION_MISMATCH: 2,
+  CROSS_FILE_CONFLICT: 2,
+  WORKSPACE_DEPENDENCY_MISSING: 2,
+  WORKSPACE_DEPENDENCY_INVALID: 2,
+  // Low: cosmetic / hygiene
+  UNDOCUMENTED_SCRIPT: 1,
+  STALE_FILE: 1,
+  TOOL_CONFIG_OUT_OF_SYNC: 1,
+  INDEX_MISSING_ENTRY: 1,
+  INDEX_ORPHAN_ENTRY: 1,
+  DEAD_EDGE: 1,
+  CHECKER_ERROR: 1
+};
+var DEFAULT_WEIGHT = 1;
+function hotPathMultiplier(file, byFile) {
+  const agg = byFile.get(file);
+  if (!agg) return 1;
+  const bonus = Math.min(1, Math.log2(agg.hits + 1) / 6);
+  return 1 + bonus;
+}
+function weightedScore(issues, aggregations = []) {
+  const byFile = /* @__PURE__ */ new Map();
+  for (const a of aggregations) byFile.set(a.file, a);
+  let totalWeight = 0;
+  for (const issue of issues) {
+    const typeWeight = TYPE_WEIGHT[issue.code] ?? DEFAULT_WEIGHT;
+    const sevMultiplier = issue.severity === "error" ? 3 : issue.severity === "warning" ? 1 : 0;
+    const hot = hotPathMultiplier(issue.file, byFile);
+    totalWeight += typeWeight * sevMultiplier * hot;
+  }
+  const clamped = Math.min(100, totalWeight);
+  const score = Math.max(0, Math.round(100 - clamped));
+  return {
+    score,
+    totalWeight: Math.round(totalWeight * 10) / 10,
+    usedTelemetry: aggregations.length > 0
+  };
+}
+
 // src/drift/index.ts
 var DEFAULT_STALENESS = {
   warnDays: 30,
@@ -1949,9 +2062,36 @@ async function runDriftCheck(config, opts = {}) {
     skip: opts.skip
   });
   const { issues: allIssues, summaries: checkerSummaries } = await runCheckerRegistry(context, registry);
+  for (const issue of allIssues) {
+    if (issue.code === "MISSING_PATH" && issue.claim) {
+      const info = findDeletionCommit(projectRoot, issue.claim.value);
+      if (info) {
+        issue.gitContext = {
+          commit: info.commit,
+          message: info.message,
+          ago: info.ago,
+          renamedTo: info.renamedTo
+        };
+      }
+    }
+  }
   const score = computeScore(allIssues);
+  const queries = readQueries(projectRoot, { sinceMs: Date.now() - 7 * 24 * 60 * 60 * 1e3 });
+  const aggregations = aggregateByFile(queries);
+  const weighted = weightedScore(allIssues, aggregations);
+  const errors = allIssues.filter((i) => i.severity === "error").length;
+  const warnings = allIssues.filter((i) => i.severity === "warning").length;
+  appendHistory(projectRoot, {
+    score,
+    weightedScore: weighted.usedTelemetry ? weighted.score : void 0,
+    errors,
+    warnings,
+    filesChecked: scaffoldFiles.length
+  });
   return {
     score,
+    weightedScore: weighted.score,
+    usedTelemetry: weighted.usedTelemetry,
     issues: allIssues,
     filesChecked: scaffoldFiles.length,
     timestamp: (/* @__PURE__ */ new Date()).toISOString(),
@@ -2045,4 +2185,4 @@ export {
   runDriftCheck,
   findScaffoldFiles
 };
-//# sourceMappingURL=chunk-MM7NAXI3.js.map
+//# sourceMappingURL=chunk-QSCBXJG5.js.map

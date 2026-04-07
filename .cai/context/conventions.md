@@ -1,21 +1,28 @@
 ---
 name: conventions
-description: Code conventions for this Obsidian plugin — file layout, type centralization, executor pattern, settings persistence rules.
+description: How code is written in obsidian-llm — naming, structure, provider/executor patterns, settings persistence, debug logging, verify checklist. Load when writing or reviewing code.
 triggers:
   - "convention"
   - "naming"
-  - "where do I put"
   - "how should I"
-  - "new provider"
-  - "new command"
-  - "settings field"
+  - "add provider"
+  - "settings"
+  - "debug log"
 edges:
-  - target: architecture.md
-    condition: when a convention depends on understanding executor/view layout
-  - target: decisions.md
-    condition: when the rule traces back to a deliberate trade-off (merge save, http vs fetch)
-  - target: stack.md
-    condition: when picking which library to use for a new feature
+  - target: context/architecture.md
+    condition: when a convention depends on understanding which executor or component is involved
+  - target: context/decisions.md
+    condition: when the rationale behind a convention is needed
+  - target: patterns/INDEX.md
+    condition: when starting a recurring task — a pattern probably exists for it
+  - target: patterns/add-cli-provider.md
+    condition: when adding a new CLI-based provider — this pattern is the canonical workflow
+  - target: patterns/settings-persistence.md
+    condition: when adding or changing persisted state — required to stay sync-safe
+  - target: patterns/spawn-cli-shellpath.md
+    condition: when adding any child_process spawn call
+  - target: patterns/debug-cli-failure.md
+    condition: when verifying behaviour broke and you need to diagnose a CLI/ACP call
 last_updated: 2026-04-07
 ---
 
@@ -23,55 +30,88 @@ last_updated: 2026-04-07
 
 ## Naming
 
-- **Files:** camelCase for utilities (`vaultSearch.ts`, `autoDetect.ts`, `shellPath.ts`, `modelFetcher.ts`), PascalCase for classes that define the file (`ChatView.ts`, `LLMExecutor.ts`, `AcpExecutor.ts`, `LocalLLMExecutor.ts`, `SettingsTab.ts`, `QuickPromptModal.ts`).
-- **Classes:** PascalCase. The plugin entry class is `LLMPlugin` (`main.ts`).
-- **Types & interfaces:** PascalCase. Provider keys are lowercase string literals: `"claude" | "opencode" | "codex" | "gemini" | "local"`.
-- **Constants:** UPPER_SNAKE_CASE for module-level lookup tables (`DEFAULT_COMMANDS`, `PROVIDER_MODELS`, `PROVIDER_DISPLAY_NAMES`, `ACP_SUPPORTED_PROVIDERS`, `DEFAULT_SETTINGS`, `DEFAULT_PROVIDER_CONFIGS`, `CHAT_VIEW_TYPE`).
-- **Provider display strings:** centralized in `PROVIDER_DISPLAY_NAMES` in `src/types.ts`. Do not duplicate elsewhere — `SettingsTab.ts` historically had its own copy; if you find one, fold it into `types.ts`.
+- **Files:** PascalCase for classes (`LLMExecutor.ts`, `ChatView.ts`, `SettingsTab.ts`,
+  `QuickPromptModal.ts`), camelCase for utility modules (`vaultSearch.ts`, `shellPath.ts`,
+  `modelFetcher.ts`, `autoDetect.ts`).
+- **Folders:** `src/executor/`, `src/views/`, `src/settings/`, `src/modals/`, `src/utils/`.
+  Each folder that exports more than one symbol has an `index.ts` barrel
+  (`src/views/index.ts`, `src/modals/index.ts`).
+- **Types:** All shared types live in `src/types.ts`. Provider-related constants
+  (`PROVIDER_DISPLAY_NAMES`, `PROVIDER_MODELS`, `ACP_SUPPORTED_PROVIDERS`,
+  `DEFAULT_PROVIDER_CONFIGS`) live there too — do not duplicate them.
+- **Providers:** `LLMProvider = "claude" | "opencode" | "codex" | "gemini" | "local"`.
+  CLI subset is `CLIProvider = Exclude<LLMProvider, "local">`. When you add a provider you
+  update both unions plus every record keyed by them — TypeScript will tell you which.
 
 ## Structure
 
-```
-main.ts                    # Plugin entry, lifecycle, settings load/save, commands
-src/
-  types.ts                 # All shared types, defaults, lookup tables — single source of truth
-  executor/
-    LLMExecutor.ts         # CLI subprocess executor (claude/gemini/codex/opencode)
-    AcpExecutor.ts         # ACP persistent connection
-    LocalLLMExecutor.ts    # HTTP client for Ollama / OpenAI-compatible servers
-  views/
-    ChatView.ts            # ItemView — chat UI, owns its three executor instances
-    index.ts               # Re-exports
-  modals/
-    QuickPromptModal.ts    # One-shot prompt modal (used by command palette)
-    index.ts
-  settings/
-    SettingsTab.ts         # PluginSettingTab UI
-  utils/
-    vaultSearch.ts         # MiniSearch RAG over vault
-    autoDetect.ts          # Probe installed CLIs and local servers
-    modelFetcher.ts        # Static + dynamic model lists
-    shellPath.ts           # Resolve interactive shell PATH for spawned CLIs
-test/specs/
-  plugin.e2e.ts            # WebdriverIO E2E
-  providers.e2e.ts
-```
-
-- **All shared types live in `src/types.ts`.** Importing modules use `import type { … } from "../types"`. Do not create per-file type duplicates.
-- **Executors are class-based and stateful.** They own session ids, active processes, and a `settings` reference. Update via `updateSettings()` rather than re-instantiating where possible.
-- **Views own their executors.** `ChatView` constructs its own `LLMExecutor`, `AcpExecutor`, `LocalLLMExecutor`. The plugin-level `LLMExecutor` on `LLMPlugin` is for command-palette / non-view flows.
+- **One executor class per transport, not per provider.** Provider differences live inside
+  a single executor as switch statements (`buildCommand`, `parseStreamingEvents`, parser
+  table, etc. in `LLMExecutor.ts`). Do not create `ClaudeExecutor.ts`.
+  - `LLMExecutor` — CLI subprocess for claude / gemini / codex / opencode.
+  - `AcpExecutor` — persistent ACP stdio connection for claude / gemini / codex.
+  - `LocalLLMExecutor` — HTTP for ollama / openai-compatible servers.
+- **Settings live in `LLMPluginSettings`** (`src/types.ts`). All persistence goes through
+  `LLMPlugin.loadSettings` and `LLMPlugin.saveSettings`. Never call `saveData` directly
+  outside of `mergeBeforeSave` — see "Settings persistence" below.
+- **Two streaming callbacks per execute call**: `onStream(text)` for cumulative assistant
+  text and `onProgress(event)` for `ProgressEvent` (thinking / tool_use / status / text).
+  `text` events also feed `onStream` so callers don't have to subscribe to both.
 
 ## Patterns
 
-- **New provider:** add the literal to `LLMProvider` in `src/types.ts`, populate `PROVIDER_DISPLAY_NAMES`, `PROVIDER_MODELS`, `DEFAULT_PROVIDER_CONFIGS`, and `ACP_SUPPORTED_PROVIDERS` if relevant. Add a parser + entry in `LLMExecutor.ts`'s `DEFAULT_COMMANDS`/`PARSERS` if CLI-based, or extend `LocalLLMExecutor` if HTTP-based. Add detection in `autoDetect.ts`.
-- **Settings persistence:** **never call `saveData(this.settings)` directly.** Use `LLMPlugin.saveSettings()` which goes through `mergeBeforeSave()` to preserve cloud-synced changes from other devices. Chat sessions have their own light-weight save path (`saveChatSessions`) that bypasses the merge because sessions are local-only.
-- **Local server URLs:** always normalize `localhost` to `127.0.0.1` (see `LocalLLMExecutor.normalizeUrl`). Electron/Obsidian on macOS hits DNS issues with `localhost`.
-- **Spawning CLIs:** always merge env from `getShellEnv()` so the user's interactive `PATH` is available — Obsidian launched from Finder has an empty PATH.
-- **Streaming:** progress reaches the UI as `ProgressEvent` (`thinking | tool_use | text | status`). Add new event types to the union in `src/types.ts`, not as ad-hoc strings.
-- **Markdown rendering in views:** use Obsidian's `MarkdownRenderer.render` and track the `Component` instances on `markdownComponents` for cleanup on view close.
-- **Debug logging:** gate behind `this.settings.debugMode`. Use `[LLM Plugin]` prefix.
-- **Migrations:** put one-shot data migrations in `LLMPlugin.loadSettings()` (see existing examples: old `systemPrompt` string → file-based, OpenCode ACP → false, ensure `local` provider exists).
-- **Truncation rule:** **never truncate content sent to the LLM.** If a message would be too large, route it through `VaultSearch`/RAG. (Project-wide rule — see user memory.)
+### Adding or changing a CLI provider
+1. Update `LLMProvider` in `src/types.ts`. Add a `DEFAULT_PROVIDER_CONFIGS` entry.
+2. Add an entry to `DEFAULT_COMMANDS` and `PARSERS` in `src/executor/LLMExecutor.ts:27`.
+3. Implement a `parse<Provider>Output(output: string): ParsedResponse` function next to
+   the existing parsers.
+4. If the CLI streams JSON events line-by-line, add a branch in
+   `LLMExecutor.parseStreamingEvents` so progress events flow into the chat UI.
+5. If the prompt should arrive on stdin (recommended for long prompts — avoids `ARG_MAX`),
+   add the provider to the `useStdin` check in `LLMExecutor.runCLI` (`LLMExecutor.ts:406`).
+6. Add a model list to `PROVIDER_MODELS` in `src/types.ts`.
+7. Add a display name to `PROVIDER_DISPLAY_NAMES`.
+8. Add settings UI in `src/settings/SettingsTab.ts`.
+
+### Adding ACP support to a provider
+1. Add the provider to `ACP_SUPPORTED_PROVIDERS` in `src/types.ts`.
+2. Add a case to `AcpExecutor.getAcpCommand` (`AcpExecutor.ts:168`) returning
+   `{ cmd, args, env? }` for the ACP adapter or `--experimental-acp` flag.
+3. Verify the adapter speaks ACP over **stdio**, not HTTP. OpenCode does *not* qualify.
+
+### Settings persistence (cloud-sync safe)
+- **Always go through `LLMPlugin.saveSettings`** — it calls `mergeBeforeSave`
+  (`main.ts:350`), which re-reads `data.json` from disk and merges per-provider configs and
+  chat sessions. This protects user changes from another device that arrived via Obsidian
+  Sync between our load and our save. Do **not** overwrite `data.json` wholesale.
+- New settings fields must be added to `DEFAULT_SETTINGS` and any in-place migration goes
+  in `LLMPlugin.loadSettings` next to the existing migrations (`main.ts:293`–`323`).
+- Chat sessions are persisted under the `_chatSessions` key alongside settings via
+  `LLMPlugin.saveChatSessions`. They are merged by id in `mergeBeforeSave`.
+
+### Spawning child processes
+- Always pass `env: getShellEnv(config.envVars)` from `src/utils/shellPath.ts`. Without it,
+  GUI Obsidian on macOS will not find homebrew/nvm-installed CLIs.
+- Use `shell: false` and pass arguments as an array — never interpolate user input into a
+  shell string.
+- Track the active process on the executor (`activeProcess`) so `cancel()` can SIGTERM it,
+  and clear it in both `error` and `close` handlers.
+
+### Local server HTTP
+- Use the `httpRequest` / `httpStreamRequest` helpers in `LocalLLMExecutor.ts` (raw Node
+  `http`). Do not use `fetch` against `localhost` LLM servers from inside Obsidian.
+- Always run user-supplied URLs through `normalizeUrl` (`LocalLLMExecutor.ts:21`) so
+  `localhost` becomes `127.0.0.1`.
+
+### Vault context (RAG over truncation)
+- When a feature wants to "include the user's notes", retrieve relevant chunks via
+  `VaultSearch` (`src/utils/vaultSearch.ts`). Do not concatenate full note bodies and
+  truncate — see the `feedback_no_truncation` user memory.
+
+### Debug logging
+- Each executor has a `debug` arrow function gated on `settings.debugMode`. Prefix logs
+  with the class name in brackets (e.g. `[AcpExecutor]`). Truncate long payloads to ~500
+  chars when logging.
 
 ## AI Response Efficiency
 - Respond concisely. Lead with the answer or action, not the reasoning.
@@ -82,15 +122,18 @@ test/specs/
 
 ## Verify Checklist
 
-After any change in `src/` or `main.ts`:
+Run these after any non-trivial change before reporting done:
 
-1. **Typecheck passes:** `tsc -noEmit -skipLibCheck` (this is the first half of `npm run build`).
-2. **Bundle builds:** `npm run build` produces `main.js` without errors.
-3. **No new shared types defined outside `src/types.ts`** (unless they are private to one file).
-4. **No new `localhost` literal** when constructing local server URLs — use `127.0.0.1` or pass through `normalizeUrl`.
-5. **No direct `saveData(this.settings)` call** — went through `saveSettings()`/`mergeBeforeSave()` instead.
-6. **No direct `fetch()` call to a local LLM server** — used the `http` helper in `LocalLLMExecutor`.
-7. **All `spawn(...)` calls** include env from `getShellEnv()`.
-8. **If a new provider was added:** updated `LLMProvider` union, `PROVIDER_DISPLAY_NAMES`, `PROVIDER_MODELS`, `DEFAULT_PROVIDER_CONFIGS`, plus parser + detection.
-9. **Manifest + package version** in sync if the change is a release.
-10. **For UI changes:** if it touched `ChatView`, run `npm run test:e2e:fast` at minimum.
+- [ ] `npm run build` succeeds (this runs `tsc -noEmit -skipLibCheck` first).
+- [ ] If you added a provider, the new provider appears everywhere it should:
+      `LLMProvider` union, `DEFAULT_PROVIDER_CONFIGS`, `PROVIDER_DISPLAY_NAMES`,
+      `PROVIDER_MODELS`, `DEFAULT_COMMANDS`, `PARSERS`, settings UI. TypeScript exhaustive
+      switches will catch most omissions.
+- [ ] Any new setting has a `DEFAULT_SETTINGS` entry and any necessary migration in
+      `LLMPlugin.loadSettings`.
+- [ ] Subprocess spawns use `getShellEnv(...)` and `shell: false`.
+- [ ] Local server URLs are passed through `normalizeUrl`.
+- [ ] No new use of `fetch()` against local LLM servers.
+- [ ] No code overwrites `data.json` directly — all writes go through `saveSettings` /
+      `saveChatSessions`.
+- [ ] If the change touches user-facing behaviour, update the README "Features" section.

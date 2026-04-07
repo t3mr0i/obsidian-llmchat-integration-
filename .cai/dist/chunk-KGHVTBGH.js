@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 import {
-  findScaffoldFiles,
-  mergeWithMarkers
-} from "./chunk-MM7NAXI3.js";
-import {
   writeIfChanged
 } from "./chunk-TBA32Z4B.js";
+import {
+  findScaffoldFiles,
+  mergeWithMarkers
+} from "./chunk-QSCBXJG5.js";
 
 // src/rules.ts
 import { existsSync, mkdirSync, readFileSync } from "fs";
@@ -166,4 +166,4 @@ export {
   generateRules,
   printRulesResult
 };
-//# sourceMappingURL=chunk-7GLRTQA4.js.map
+//# sourceMappingURL=chunk-KGHVTBGH.js.map

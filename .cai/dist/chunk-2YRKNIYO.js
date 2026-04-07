@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 import {
   generateRules
-} from "./chunk-7GLRTQA4.js";
-import {
-  getGitDiff,
-  runDriftCheck
-} from "./chunk-MM7NAXI3.js";
+} from "./chunk-KGHVTBGH.js";
 import {
   writeIfChanged
 } from "./chunk-TBA32Z4B.js";
+import {
+  getGitDiff,
+  runDriftCheck
+} from "./chunk-QSCBXJG5.js";
 
 // src/sync/index.ts
 import chalk from "chalk";
@@ -392,4 +392,4 @@ function groupIntoTargets(issues) {
 export {
   runSync
 };
-//# sourceMappingURL=chunk-AWGJUVUQ.js.map
+//# sourceMappingURL=chunk-2YRKNIYO.js.map
