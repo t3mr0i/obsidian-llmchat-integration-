@@ -14,7 +14,8 @@
       "WebFetch(domain:openai.com)",
       "Bash(gh release:*)",
       "Bash(node:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(npm install:*)"
     ]
   }
 }
