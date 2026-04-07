@@ -17,6 +17,7 @@ interface ParsedResponse {
   content: string;
   tokens?: TokenUsage;
   cost?: number;
+  error?: string;
 }
 
 /**
@@ -176,6 +177,7 @@ function parseOpenCodeOutput(output: string): ParsedResponse {
   const finalMessages: Set<string> = new Set();
   const tokens: TokenUsage = { input: 0, output: 0 };
   let cost = 0;
+  let error: string | undefined;
 
   for (const line of output.trim().split("\n")) {
     if (!line.trim()) continue;
@@ -185,7 +187,12 @@ function parseOpenCodeOutput(output: string): ParsedResponse {
       const part = obj.part || {};
       const messageID = part.messageID as string | undefined;
 
-      if (eventType === "text" && part.text && messageID) {
+      if (eventType === "error") {
+        // OpenCode error event: { type: "error", error: { name, data: { message } } }
+        const errObj = obj.error || {};
+        const errData = errObj.data || {};
+        error = errData.message || errObj.message || errObj.name || "OpenCode error";
+      } else if (eventType === "text" && part.text && messageID) {
         if (!textByMessage.has(messageID)) {
           textByMessage.set(messageID, []);
         }
@@ -221,11 +228,12 @@ function parseOpenCodeOutput(output: string): ParsedResponse {
     }
   }
 
-  const content = textParts.join("").trim() || output;
+  const content = textParts.join("").trim();
   return {
-    content,
+    content: content || (error ? "" : output),
     tokens: tokens.input > 0 || tokens.output > 0 ? tokens : undefined,
     cost: cost > 0 ? cost : undefined,
+    error,
   };
 }
 
@@ -354,6 +362,7 @@ export class LLMExecutor {
         provider: selectedProvider,
         tokensUsed: parsed.tokens,
         durationMs,
+        error: parsed.error,
       };
     } catch (error) {
       const durationMs = Date.now() - startTime;

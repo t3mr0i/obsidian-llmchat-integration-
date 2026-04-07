@@ -457,6 +457,7 @@ function parseOpenCodeOutput(output) {
   const finalMessages = /* @__PURE__ */ new Set();
   const tokens = { input: 0, output: 0 };
   let cost = 0;
+  let error48;
   for (const line of output.trim().split("\n")) {
     if (!line.trim()) continue;
     try {
@@ -464,7 +465,11 @@ function parseOpenCodeOutput(output) {
       const eventType = obj.type;
       const part = obj.part || {};
       const messageID = part.messageID;
-      if (eventType === "text" && part.text && messageID) {
+      if (eventType === "error") {
+        const errObj = obj.error || {};
+        const errData = errObj.data || {};
+        error48 = errData.message || errObj.message || errObj.name || "OpenCode error";
+      } else if (eventType === "text" && part.text && messageID) {
         if (!textByMessage.has(messageID)) {
           textByMessage.set(messageID, []);
         }
@@ -494,11 +499,12 @@ function parseOpenCodeOutput(output) {
       textParts.push(...parts);
     }
   }
-  const content = textParts.join("").trim() || output;
+  const content = textParts.join("").trim();
   return {
-    content,
+    content: content || (error48 ? "" : output),
     tokens: tokens.input > 0 || tokens.output > 0 ? tokens : void 0,
-    cost: cost > 0 ? cost : void 0
+    cost: cost > 0 ? cost : void 0,
+    error: error48
   };
 }
 async function detectProvider(provider) {
@@ -638,7 +644,8 @@ var init_LLMExecutor = __esm({
             content: parsed.content,
             provider: selectedProvider,
             tokensUsed: parsed.tokens,
-            durationMs
+            durationMs,
+            error: parsed.error
           };
         } catch (error48) {
           const durationMs = Date.now() - startTime;
