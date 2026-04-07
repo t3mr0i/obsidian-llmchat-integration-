@@ -9,11 +9,11 @@ triggers:
   - "ENOENT"
   - "hang"
 edges:
-  - target: ../context/architecture.md
+  - target: context/architecture.md
     condition: when you need to identify which executor handles the failing provider
-  - target: spawn-cli-shellpath.md
+  - target: patterns/spawn-cli-shellpath.md
     condition: when the failure is ENOENT / not-found
-  - target: ../context/conventions.md
+  - target: context/conventions.md
     condition: when you need the debug logging convention
 last_updated: 2026-04-07
 ---
@@ -22,7 +22,7 @@ last_updated: 2026-04-07
 
 ## Anchor
 
-`src/executor/LLMExecutor.ts:614` shows the user-facing error mapping that will obscure
+`src/executor/LLMExecutor.ts` shows the user-facing error mapping that will obscure
 the original stderr if you read only the toast text:
 
 ```ts
@@ -69,7 +69,7 @@ tab. If you don't know which path is firing, the developer console will show
 
 | Symptom | Likely cause | Where to look |
 |---|---|---|
-| `Failed to spawn <cmd>: ENOENT` | Binary not on PATH from Obsidian | `spawn-cli-shellpath.md`, restart Obsidian to bust shell PATH cache |
+| `Failed to spawn <cmd>: ENOENT` | Binary not on PATH from Obsidian | `patterns/spawn-cli-shellpath.md`, restart Obsidian to bust shell PATH cache |
 | `Process was killed` after exactly N seconds | Hit `timeout` (per-provider or `defaultTimeout`) | Increase timeout; check the last `stdout chunk` for what the CLI was doing |
 | Empty `content` but exit code 0 | Parser didn't recognise the output format | Add a `console.log(output)` inside the parser; check if the CLI changed its JSON shape |
 | `Model not found` toast | The CLI rejected `--model <id>` | Verify `PROVIDER_MODELS` ids against the CLI's current list; commit `40382ea` resets stored model when not in fetched list |
@@ -85,7 +85,7 @@ tab. If you don't know which path is firing, the developer console will show
    }
    ```
 7. **If the process hangs without exiting**, check whether stdin was closed. The plugin
-   writes the prompt then calls `child.stdin.end()` (`LLMExecutor.ts:534`) — if you added
+   writes the prompt then calls `child.stdin.end()` (`LLMExecutor.ts`) — if you added
    a code path that forgets the `.end()`, the CLI will wait forever.
 
 ## Gotchas
@@ -95,7 +95,7 @@ tab. If you don't know which path is firing, the developer console will show
 - `[AcpExecutor]` errors are often JSON-RPC framing issues from a partially-buffered
   stdio chunk. They surface as cryptic SDK exceptions rather than clean parse errors.
 - Cancelling from the chat UI sets `activeProcess = null` and SIGTERMs. If you see a
-  later `WARNING: close event fired again - ignoring` line (`LLMExecutor.ts:489`) that's
+  later `WARNING: close event fired again - ignoring` line (`LLMExecutor.ts`) that's
   benign — the plugin guards against double-handling.
 - Local servers may return HTTP 200 with an error body. `LocalLLMExecutor` checks
   `statusCode >= 400` only for the streaming path — inspect bodies on the non-stream

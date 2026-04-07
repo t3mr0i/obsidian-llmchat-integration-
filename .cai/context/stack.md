@@ -23,11 +23,11 @@ last_updated: 2026-04-07
 
 ## Core Technologies
 
-- **TypeScript 5.x** (`typescript ^5.0.0`). `tsconfig.json`: `target: ES6`, `module: ESNext`,
+- **TypeScript** (`typescript ^5.0.0`). `tsconfig.json`: `target: ES6`, `module: ESNext`,
   `moduleResolution: node`, `strictNullChecks: true`, `noImplicitAny: true`,
   `isolatedModules: true`, `inlineSourceMap: true`. Type-only check via
   `tsc -noEmit -skipLibCheck` runs as part of `npm run build`.
-- **esbuild 0.25.x** as the only bundler. Single-entry build: `main.ts` → `main.js`
+- **esbuild** (`esbuild ^0.25.12`) as the only bundler. Single-entry build: `main.ts` → `main.js`
   (CJS, target `es2018`, treeshake on). See `esbuild.config.mjs`.
 - **Node.js / Electron runtime** (Obsidian's embedded Chromium + Node). Plugin uses Node
   `child_process.spawn` / `exec` and the raw Node `http` module.
@@ -37,21 +37,21 @@ last_updated: 2026-04-07
 
 ## Key Libraries
 
-- **`@agentclientprotocol/sdk` ^0.13.1** — Agent Client Protocol SDK. Used by
+- **`@agentclientprotocol/sdk`** — Agent Client Protocol SDK. Used by
   `src/executor/AcpExecutor.ts` to keep a long-lived stdio session with Claude / Gemini /
   Codex ACP adapters. Provides `ClientSideConnection`, `ndJsonStream`, and the session
   notification / model state types.
-- **`minisearch` ^7.2.0** — Tiny BM25 full-text search. Used by `src/utils/vaultSearch.ts`
+- **`minisearch`** — Tiny BM25 full-text search. Used by `src/utils/vaultSearch.ts`
   to index vault notes (split into heading-level chunks) for RAG, instead of stuffing whole
   notes into prompts.
-- **`zod` ^4.3.6** — Schema validation. Declared as a dep; reach for it before hand-rolling
+- **`zod`** — Schema validation. Declared as a dep; reach for it before hand-rolling
   validators when parsing CLI / HTTP responses.
 
 ## Dev / Test Libraries
 
 - **`wdio-obsidian-service` ^2.2.1** + **`wdio-obsidian-reporter` ^2.2.1** —
   WebdriverIO service that boots a real Obsidian instance for e2e testing.
-- **`@wdio/*` ^9.23** — WDIO local runner, mocha framework, spec reporter.
+- **`@wdio` packages ^9.23** — WDIO local runner, mocha framework, spec reporter.
 - **`@types/mocha` ^10**, **`expect-webdriverio` ^5.6** — test types and matchers.
 - **`builtin-modules` ^3.3** — supplies the Node builtin list for esbuild's `external`.
 - **`tslib` ^2.4** — TS helper runtime.
@@ -60,7 +60,7 @@ last_updated: 2026-04-07
 
 - **No `fetch` for local-server calls.** `LocalLLMExecutor` uses raw Node `http` because
   Electron's fetch implementation has misbehaved against `localhost` LLM servers — see
-  `decisions.md`.
+  `context/decisions.md`.
 - **No CommonJS/ESM dual build.** Output is CJS only; Obsidian's plugin loader expects it.
 - **No unit-test framework** (no jest / vitest / mocha standalone). Only WebdriverIO e2e.
 - **No CSS framework / UI library.** Plain DOM via Obsidian's API and `styles.css`.
@@ -70,7 +70,7 @@ last_updated: 2026-04-07
 
 ## Version Constraints
 
-- **Node `>=20`** for the build (matches `@types/node ^20.19.30`).
+- **Node `>=20`** for the build (matches `@types/node` v20).
 - **Obsidian `minAppVersion: 1.0.0`** declared in `manifest.json`.
 - **Plugin version `0.4.0`** (kept in sync between `package.json` and `manifest.json`).
 - **esbuild target `es2018`** — Obsidian's Electron is modern, but `es2018` is the

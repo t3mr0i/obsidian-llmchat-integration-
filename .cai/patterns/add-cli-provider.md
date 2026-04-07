@@ -7,9 +7,9 @@ triggers:
   - "support new cli"
   - "add llm"
 edges:
-  - target: ../context/conventions.md
+  - target: context/conventions.md
     condition: when verifying you touched every required slot for a new provider
-  - target: ../context/architecture.md
+  - target: context/architecture.md
     condition: when you need to understand executor boundaries before extending them
 last_updated: 2026-04-07
 ---
@@ -18,7 +18,7 @@ last_updated: 2026-04-07
 
 ## Anchor
 
-`src/executor/LLMExecutor.ts:27` — every provider exists in two parallel tables; both must
+`src/executor/LLMExecutor.ts` — every provider exists in two parallel tables; both must
 gain an entry:
 
 ```ts
@@ -37,7 +37,7 @@ const PARSERS: Record<CLIProvider, (output: string) => ParsedResponse> = {
 };
 ```
 
-`src/types.ts:4` — the union type `LLMProvider` is the spine. Adding a value here causes
+`src/types.ts` — the union type `LLMProvider` is the spine. Adding a value here causes
 TypeScript to flag every record/switch that needs updating, which is the cheapest way to
 discover the full surface.
 
@@ -65,9 +65,9 @@ should be able to emit JSON (ideally streaming JSON) for token usage.
    - Write a `parse<Name>Output(output: string): ParsedResponse` function next to the other
      parsers. Extract the assistant text and (if available) input/output tokens.
    - Add the parser to `PARSERS`.
-   - In `buildCommand` (`LLMExecutor.ts:543`), add a case to the model-flag switch.
+   - In `buildCommand` (`LLMExecutor.ts`), add a case to the model-flag switch.
    - If the prompt should be sent on stdin (recommended for long prompts to avoid
-     `ARG_MAX`), add the provider to the `useStdin` test in `runCLI` (`LLMExecutor.ts:406`).
+     `ARG_MAX`), add the provider to the `useStdin` test in `runCLI` (`LLMExecutor.ts`).
    - If the CLI streams events, add a branch in `parseStreamingEvents` so progress events
      reach the chat UI.
 4. **Settings UI:** add a section in `src/settings/SettingsTab.ts` mirroring the existing
@@ -100,18 +100,18 @@ should be able to emit JSON (ideally streaming JSON) for token usage.
 - [ ] Sending a prompt from `ChatView` returns text.
 - [ ] Token counts (if the CLI returns them) appear in `LLMResponse.tokensUsed`.
 - [ ] Cancelling mid-stream from the chat UI actually kills the child process.
-- [ ] If you added an ACP-capable provider, also follow `add-acp-support.md`.
+- [ ] If you added an ACP-capable provider, also follow `patterns/add-acp-support.md`.
 
 ## Debug
 
 - Enable Debug mode in plugin settings, then check the developer console for
   `[LLMExecutor]` lines (the command, stdout/stderr chunks, exit code).
 - If the spawn fails with `ENOENT`, the binary is not on PATH from inside Obsidian — see
-  `spawn-cli-shellpath.md`.
+  `patterns/spawn-cli-shellpath.md`.
 - If parsing returns an empty `content`, log the raw `output` argument inside your parser
   to see whether the CLI is emitting JSON at all on this version.
 
 ## After This Task
 - [ ] Update `.cai/ROUTER.md` "Current Project State" if a new provider materially changes what's working.
 - [ ] Update `.cai/context/architecture.md` "External Dependencies" with the new CLI.
-- [ ] If this is a new task type without a pattern, create one in `.cai/patterns/` and add to `INDEX.md`.
+- [ ] If this is a new task type without a pattern, create one in `.cai/patterns/` and add to `patterns/INDEX.md`.

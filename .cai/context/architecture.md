@@ -36,7 +36,7 @@ lets the user chat with multiple LLM providers from inside Obsidian. It is **des
 
 The plugin entry point `main.ts` is bundled by esbuild into a single `main.js` CJS file at the
 repo root and shipped together with `manifest.json` and `styles.css` to a vault's
-`.obsidian/plugins/obsidian-llm/` folder.
+the vault plugin folder folder.
 
 Flow:
 
@@ -53,22 +53,22 @@ Commands / QuickPrompt ────┤                       providers: claude, 
 `autoDetect` runs on plugin load and on the `detect-providers` command. It probes installed
 CLIs (`claude`, `gemini`, `codex`, `opencode`) and local server endpoints (Ollama, LM Studio,
 MLX, vLLM, llama.cpp, etc.), and can auto-start local server software when models are present
-but the server is down (see `main.ts:193` `autoDetect()`).
+but the server is down (see `main.ts` (autoDetect) `autoDetect()`).
 
 ## Key Components
 
 - `main.ts` — Plugin entry. Registers `ChatView`, ribbon icon, status bar, commands
   (`open-llm-chat`, `quick-llm-prompt`, `send-selection-to-llm`, `summarize-selection`,
   `explain-selection`, `improve-writing`, `generate-from-context`, `detect-providers`).
-  Handles settings load/save with cloud-sync-safe merge (`mergeBeforeSave`, `main.ts:350`)
+  Handles settings load/save with cloud-sync-safe merge (`mergeBeforeSave`, `main.ts` (mergeBeforeSave))
   and persists `_chatSessions` alongside settings.
 - `src/types.ts` — Single source of truth for `LLMProvider`, `ProviderConfig`,
   `LLMPluginSettings`, `ProgressEvent`, `PROVIDER_DISPLAY_NAMES`, `PROVIDER_MODELS`,
   `ACP_SUPPORTED_PROVIDERS`, `DEFAULT_SETTINGS`.
 - `src/executor/LLMExecutor.ts` — Spawns CLI subprocess per request. Per-provider command
-  table `DEFAULT_COMMANDS` (`LLMExecutor.ts:27`) and per-provider parser table `PARSERS`
-  (`LLMExecutor.ts:37`). Claude uses `--output-format stream-json`, parsed line-by-line in
-  `parseClaudeOutput` (`LLMExecutor.ts:48`). stdin is used for claude/opencode (long prompts);
+  table `DEFAULT_COMMANDS` (`src/executor/LLMExecutor.ts`) and per-provider parser table `PARSERS`
+  (`src/executor/LLMExecutor.ts`). Claude uses `--output-format stream-json`, parsed line-by-line in
+  `parseClaudeOutput` (`src/executor/LLMExecutor.ts`). stdin is used for claude/opencode (long prompts);
   positional arg for gemini/codex. Streams text via `onStream` and structured events via
   `onProgress`. Tracks resumable session ids per provider.
 - `src/executor/AcpExecutor.ts` — Persistent connection via `@agentclientprotocol/sdk`
@@ -79,7 +79,7 @@ but the server is down (see `main.ts:193` `autoDetect()`).
 - `src/executor/LocalLLMExecutor.ts` — Talks HTTP to Ollama (`/api/chat`, `/api/tags`) or
   OpenAI-compatible servers (`/v1/chat/completions`, `/v1/models`). Uses raw Node `http` (not
   Electron `fetch`) to avoid Electron HTTP quirks. Normalises `localhost` → `127.0.0.1`
-  (`LocalLLMExecutor.ts:21`).
+  (`LocalLLMExecutor.ts`).
 - `src/views/ChatView.ts` — `ItemView` registered as `CHAT_VIEW_TYPE = "llm-chat-view"` in
   the right sidebar. Owns chat tabs, message rendering, model picker, all three executors,
   and a per-view `VaultSearch` instance.
@@ -105,14 +105,14 @@ but the server is down (see `main.ts:193` `autoDetect()`).
 
 - **Obsidian API** (`obsidian` package, dev-only — provided by host at runtime). `Plugin`,
   `ItemView`, `WorkspaceLeaf`, `MarkdownRenderer`, `TFile`, `Notice`, settings APIs.
-- **`@agentclientprotocol/sdk` ^0.13.1** — ACP client bindings. Imported by `AcpExecutor`.
-- **`minisearch` ^7.2.0** — In-memory BM25 index for the vault RAG.
-- **`zod` ^4.3.6** — Schema validation (declared dep; used sparingly).
+- **`@agentclientprotocol/sdk`** — ACP client bindings. Imported by `AcpExecutor`.
+- **`minisearch`** — In-memory BM25 index for the vault RAG.
+- **`zod`** — Schema validation (declared dep; used sparingly).
 - **External CLIs** (not npm deps — user-installed binaries discovered via shell PATH):
   `claude`, `gemini`, `codex`, `opencode`, plus ACP adapters launched via `npx -y`
   (`@zed-industries/claude-code-acp`, `@zed-industries/codex-acp`).
 - **Local LLM servers** (HTTP, optional): Ollama, LM Studio, MLX, vLLM, llama.cpp, Jan,
-  text-generation-webui, LocalAI — see `LOCAL_SERVER_PROBES` in `src/utils/autoDetect.ts:10`.
+  text-generation-webui, LocalAI — see `LOCAL_SERVER_PROBES` in `src/utils/autoDetect.ts`.
 
 ## What Does NOT Exist Here
 

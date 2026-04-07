@@ -7,9 +7,9 @@ triggers:
   - "persistent connection"
   - "add acp"
 edges:
-  - target: ../context/architecture.md
+  - target: context/architecture.md
     condition: when you need to understand AcpExecutor's lifecycle and stream wrapping
-  - target: ../context/decisions.md
+  - target: context/decisions.md
     condition: when justifying why a provider is or isn't ACP-eligible (OpenCode case)
 last_updated: 2026-04-07
 ---
@@ -18,13 +18,13 @@ last_updated: 2026-04-07
 
 ## Anchor
 
-`src/types.ts:62`:
+`src/types.ts`:
 
 ```ts
 export const ACP_SUPPORTED_PROVIDERS: LLMProvider[] = ["claude", "gemini", "codex"]; // OpenCode ACP uses HTTP, not stdio
 ```
 
-`src/executor/AcpExecutor.ts:168` — `getAcpCommand` is the dispatcher for which binary to
+`src/executor/AcpExecutor.ts` — `getAcpCommand` is the dispatcher for which binary to
 spawn for which provider's ACP transport:
 
 ```ts
@@ -58,12 +58,12 @@ events instead of spawning a fresh subprocess per turn. We use
 speak ACP over stdio** — OpenCode does not (its ACP is HTTP-based) and is excluded.
 
 Read `context/architecture.md` "Key Components" → `AcpExecutor` and the WHATWG-stream
-adapter functions `nodeToWebReadable` / `nodeToWebWritable` (`AcpExecutor.ts:40–131`).
+adapter functions `nodeToWebReadable` / `nodeToWebWritable` (`AcpExecutor.ts`).
 
 ## Steps
 
 1. **Verify the adapter speaks stdio ACP.** If it speaks HTTP, stop — use the CLI executor
-   instead and document why in `decisions.md`.
+   instead and document why in `context/decisions.md`.
 2. Add the provider to `ACP_SUPPORTED_PROVIDERS` in `src/types.ts`.
 3. Add a `case` to `AcpExecutor.getAcpCommand` returning `{ cmd, args, env? }`. If the
    adapter is published as an npm package, use `npx -y <pkg>` so users don't have to
@@ -84,7 +84,7 @@ adapter functions `nodeToWebReadable` / `nodeToWebWritable` (`AcpExecutor.ts:40�
   this in the UI as "connecting…" status, not as a hang.
 - **Model picker churn.** When ACP disconnects, call `clearAcpModels(provider)` so the UI
   falls back to the CLI/static model list — already done in `AcpExecutor`.
-- **OpenCode special case.** `LLMPlugin.loadSettings` (`main.ts:310`) force-flips
+- **OpenCode special case.** `LLMPlugin.loadSettings` (`main.ts`) force-flips
   `providers.opencode.useAcp` to `false` on every load. Do not undo that migration.
 
 ## Verify

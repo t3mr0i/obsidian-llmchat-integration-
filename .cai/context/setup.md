@@ -22,7 +22,7 @@ last_updated: 2026-04-07
 
 ## Prerequisites
 
-- **Node.js >= 20** (`@types/node ^20.19.30`).
+- **Node.js >= 20** (`@types/node` v20).
 - **npm** (the lockfile is `package-lock.json`).
 - **Obsidian desktop** (>= 1.0.0). The plugin is desktop-only — `isDesktopOnly: true`.
 - **An LLM provider on your machine.** At least one of:
@@ -34,7 +34,7 @@ last_updated: 2026-04-07
     `src/utils/autoDetect.ts`.
 - **macOS users:** install CLIs into a location your shell PATH already knows about
   (homebrew or nvm). The plugin re-derives PATH via your login shell at startup
-  (`src/utils/shellPath.ts`), so anything in `~/.zshrc` / `~/.bashrc` is fine.
+  (`src/utils/shellPath.ts`), so anything in your shell rc file is fine.
 
 ## First-time Setup
 
@@ -88,7 +88,7 @@ each user-installed CLI or local server.
 ## Common Issues
 
 - **`Failed to spawn claude: ENOENT`** — the CLI is not on PATH from inside Obsidian. Make
-  sure your shell rc file (`~/.zshrc` / `~/.bashrc`) puts the CLI directory on PATH; the
+  sure your shell rc file puts the CLI directory on PATH; the
   plugin re-derives PATH from a login shell. Restart Obsidian to bust the
   `getShellPATH()` cache.
 - **`Process was killed by SIGTERM` after exactly N seconds** — hit `defaultTimeout` (or
@@ -98,7 +98,7 @@ each user-installed CLI or local server.
   `localhost`. The plugin normalises this in code (`normalizeUrl`), but copy-pasted URLs in
   custom fields may still surprise you.
 - **Settings disappeared after Obsidian Sync** — check that you only ever wrote to
-  `data.json` via `saveSettings` / `saveChatSessions`. Direct `saveData` writes bypass
+  the plugin data file via `saveSettings` / `saveChatSessions`. Direct `saveData` writes bypass
   `mergeBeforeSave` and lose remote changes.
 - **OpenCode + ACP toggle is greyed-out / off** — intentional. OpenCode ACP is HTTP-only,
   not stdio. See decisions.md.

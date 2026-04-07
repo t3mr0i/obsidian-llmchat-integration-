@@ -14,7 +14,7 @@ shelling out to the user's installed CLIs — no bundled vendor SDKs, no API key
 
 - **Never truncate user notes before sending to a model.** Use `VaultSearch` (MiniSearch
   RAG) in `src/utils/vaultSearch.ts` to retrieve relevant chunks instead.
-- **Never overwrite `data.json` directly.** All persistence goes through
+- **Never overwrite the plugin data file directly.** All persistence goes through
   `LLMPlugin.saveSettings` / `saveChatSessions`, which call `mergeBeforeSave` to stay safe
   against Obsidian Sync from another device.
 - **Every `child_process.spawn` must use `getShellEnv()` from `src/utils/shellPath.ts`.**

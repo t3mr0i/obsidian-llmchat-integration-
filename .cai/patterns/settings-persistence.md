@@ -8,9 +8,9 @@ triggers:
   - "save"
   - "migration"
 edges:
-  - target: ../context/conventions.md
+  - target: context/conventions.md
     condition: when reviewing the verify checklist for a settings change
-  - target: ../context/decisions.md
+  - target: context/decisions.md
     condition: when justifying why mergeBeforeSave exists
 last_updated: 2026-04-07
 ---
@@ -19,7 +19,7 @@ last_updated: 2026-04-07
 
 ## Anchor
 
-`main.ts:350` — `mergeBeforeSave` re-reads `data.json` from disk and merges per-provider
+`main.ts` — `mergeBeforeSave` re-reads the plugin data file from disk and merges per-provider
 configs and chat sessions, so settings written by another device via Obsidian Sync survive:
 
 ```ts
@@ -48,7 +48,7 @@ private async mergeBeforeSave(): Promise<Record<string, unknown>> {
 ## Context
 
 Read `context/decisions.md` → "Cloud-sync-safe `mergeBeforeSave`" and the
-`feedback_merge_not_overwrite` user memory. The principle is: **`data.json` is shared
+`feedback_merge_not_overwrite` user memory. The principle is: **the plugin data file is shared
 state**, not exclusively ours. We must always read-then-write, never just write.
 
 ## Steps
@@ -57,7 +57,7 @@ state**, not exclusively ours. We must always read-then-write, never just write.
 1. Add the field to `LLMPluginSettings` in `src/types.ts`.
 2. Add a default to `DEFAULT_SETTINGS` (also in `src/types.ts`).
 3. If older saved data may not have the field, add an in-place migration in
-   `LLMPlugin.loadSettings` (`main.ts:287`) next to the existing migrations.
+   `LLMPlugin.loadSettings` (`main.ts`) next to the existing migrations.
 4. Add UI for it in `src/settings/SettingsTab.ts`.
 5. Always save via `await this.plugin.saveSettings()` — never call `saveData` directly.
 
@@ -83,7 +83,7 @@ state**, not exclusively ours. We must always read-then-write, never just write.
   remote changes the user made on another device. Always go through `saveSettings` or a
   dedicated `saveXxx` that re-reads disk.
 - **The lightweight `saveChatSessions` path skips full merge** (see comment in
-  `main.ts:338`). It is safe only because chat sessions are written exclusively from this
+  `main.ts`). It is safe only because chat sessions are written exclusively from this
   device's view. Do not use it for state that can change remotely.
 - **Migrations must be idempotent.** They run on every `loadSettings`. Don't push to an
   array unconditionally.
@@ -93,7 +93,7 @@ state**, not exclusively ours. We must always read-then-write, never just write.
 
 ## Verify
 
-- [ ] Save the setting, edit `data.json` on disk to add an unrelated key, save again from
+- [ ] Save the setting, edit the plugin data file on disk to add an unrelated key, save again from
       the plugin, check that the unrelated key survived.
 - [ ] Save the setting on device A while a different value exists on disk (simulate
       Obsidian Sync), confirm the disk value is preserved when not touched in memory.
@@ -104,7 +104,7 @@ state**, not exclusively ours. We must always read-then-write, never just write.
 ## Debug
 
 - `console.log(await this.loadData())` in `loadSettings` to see what arrived on disk.
-- Diff `data.json` before and after a save to confirm only intended keys changed.
+- Diff the plugin data file before and after a save to confirm only intended keys changed.
 - If a setting "disappeared", search the codebase for any direct `saveData(` call —
   there should be none outside `mergeBeforeSave` and the lightweight `saveChatSessions`.
 

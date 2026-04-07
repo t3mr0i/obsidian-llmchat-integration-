@@ -47,7 +47,7 @@ last_updated: 2026-04-07
 
 - **One executor class per transport, not per provider.** Provider differences live inside
   a single executor as switch statements (`buildCommand`, `parseStreamingEvents`, parser
-  table, etc. in `LLMExecutor.ts`). Do not create `ClaudeExecutor.ts`.
+  table, etc. in `LLMExecutor.ts`). Do not create provider-specific executor classes.
   - `LLMExecutor` — CLI subprocess for claude / gemini / codex / opencode.
   - `AcpExecutor` — persistent ACP stdio connection for claude / gemini / codex.
   - `LocalLLMExecutor` — HTTP for ollama / openai-compatible servers.
@@ -62,30 +62,30 @@ last_updated: 2026-04-07
 
 ### Adding or changing a CLI provider
 1. Update `LLMProvider` in `src/types.ts`. Add a `DEFAULT_PROVIDER_CONFIGS` entry.
-2. Add an entry to `DEFAULT_COMMANDS` and `PARSERS` in `src/executor/LLMExecutor.ts:27`.
+2. Add an entry to `DEFAULT_COMMANDS` and `PARSERS` in `src/executor/LLMExecutor.ts`.
 3. Implement a `parse<Provider>Output(output: string): ParsedResponse` function next to
    the existing parsers.
 4. If the CLI streams JSON events line-by-line, add a branch in
    `LLMExecutor.parseStreamingEvents` so progress events flow into the chat UI.
 5. If the prompt should arrive on stdin (recommended for long prompts — avoids `ARG_MAX`),
-   add the provider to the `useStdin` check in `LLMExecutor.runCLI` (`LLMExecutor.ts:406`).
+   add the provider to the `useStdin` check in `LLMExecutor.runCLI` (`LLMExecutor.ts`).
 6. Add a model list to `PROVIDER_MODELS` in `src/types.ts`.
 7. Add a display name to `PROVIDER_DISPLAY_NAMES`.
 8. Add settings UI in `src/settings/SettingsTab.ts`.
 
 ### Adding ACP support to a provider
 1. Add the provider to `ACP_SUPPORTED_PROVIDERS` in `src/types.ts`.
-2. Add a case to `AcpExecutor.getAcpCommand` (`AcpExecutor.ts:168`) returning
+2. Add a case to `AcpExecutor.getAcpCommand` (`AcpExecutor.ts`) returning
    `{ cmd, args, env? }` for the ACP adapter or `--experimental-acp` flag.
 3. Verify the adapter speaks ACP over **stdio**, not HTTP. OpenCode does *not* qualify.
 
 ### Settings persistence (cloud-sync safe)
 - **Always go through `LLMPlugin.saveSettings`** — it calls `mergeBeforeSave`
-  (`main.ts:350`), which re-reads `data.json` from disk and merges per-provider configs and
+  (`main.ts`), which re-reads the plugin data file from disk and merges per-provider configs and
   chat sessions. This protects user changes from another device that arrived via Obsidian
-  Sync between our load and our save. Do **not** overwrite `data.json` wholesale.
+  Sync between our load and our save. Do **not** overwrite the plugin data file wholesale.
 - New settings fields must be added to `DEFAULT_SETTINGS` and any in-place migration goes
-  in `LLMPlugin.loadSettings` next to the existing migrations (`main.ts:293`–`323`).
+  in `LLMPlugin.loadSettings` next to the existing migrations.
 - Chat sessions are persisted under the `_chatSessions` key alongside settings via
   `LLMPlugin.saveChatSessions`. They are merged by id in `mergeBeforeSave`.
 
@@ -100,7 +100,7 @@ last_updated: 2026-04-07
 ### Local server HTTP
 - Use the `httpRequest` / `httpStreamRequest` helpers in `LocalLLMExecutor.ts` (raw Node
   `http`). Do not use `fetch` against `localhost` LLM servers from inside Obsidian.
-- Always run user-supplied URLs through `normalizeUrl` (`LocalLLMExecutor.ts:21`) so
+- Always run user-supplied URLs through `normalizeUrl` (`LocalLLMExecutor.ts`) so
   `localhost` becomes `127.0.0.1`.
 
 ### Vault context (RAG over truncation)
@@ -134,6 +134,6 @@ Run these after any non-trivial change before reporting done:
 - [ ] Subprocess spawns use `getShellEnv(...)` and `shell: false`.
 - [ ] Local server URLs are passed through `normalizeUrl`.
 - [ ] No new use of `fetch()` against local LLM servers.
-- [ ] No code overwrites `data.json` directly — all writes go through `saveSettings` /
+- [ ] No code overwrites the plugin data file directly — all writes go through `saveSettings` /
       `saveChatSessions`.
 - [ ] If the change touches user-facing behaviour, update the README "Features" section.

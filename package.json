@@ -27,6 +27,8 @@
   "author": "Kai Detmers",
   "license": "MIT",
   "devDependencies": {
+    "@codemirror/state": "^6.6.0",
+    "@codemirror/view": "^6.41.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "^20.19.30",
     "@wdio/cli": "^9.23.2",

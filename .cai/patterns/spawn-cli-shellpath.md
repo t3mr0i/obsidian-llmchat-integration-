@@ -8,11 +8,11 @@ triggers:
   - "shell path"
   - "exec"
 edges:
-  - target: ../context/decisions.md
+  - target: context/decisions.md
     condition: when justifying why getShellEnv exists
-  - target: ../context/conventions.md
+  - target: context/conventions.md
     condition: when reviewing the spawn convention checklist
-  - target: debug-cli-failure.md
+  - target: patterns/debug-cli-failure.md
     condition: when a spawn fails with ENOENT or hangs and you need the diagnosis flow
 last_updated: 2026-04-07
 ---
@@ -21,7 +21,7 @@ last_updated: 2026-04-07
 
 ## Anchor
 
-`src/utils/shellPath.ts:11`:
+`src/utils/shellPath.ts`:
 
 ```ts
 export function getShellPATH(): string {
@@ -44,7 +44,7 @@ export function getShellPATH(): string {
 }
 ```
 
-`src/executor/LLMExecutor.ts:420`:
+`src/executor/LLMExecutor.ts`:
 
 ```ts
 const child = spawn(cmd, args, {
@@ -60,7 +60,7 @@ const child = spawn(cmd, args, {
 GUI apps launched from the macOS Dock / Finder do **not** inherit the user's interactive
 shell PATH. Anything installed via homebrew, nvm, asdf, cargo, pyenv, etc. is invisible to
 `spawn` unless we resolve PATH ourselves. The plugin runs `$SHELL -ilc 'echo $PATH'` once
-on first use and caches the result for the session. Read `decisions.md` → "Resolve `$PATH`
+on first use and caches the result for the session. Read `context/decisions.md` → "Resolve `$PATH`
 via login shell on macOS" for the rationale.
 
 ## Steps

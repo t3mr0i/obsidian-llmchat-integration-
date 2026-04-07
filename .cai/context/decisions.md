@@ -44,13 +44,13 @@ last_updated: 2026-04-07
 - **Alternatives considered:** asking the user to launch Obsidian from a terminal (terrible
   UX); hard-coding common paths only (works on most Macs but breaks on nvm).
 
-### Cloud-sync-safe `mergeBeforeSave` for `data.json`
-- **Why:** Obsidian Sync replicates `data.json` between devices. If we just call
+### Cloud-sync-safe `mergeBeforeSave` for the plugin data file
+- **Why:** Obsidian Sync replicates the plugin data file between devices. If we just call
   `saveData(this.settings)`, settings the user changed on another device get clobbered.
-- **How:** `LLMPlugin.mergeBeforeSave` (`main.ts:350`) re-reads `data.json` from disk before
+- **How:** `LLMPlugin.mergeBeforeSave` (`main.ts`) re-reads the plugin data file from disk before
   every save and merges per-provider configs and chat sessions by id. In-memory wins
   per-field, but extra keys from disk are preserved.
-- **Constraint:** never write to `data.json` outside `saveSettings` / `saveChatSessions`.
+- **Constraint:** never write to the plugin data file outside `saveSettings` / `saveChatSessions`.
   See user memory `feedback_merge_not_overwrite`.
 
 ### OpenCode uses CLI mode, not ACP
@@ -58,15 +58,15 @@ last_updated: 2026-04-07
   around `@agentclientprotocol/sdk`'s stdio `ClientSideConnection`. The CLI mode is more
   reliable for OpenCode anyway.
 - **Where it's enforced:** `ACP_SUPPORTED_PROVIDERS = ["claude", "gemini", "codex"]` in
-  `src/types.ts:62` and an in-place migration that flips `useAcp` off for OpenCode in
-  `LLMPlugin.loadSettings` (`main.ts:310`).
+  `src/types.ts` and an in-place migration that flips `useAcp` off for OpenCode in
+  `LLMPlugin.loadSettings` (`main.ts`).
 
 ### Raw Node `http` for local LLM servers (not Electron `fetch`)
 - **Why:** Electron's fetch implementation has caused intermittent failures against
   `localhost` LLM servers (Ollama / LM Studio) — DNS resolution and connection-reuse quirks.
   Node's `http` module is predictable and lets us stream chunks line-by-line.
 - **Companion decision:** rewrite `localhost` → `127.0.0.1` in `normalizeUrl`
-  (`LocalLLMExecutor.ts:21`) to dodge IPv6 / DNS edge cases entirely.
+  (`LocalLLMExecutor.ts`) to dodge IPv6 / DNS edge cases entirely.
 
 ### MiniSearch RAG over prompt truncation
 - **Why:** vault notes can be huge. Truncating before sending to the model loses context
@@ -80,7 +80,7 @@ last_updated: 2026-04-07
 ### Stream-JSON output format for Claude
 - **Why:** Claude's `--output-format stream-json` emits one JSON event per line, giving us
   intermediate `assistant` / `content_block_delta` / `message_delta` events. We parse them
-  in `parseClaudeOutput` (`LLMExecutor.ts:48`) to surface progress (thinking, tool use,
+  in `parseClaudeOutput` (`LLMExecutor.ts`) to surface progress (thinking, tool use,
   tokens) in the UI without waiting for the full response.
 
 ### Single CJS bundle via esbuild
@@ -98,7 +98,7 @@ last_updated: 2026-04-07
 ### Auto-start local server when models are present
 - **Why:** Ollama and LM Studio are commonly installed but not always running. Detecting
   models on disk and starting the server in the background turns "I have Ollama installed"
-  into a working provider with zero clicks. See `LLMPlugin.autoDetect` (`main.ts:193`) and
+  into a working provider with zero clicks. See `LLMPlugin.autoDetect` (`main.ts`) and
   `startLocalServer` in `src/utils/autoDetect.ts`.
 
 ## Token Optimization
