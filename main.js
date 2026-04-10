@@ -22447,12 +22447,6 @@ ${action.prompt}`;
     return this.app.vault.adapter.basePath;
   }
   /**
-   * Eagerly connect to ACP if enabled for the current provider.
-   * This is called when the view opens and when the provider changes.
-   * Blocks user input while connecting.
-   * Tracks in-flight connections to prevent overlapping connect/disconnect calls.
-   */
-  /**
    * Try to start a local LLM server if one is installed but not running.
    * Probes known software (Ollama, LM Studio) and starts the first installed one.
    */
@@ -22551,6 +22545,7 @@ ${action.prompt}`;
     }
   }
   async sendMessage() {
+    var _a3;
     if (!this.inputEl || this.isLoading) return;
     const prompt = this.inputEl.value.trim();
     if (!prompt) return;
@@ -22644,7 +22639,7 @@ ${action.prompt}`;
         if (this.inputEl) this.inputEl.value = savedInput;
         this.messages.pop();
         await this.renderMessagesContent(true);
-        this.showError(response.error);
+        this.showError((_a3 = response.error) != null ? _a3 : "Unknown error");
       } else {
         this.removeStreamingMessage();
         this.clearProgress();
@@ -23113,8 +23108,9 @@ ${content}`);
       });
       link.addEventListener("click", (e) => {
         e.preventDefault();
-        this.app.setting.open();
-        this.app.setting.openTabById("obsidian-llm");
+        const setting = this.app.setting;
+        setting.open();
+        setting.openTabById("obsidian-llm");
       });
     }
     this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
@@ -23194,8 +23190,6 @@ ${content}`);
     if (this.inputEl && !this.isLoading) {
       this.inputEl.value = message;
       this.sendMessage();
-    } else if (this.isLoading) {
-      new import_obsidian4.Notice(`Clicked: ${buttonText}`);
     }
   }
   /**
@@ -23207,8 +23201,6 @@ ${content}`);
     if (this.inputEl && !this.isLoading) {
       this.inputEl.value = message;
       this.sendMessage();
-    } else if (this.isLoading) {
-      new import_obsidian4.Notice(`${action}: ${itemText}`);
     }
   }
   /**

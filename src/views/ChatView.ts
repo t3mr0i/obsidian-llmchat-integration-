@@ -966,12 +966,6 @@ export class ChatView extends ItemView {
   }
 
   /**
-   * Eagerly connect to ACP if enabled for the current provider.
-   * This is called when the view opens and when the provider changes.
-   * Blocks user input while connecting.
-   * Tracks in-flight connections to prevent overlapping connect/disconnect calls.
-   */
-  /**
    * Try to start a local LLM server if one is installed but not running.
    * Probes known software (Ollama, LM Studio) and starts the first installed one.
    */
@@ -1252,7 +1246,7 @@ export class ChatView extends ItemView {
         // Remove the user message we already added
         this.messages.pop();
         await this.renderMessagesContent(true);
-        this.showError(response.error);
+        this.showError(response.error ?? "Unknown error");
       } else {
         // Remove streaming/progress elements
         this.removeStreamingMessage();
@@ -1872,8 +1866,9 @@ export class ChatView extends ItemView {
       });
       link.addEventListener("click", (e) => {
         e.preventDefault();
-        (this.app as unknown as { setting: { open: () => void; openTabById: (id: string) => void } }).setting.open();
-        (this.app as unknown as { setting: { openTabById: (id: string) => void } }).setting.openTabById("obsidian-llm");
+        const setting = (this.app as unknown as { setting: { open: () => void; openTabById: (id: string) => void } }).setting;
+        setting.open();
+        setting.openTabById("obsidian-llm");
       });
     }
 
@@ -1982,8 +1977,6 @@ export class ChatView extends ItemView {
     if (this.inputEl && !this.isLoading) {
       this.inputEl.value = message;
       this.sendMessage();
-    } else if (this.isLoading) {
-      new Notice(`Clicked: ${buttonText}`);
     }
   }
 
@@ -1994,12 +1987,9 @@ export class ChatView extends ItemView {
     const action = isChecked ? "checked" : "unchecked";
     const message = `[${action}: "${itemText}"]`;
 
-    // Set the input and send
     if (this.inputEl && !this.isLoading) {
       this.inputEl.value = message;
       this.sendMessage();
-    } else if (this.isLoading) {
-      new Notice(`${action}: ${itemText}`);
     }
   }
 
