@@ -1,5 +1,5 @@
 import { spawn, ChildProcess } from "child_process";
-import type { LLMProvider, CLIProvider, LLMResponse, ProviderConfig, LLMPluginSettings, ProgressEvent } from "../types";
+import type { LLMProvider, CLIProvider, LLMResponse, ProviderConfig, LLMPluginSettings, StreamChunk } from "../types";
 import { getShellEnv } from "../utils/shellPath";
 
 /**
@@ -238,14 +238,14 @@ function parseOpenCodeOutput(output: string): ParsedResponse {
 }
 
 /**
- * Callback for streaming text updates (legacy)
+ * Callback for streaming text updates (cumulative)
  */
-export type StreamCallback = (chunk: string) => void;
+type StreamCallback = (chunk: string) => void;
 
 /**
- * Callback for progress events during execution
+ * Callback for streaming events during execution
  */
-export type ProgressCallback = (event: ProgressEvent) => void;
+type ProgressCallback = (event: StreamChunk) => void;
 
 /**
  * LLMExecutor wraps CLI tools for LLM interaction
@@ -318,7 +318,8 @@ export class LLMExecutor {
     provider?: LLMProvider,
     onStream?: StreamCallback,
     onProgress?: ProgressCallback,
-    cwd?: string
+    cwd?: string,
+    signal?: AbortSignal
   ): Promise<LLMResponse> {
     const rawProvider = provider || this.settings.defaultProvider;
     if (rawProvider === "local") {
@@ -350,7 +351,8 @@ export class LLMExecutor {
         prompt,
         onStream,
         onProgress,
-        cwd
+        cwd,
+        signal
       );
       const durationMs = Date.now() - startTime;
 
@@ -394,7 +396,8 @@ export class LLMExecutor {
     prompt: string,
     onStream?: StreamCallback,
     onProgress?: ProgressCallback,
-    cwd?: string
+    cwd?: string,
+    signal?: AbortSignal
   ): Promise<string> {
     return new Promise((resolve, reject) => {
       const command = this.buildCommand(provider, config);
@@ -417,6 +420,10 @@ export class LLMExecutor {
       this.debug("Prompt length:", prompt.length, "chars");
       this.debug("Allow file writes:", this.settings.allowFileWrites);
 
+      // Do not pass `signal` directly to spawn() — Obsidian's Electron runtime
+      // uses a different JavaScript realm for AbortSignal, causing Node's internal
+      // `instanceof EventTarget` check to fail. Handle abort manually instead.
+      // (Pattern from Claudian, MIT-licensed.)
       const child = spawn(cmd, args, {
         cwd: cwd || undefined,
         env: getShellEnv(config.envVars),
@@ -425,6 +432,21 @@ export class LLMExecutor {
       });
 
       this.activeProcess = child;
+
+      // Wire up external AbortSignal for cancellation from ChatView
+      if (signal) {
+        if (signal.aborted) {
+          child.kill("SIGTERM");
+          reject(new Error("Request cancelled"));
+          return;
+        }
+        signal.addEventListener("abort", () => {
+          if (this.activeProcess === child) {
+            child.kill("SIGTERM");
+            this.activeProcess = null;
+          }
+        }, { once: true });
+      }
 
       let stdout = "";
       let stderr = "";
@@ -699,8 +721,8 @@ export class LLMExecutor {
   private parseStreamingEvents(
     provider: LLMProvider,
     chunk: string
-  ): ProgressEvent[] {
-    const events: ProgressEvent[] = [];
+  ): StreamChunk[] {
+    const events: StreamChunk[] = [];
     const lines = chunk.split("\n");
 
     for (const line of lines) {
@@ -721,12 +743,12 @@ export class LLMExecutor {
   }
 
   /**
-   * Parse a single JSON event object into a ProgressEvent
+   * Parse a single JSON event object into a StreamChunk
    */
   private parseEventObject(
     provider: LLMProvider,
     obj: Record<string, unknown>
-  ): ProgressEvent | null {
+  ): StreamChunk | null {
     switch (provider) {
       case "claude":
         return this.parseClaudeEvent(obj);
@@ -749,7 +771,7 @@ export class LLMExecutor {
    * - {"type":"assistant","message":{"content":[{"type":"text","text":"..."}]}} - text response
    * - {"type":"result","subtype":"success",...} - final result
    */
-  private parseClaudeEvent(obj: Record<string, unknown>): ProgressEvent | null {
+  private parseClaudeEvent(obj: Record<string, unknown>): StreamChunk | null {
     const eventType = obj.type as string;
 
     this.debug("Claude event type:", eventType, "subtype:", obj.subtype);
@@ -839,7 +861,7 @@ export class LLMExecutor {
   /**
    * Parse Codex streaming JSON events
    */
-  private parseCodexEvent(obj: Record<string, unknown>): ProgressEvent | null {
+  private parseCodexEvent(obj: Record<string, unknown>): StreamChunk | null {
     const type = obj.type as string;
 
     // Text output
@@ -883,7 +905,7 @@ export class LLMExecutor {
    * Intermediate text (before step_finish with reason="stop") is shown as progress.
    * Final text is emitted as "text" events for streaming output.
    */
-  private parseOpenCodeEvent(obj: Record<string, unknown>): ProgressEvent | null {
+  private parseOpenCodeEvent(obj: Record<string, unknown>): StreamChunk | null {
     const type = obj.type as string;
     const part = obj.part as Record<string, unknown> | undefined;
     const messageID = part?.messageID as string | undefined;
@@ -1078,7 +1100,7 @@ export class LLMExecutor {
 /**
  * Check if a CLI tool is available on the system
  */
-export async function detectProvider(provider: LLMProvider): Promise<boolean> {
+async function detectProvider(provider: LLMProvider): Promise<boolean> {
   if (provider === "local") return true; // Local LLM uses HTTP, not CLI
 
   const commands: Record<CLIProvider, string[]> = {

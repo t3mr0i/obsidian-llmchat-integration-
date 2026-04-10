@@ -10,7 +10,7 @@ import {
 } from "obsidian";
 import type LLMPlugin from "../../main";
 import type { ChatSession } from "../../main";
-import type { LLMProvider, ConversationMessage, ProgressEvent } from "../types";
+import type { LLMProvider, ConversationMessage, StreamChunk } from "../types";
 import { ACP_SUPPORTED_PROVIDERS, PROVIDER_DISPLAY_NAMES } from "../types";
 import { fetchModelsForProvider } from "../utils/modelFetcher";
 import { LLMExecutor } from "../executor/LLMExecutor";
@@ -862,7 +862,7 @@ export class ChatView extends ItemView {
    * Try to start a local LLM server if one is installed but not running.
    * Probes known software (Ollama, LM Studio) and starts the first installed one.
    */
-  private async tryStartLocalServer(onProgress: (e: ProgressEvent) => void): Promise<boolean> {
+  private async tryStartLocalServer(onProgress: (e: StreamChunk) => void): Promise<boolean> {
     const { detectLocalSoftwareStatuses, startLocalServer } = await import("../utils/autoDetect");
     onProgress({ type: "status", message: "Local server not running — checking installed software..." });
 
@@ -1034,7 +1034,7 @@ export class ChatView extends ItemView {
       };
 
       // Progress callback for tool use/thinking events
-      const onProgress = (event: ProgressEvent) => {
+      const onProgress = (event: StreamChunk) => {
         this.handleProgressEvent(event);
       };
 
@@ -1076,20 +1076,15 @@ export class ChatView extends ItemView {
         // Add current prompt
         chatMessages.push({ role: "user", content: prompt });
 
-        // Local executor sends incremental deltas, so accumulate them
-        const onLocalStream = (chunk: string) => {
-          streamedContent += chunk;
-          this.updateStreamingMessage(streamedContent);
-        };
-
-        response = await this.localExecutor.execute(chatMessages, onLocalStream, onProgress);
+        // Local executor now sends cumulative content (matching CLI/ACP behaviour)
+        response = await this.localExecutor.execute(chatMessages, onStream, onProgress);
 
         // Auto-start local server on connection failure and retry
         if (response.error && /cannot connect|cannot reach|econnrefused|server is running/i.test(response.error)) {
           const started = await this.tryStartLocalServer(onProgress);
           if (started) {
             streamedContent = "";
-            response = await this.localExecutor.execute(chatMessages, onLocalStream, onProgress);
+            response = await this.localExecutor.execute(chatMessages, onStream, onProgress);
           }
         }
       } else if (useAcp) {
@@ -1178,7 +1173,7 @@ export class ChatView extends ItemView {
   /**
    * Handle progress events from the LLM executor
    */
-  private handleProgressEvent(event: ProgressEvent) {
+  private handleProgressEvent(event: StreamChunk) {
     if (!this.messagesContainer) return;
 
     // Ensure progress container exists (it should already from setLoading, but just in case)
@@ -1220,6 +1215,18 @@ export class ChatView extends ItemView {
         if (event.content) {
           this.updateStreamingMessage(event.content);
         }
+        break;
+
+      case "error":
+        this.updateProgressDisplay(event.message, "status");
+        break;
+
+      case "done":
+        // Final content — handled by the response flow, nothing extra needed here
+        break;
+
+      case "usage":
+        // Token usage info — could be displayed in status bar in the future
         break;
     }
   }

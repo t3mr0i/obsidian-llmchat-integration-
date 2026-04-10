@@ -405,7 +405,7 @@ export async function pullModel(
  * Probe all known ports for running servers.
  * Used as fallback if no known software was detected.
  */
-export async function probeAllPorts(): Promise<
+async function probeAllPorts(): Promise<
   { name: string; url: string; type: LocalServerType; models: string[] }[]
 > {
   const results = await Promise.all(

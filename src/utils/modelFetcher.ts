@@ -49,13 +49,6 @@ export function clearAcpModels(provider: LLMProvider): void {
 }
 
 /**
- * Check if ACP models are available for a provider
- */
-export function hasAcpModels(provider: LLMProvider): boolean {
-  return acpModelCache.has(provider);
-}
-
-/**
  * Get models for OpenCode by calling `opencode models`
  */
 async function fetchOpenCodeModels(): Promise<ModelOption[]> {
@@ -144,14 +137,3 @@ export async function fetchModelsForProvider(
 /**
  * Clear the model cache (useful after settings changes)
  */
-export function clearModelCache(): void {
-  modelCache.clear();
-}
-
-/**
- * Clear all caches (both CLI and ACP)
- */
-export function clearAllModelCaches(): void {
-  modelCache.clear();
-  acpModelCache.clear();
-}

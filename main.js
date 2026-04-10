@@ -193,8 +193,8 @@ var init_LocalLLMExecutor = __esm({
                   const delta = this.extractDelta(parsed);
                   if (delta) {
                     fullContent += delta;
-                    onStream == null ? void 0 : onStream(delta);
-                    onProgress == null ? void 0 : onProgress({ type: "text", content: delta });
+                    onStream == null ? void 0 : onStream(fullContent);
+                    onProgress == null ? void 0 : onProgress({ type: "text", content: fullContent });
                   }
                 } catch (e) {
                 }
@@ -609,7 +609,7 @@ var init_LLMExecutor = __esm({
        * @param onProgress Callback for progress events
        * @param cwd Working directory for the CLI process (e.g., vault path)
        */
-      async execute(prompt, provider, onStream, onProgress, cwd) {
+      async execute(prompt, provider, onStream, onProgress, cwd, signal) {
         const rawProvider = provider || this.settings.defaultProvider;
         if (rawProvider === "local") {
           throw new Error("Local LLM provider uses LocalLLMExecutor, not CLI executor");
@@ -635,7 +635,8 @@ var init_LLMExecutor = __esm({
             prompt,
             onStream,
             onProgress,
-            cwd
+            cwd,
+            signal
           );
           const durationMs = Date.now() - startTime;
           const parser = PARSERS[selectedProvider];
@@ -669,7 +670,7 @@ var init_LLMExecutor = __esm({
       /**
        * Run the CLI command for a provider
        */
-      runCLI(provider, config2, prompt, onStream, onProgress, cwd) {
+      runCLI(provider, config2, prompt, onStream, onProgress, cwd, signal) {
         return new Promise((resolve, reject) => {
           var _a3, _b, _c;
           const command = this.buildCommand(provider, config2);
@@ -691,6 +692,19 @@ var init_LLMExecutor = __esm({
             stdio: useStdin ? ["pipe", "pipe", "pipe"] : ["ignore", "pipe", "pipe"]
           });
           this.activeProcess = child;
+          if (signal) {
+            if (signal.aborted) {
+              child.kill("SIGTERM");
+              reject(new Error("Request cancelled"));
+              return;
+            }
+            signal.addEventListener("abort", () => {
+              if (this.activeProcess === child) {
+                child.kill("SIGTERM");
+                this.activeProcess = null;
+              }
+            }, { once: true });
+          }
           let stdout = "";
           let stderr = "";
           let streamedText = "";
@@ -734,17 +748,17 @@ var init_LLMExecutor = __esm({
             reject(new Error(`Failed to spawn ${cmd}: ${error48.message}`));
           });
           let closeHandled = false;
-          child.on("exit", (code, signal) => {
-            this.debug("Process exit event - code:", code, "signal:", signal, "pid:", child.pid);
+          child.on("exit", (code, signal2) => {
+            this.debug("Process exit event - code:", code, "signal:", signal2, "pid:", child.pid);
           });
-          child.on("close", (code, signal) => {
+          child.on("close", (code, signal2) => {
             if (closeHandled) {
-              this.debug("WARNING: close event fired again - ignoring. code:", code, "signal:", signal);
+              this.debug("WARNING: close event fired again - ignoring. code:", code, "signal:", signal2);
               return;
             }
             closeHandled = true;
             this.activeProcess = null;
-            this.debug("Process closed - code:", code, "signal:", signal, "pid:", child.pid);
+            this.debug("Process closed - code:", code, "signal:", signal2, "pid:", child.pid);
             this.debug("Total stdout length:", stdout.length);
             this.debug("Total stderr length:", stderr.length);
             this.debug("OpenCode pending text entries:", this.pendingOpenCodeText.size);
@@ -756,8 +770,8 @@ var init_LLMExecutor = __esm({
             if (code === 0) {
               resolve(stdout);
             } else if (code === null) {
-              this.debug("Process killed by signal:", signal);
-              reject(new Error(`Process was killed${signal ? ` by ${signal}` : ""}`));
+              this.debug("Process killed by signal:", signal2);
+              reject(new Error(`Process was killed${signal2 ? ` by ${signal2}` : ""}`));
             } else {
               const errorMessage = this.parseErrorMessage(provider, stderr, code);
               reject(new Error(errorMessage));
@@ -887,7 +901,7 @@ var init_LLMExecutor = __esm({
         return events;
       }
       /**
-       * Parse a single JSON event object into a ProgressEvent
+       * Parse a single JSON event object into a StreamChunk
        */
       parseEventObject(provider, obj) {
         switch (provider) {
@@ -1169,7 +1183,6 @@ __export(autoDetect_exports, {
   applyDetectionResults: () => applyDetectionResults,
   autoDetectProviders: () => autoDetectProviders,
   detectLocalSoftwareStatuses: () => detectLocalSoftwareStatuses,
-  probeAllPorts: () => probeAllPorts,
   pullModel: () => pullModel,
   startLocalServer: () => startLocalServer
 });
@@ -1386,21 +1399,6 @@ async function pullModel(softwareName, modelName, onProgress) {
     }, 6e5);
   });
 }
-async function probeAllPorts() {
-  const results = await Promise.all(
-    LOCAL_SERVER_PROBES.map(async (probe) => {
-      try {
-        const result = await LocalLLMExecutor.testConnection(probe.url, probe.type);
-        if (result.ok && result.models && result.models.length > 0) {
-          return { ...probe, models: result.models };
-        }
-      } catch (e) {
-      }
-      return null;
-    })
-  );
-  return results.filter((r) => r !== null);
-}
 function applyDetectionResults(settings, result) {
   var _a3;
   let changed = false;
@@ -1443,23 +1441,13 @@ function applyDetectionResults(settings, result) {
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
-var import_child_process4, LOCAL_SERVER_PROBES, LOCAL_SOFTWARE;
+var import_child_process4, LOCAL_SOFTWARE;
 var init_autoDetect = __esm({
   "src/utils/autoDetect.ts"() {
     import_child_process4 = require("child_process");
     init_LLMExecutor();
     init_LocalLLMExecutor();
     init_shellPath();
-    LOCAL_SERVER_PROBES = [
-      { name: "Ollama", url: "http://127.0.0.1:11434", type: "ollama" },
-      { name: "LM Studio", url: "http://127.0.0.1:1234", type: "openai-compatible" },
-      { name: "MLX", url: "http://127.0.0.1:8080", type: "openai-compatible" },
-      { name: "vLLM", url: "http://127.0.0.1:8000", type: "openai-compatible" },
-      { name: "llama.cpp", url: "http://127.0.0.1:8081", type: "openai-compatible" },
-      { name: "text-generation-webui", url: "http://127.0.0.1:5000", type: "openai-compatible" },
-      { name: "LocalAI", url: "http://127.0.0.1:8082", type: "openai-compatible" },
-      { name: "Jan", url: "http://127.0.0.1:1337", type: "openai-compatible" }
-    ];
     LOCAL_SOFTWARE = [
       {
         name: "Ollama",
@@ -18397,7 +18385,7 @@ var AcpExecutor = class {
     }
   }
   /**
-   * Handle session update notifications and convert to ProgressEvents
+   * Handle session update notifications and convert to StreamChunks
    */
   handleSessionUpdate(update) {
     var _a3, _b;
@@ -21697,16 +21685,12 @@ ${action.prompt}`;
           }
         }
         chatMessages.push({ role: "user", content: prompt });
-        const onLocalStream = (chunk) => {
-          streamedContent += chunk;
-          this.updateStreamingMessage(streamedContent);
-        };
-        response = await this.localExecutor.execute(chatMessages, onLocalStream, onProgress);
+        response = await this.localExecutor.execute(chatMessages, onStream, onProgress);
         if (response.error && /cannot connect|cannot reach|econnrefused|server is running/i.test(response.error)) {
           const started = await this.tryStartLocalServer(onProgress);
           if (started) {
             streamedContent = "";
-            response = await this.localExecutor.execute(chatMessages, onLocalStream, onProgress);
+            response = await this.localExecutor.execute(chatMessages, onStream, onProgress);
           }
         }
       } else if (useAcp) {
@@ -21800,6 +21784,13 @@ ${action.prompt}`;
         if (event.content) {
           this.updateStreamingMessage(event.content);
         }
+        break;
+      case "error":
+        this.updateProgressDisplay(event.message, "status");
+        break;
+      case "done":
+        break;
+      case "usage":
         break;
     }
   }

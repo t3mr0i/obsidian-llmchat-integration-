@@ -154,7 +154,7 @@ export interface LLMPluginSettings {
 /**
  * Default provider configurations based on deliberate tool patterns
  */
-export const DEFAULT_PROVIDER_CONFIGS: Record<LLMProvider, ProviderConfig> = {
+const DEFAULT_PROVIDER_CONFIGS: Record<LLMProvider, ProviderConfig> = {
   claude: {
     enabled: true,
     useAcp: true,
@@ -223,10 +223,19 @@ export interface LLMResponse {
 }
 
 /**
- * Progress event types emitted during LLM execution
+ * Streaming event types emitted during LLM execution.
+ *
+ * All text events carry **cumulative** content (the full assistant text so far),
+ * regardless of which executor produced them. Consumers can render the latest
+ * `text.content` directly without accumulating deltas themselves.
+ *
+ * Inspired by Claudian's normalised StreamChunk pattern (MIT).
  */
-export type ProgressEvent =
+export type StreamChunk =
   | { type: "thinking"; content: string }
   | { type: "tool_use"; tool: string; input?: string; status?: "started" | "completed" }
   | { type: "text"; content: string }
-  | { type: "status"; message: string };
+  | { type: "status"; message: string }
+  | { type: "error"; message: string }
+  | { type: "done"; content: string }
+  | { type: "usage"; input: number; output: number };

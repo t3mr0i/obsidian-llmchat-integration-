@@ -8,7 +8,7 @@ let cachedPath: string | null = null;
  * macOS GUI apps don't inherit the user's shell PATH (nvm, homebrew, etc. are missing).
  * This runs a login shell to get the real PATH and caches the result.
  */
-export function getShellPATH(): string {
+function getShellPATH(): string {
   if (cachedPath) return cachedPath;
 
   try {

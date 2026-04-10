@@ -2,7 +2,7 @@ import http from "http";
 import type {
   LLMResponse,
   LLMPluginSettings,
-  ProgressEvent,
+  StreamChunk,
   LocalServerType,
 } from "../types";
 
@@ -12,7 +12,7 @@ interface ChatMessage {
 }
 
 type StreamCallback = (chunk: string) => void;
-type ProgressCallback = (event: ProgressEvent) => void;
+type ProgressCallback = (event: StreamChunk) => void;
 
 /**
  * Normalize URL: replace "localhost" with "127.0.0.1" to avoid
@@ -196,8 +196,10 @@ export class LocalLLMExecutor {
               const delta = this.extractDelta(parsed);
               if (delta) {
                 fullContent += delta;
-                onStream?.(delta);
-                onProgress?.({ type: "text", content: delta });
+                // Both callbacks receive cumulative content, matching CLI/ACP behaviour.
+                // Previously onStream sent deltas — consumers had to accumulate manually.
+                onStream?.(fullContent);
+                onProgress?.({ type: "text", content: fullContent });
               }
             } catch {
               // Skip malformed JSON

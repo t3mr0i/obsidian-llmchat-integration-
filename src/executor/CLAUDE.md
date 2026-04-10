@@ -29,9 +29,13 @@ Three classes, one transport each. Provider differences are switch-statements in
 
 Two callbacks per `execute` call:
 - `onStream(chunk: string)` — cumulative assistant text (the chat bubble grows from this)
-- `onProgress(event: ProgressEvent)` — structured `thinking | tool_use | text | status` (the progress strip above the input)
+- `onProgress(event: StreamChunk)` — structured `thinking | tool_use | text | status | error | done | usage` (the progress strip above the input)
 
-Text events feed both — callers don't subscribe twice. New event shapes go in the `ProgressEvent` union in `src/types.ts`, never as ad-hoc strings.
+**All text events are cumulative** across all three executors (CLI, ACP, Local). Consumers render `event.content` directly without accumulating deltas.
+
+Text events feed both — callers don't subscribe twice. New event shapes go in the `StreamChunk` union in `src/types.ts` (aliased as `ProgressEvent` for backwards compatibility), never as ad-hoc strings.
+
+`LLMExecutor.execute()` accepts an optional `AbortSignal` parameter. The signal is **not** passed to Node's `spawn()` (Electron's cross-realm `AbortSignal` breaks `instanceof EventTarget` checks). Instead it is wired manually via `addEventListener('abort', ...)`. Pattern from Claudian (MIT).
 
 ## Debug
 

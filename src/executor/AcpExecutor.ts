@@ -21,16 +21,16 @@ import {
   type SessionModelState,
   type ModelInfo,
 } from "@agentclientprotocol/sdk";
-import type { LLMPluginSettings, LLMProvider, ProgressEvent } from "../types";
+import type { LLMPluginSettings, LLMProvider, StreamChunk } from "../types";
 import { setAcpModels, clearAcpModels } from "../utils/modelFetcher";
 import { getShellEnv } from "../utils/shellPath";
 
-export interface ThinkingOption {
+interface ThinkingOption {
   id: string;
   name: string;
 }
 
-export interface CurrentModelInfo {
+interface CurrentModelInfo {
   id: string;
   name: string;
   description?: string;
@@ -130,8 +130,8 @@ function nodeToWebWritable(nodeStream: NodeJS.WritableStream): WritableStream<Ui
   });
 }
 
-export interface AcpExecutorOptions {
-  onProgress?: (event: ProgressEvent) => void;
+interface AcpExecutorOptions {
+  onProgress?: (event: StreamChunk) => void;
   onPermissionRequest?: (request: RequestPermissionRequest) => Promise<RequestPermissionResponse>;
 }
 
@@ -142,7 +142,7 @@ export class AcpExecutor {
   private sessionId: string | null = null;
   private currentProvider: LLMProvider | null = null;
   private debug: (...args: unknown[]) => void;
-  private progressCallback: ((event: ProgressEvent) => void) | null = null;
+  private progressCallback: ((event: StreamChunk) => void) | null = null;
   private configOptions: SessionConfigOption[] = [];
   private modelState: SessionModelState | null = null;
   private accumulatedContent: string = ""; // Accumulate text content during prompt
@@ -417,7 +417,7 @@ export class AcpExecutor {
   }
 
   /**
-   * Handle session update notifications and convert to ProgressEvents
+   * Handle session update notifications and convert to StreamChunks
    */
   private handleSessionUpdate(update: SessionUpdate) {
     this.debug("handleSessionUpdate:", update.sessionUpdate, JSON.stringify(update).slice(0, 200));
