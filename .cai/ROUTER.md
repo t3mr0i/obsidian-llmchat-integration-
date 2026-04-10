@@ -25,7 +25,7 @@ Then read this file fully before doing anything else in this session.
 
 ## Current Project State
 
-`obsidian-llm` v0.4.0 — desktop-only Obsidian community plugin "AI Chat Integration".
+`obsidian-llm` v0.5.3 — desktop-only Obsidian community plugin "AI Chat Integration".
 Sidebar chat that talks to Claude / Gemini / Codex / OpenCode CLIs and to local LLM servers
 (Ollama / OpenAI-compatible). Three executors split by transport: `LLMExecutor` (CLI
 subprocess + stream-json), `AcpExecutor` (persistent ACP stdio session), `LocalLLMExecutor`
@@ -36,8 +36,16 @@ What's working: all four CLI providers, ACP for claude/gemini/codex (OpenCode is
 local server auto-detect + auto-start for Ollama and LM Studio, vault RAG, chat tabs,
 cloud-sync-safe settings merge.
 
-Recent direction (from git log): fix OpenCode CLI error surfacing, reset stored model when
-not in fetched list, UI layout polish, local LLM auto-start.
+Recent changes (v0.5.0→v0.5.3):
+- Unified `StreamChunk` discriminated union replacing `ProgressEvent` (v0.5.1)
+- Electron AbortSignal cross-realm workaround for CLI cancellation (v0.5.1)
+- Dead code cleanup via knip (v0.5.1)
+- Collapsible thinking blocks with live timer, collapsible tool call UI with ARIA (v0.5.2)
+- Vault file nudge after tool writes (v0.5.2)
+- Thinking debounce to reduce DOM churn (v0.5.2)
+- First-run welcome banner with auto-detect scan (v0.5.3)
+- Actionable error messages with "Open Settings" link (v0.5.3)
+- Filtered provider dropdowns, local provider in QuickPromptModal (v0.5.3)
 
 ## Routing Table
 
