@@ -17,6 +17,7 @@ import { LLMExecutor } from "../executor/LLMExecutor";
 import { AcpExecutor } from "../executor/AcpExecutor";
 import { LocalLLMExecutor } from "../executor/LocalLLMExecutor";
 import { VaultSearch } from "../utils/vaultSearch";
+import { autoDetectProviders, applyDetectionResults } from "../utils/autoDetect";
 import { setupCollapsible, collapseElement } from "../utils/collapsible";
 
 export const CHAT_VIEW_TYPE = "llm-chat-view";
@@ -418,16 +419,21 @@ export class ChatView extends ItemView {
       this.renderedCount = 0;
     }
 
-    // Empty state
+    // Empty state — show setup guidance if no providers enabled
     if (this.messages.length === 0) {
-      const emptyState = this.messagesContainer.createDiv({
-        cls: "llm-empty-state",
-      });
-      emptyState.createEl("p", { text: "Start a conversation with AI." });
-      emptyState.createEl("p", {
-        text: "Use the buttons above to quickly summarize, rewrite, or translate your notes.",
-        cls: "llm-empty-hint",
-      });
+      const allProviders: LLMProvider[] = ["claude", "opencode", "codex", "gemini", "local"];
+      const enabledProviders = allProviders.filter((p) => this.plugin.settings.providers[p]?.enabled);
+
+      if (enabledProviders.length === 0) {
+        this.renderSetupBanner();
+      } else {
+        const emptyState = this.messagesContainer.createDiv({ cls: "llm-empty-state" });
+        emptyState.createEl("p", { text: "Start a conversation with AI." });
+        emptyState.createEl("p", {
+          text: "Type a message below, or select text in a note and use the command palette.",
+          cls: "llm-empty-hint",
+        });
+      }
       return;
     }
 
@@ -448,6 +454,102 @@ export class ChatView extends ItemView {
   /**
    * Render a single message and append it to the messages container.
    */
+  /**
+   * Render the setup banner when no providers are enabled.
+   * Shows a welcome message with a scan button that auto-detects providers.
+   */
+  private renderSetupBanner() {
+    if (!this.messagesContainer) return;
+
+    const banner = this.messagesContainer.createDiv({ cls: "llm-setup-banner" });
+
+    banner.createEl("h3", { text: "Welcome to AI Chat" });
+    banner.createEl("p", {
+      text: "No AI providers are configured yet. Let's find what's available on your system.",
+    });
+
+    const actions = banner.createDiv({ cls: "llm-setup-actions" });
+
+    // Scan button
+    const scanBtn = actions.createEl("button", {
+      text: "Scan for providers",
+      cls: "llm-setup-scan-btn",
+    });
+    setIcon(scanBtn.createSpan({ cls: "llm-setup-scan-icon" }), "search");
+
+    const statusEl = banner.createDiv({ cls: "llm-setup-status" });
+
+    scanBtn.addEventListener("click", async () => {
+      scanBtn.disabled = true;
+      scanBtn.textContent = "Scanning...";
+      statusEl.empty();
+
+      try {
+        const result = await autoDetectProviders();
+
+        if (result.detected.length > 0) {
+          applyDetectionResults(this.plugin.settings, result);
+          await this.plugin.saveSettings();
+
+          const names = result.detected.map((d) => d.name).join(", ");
+          statusEl.empty();
+          statusEl.createEl("p", { text: `Found: ${names}`, cls: "llm-setup-success" });
+          statusEl.createEl("p", { text: "Reloading...", cls: "llm-setup-hint" });
+
+          // Re-render the full view with the new providers
+          setTimeout(async () => {
+            const allProviders: LLMProvider[] = ["claude", "opencode", "codex", "gemini", "local"];
+            const enabled = allProviders.filter((p) => this.plugin.settings.providers[p]?.enabled);
+            if (enabled.length > 0) {
+              this.currentProvider = enabled[0];
+            }
+            await this.onOpen();
+          }, 500);
+        } else {
+          statusEl.empty();
+          statusEl.createEl("p", {
+            text: "No providers detected.",
+            cls: "llm-setup-hint",
+          });
+          this.renderManualSetupHints(statusEl);
+        }
+      } catch {
+        statusEl.empty();
+        statusEl.createEl("p", { text: "Scan failed. Try again or configure manually.", cls: "llm-setup-hint" });
+      }
+
+      scanBtn.disabled = false;
+      scanBtn.textContent = "Scan again";
+    });
+
+    // Settings link
+    const settingsBtn = actions.createEl("button", {
+      text: "Open settings",
+      cls: "llm-setup-settings-btn",
+    });
+    settingsBtn.addEventListener("click", () => {
+      (this.app as unknown as { setting: { open: () => void; openTabById: (id: string) => void } }).setting.open();
+      (this.app as unknown as { setting: { openTabById: (id: string) => void } }).setting.openTabById("obsidian-llm");
+    });
+
+    // Quick hints
+    this.renderManualSetupHints(banner);
+  }
+
+  /**
+   * Render manual setup hints for common providers.
+   */
+  private renderManualSetupHints(container: HTMLElement) {
+    const hints = container.createDiv({ cls: "llm-setup-hints" });
+    hints.createEl("p", { text: "Quick setup options:", cls: "llm-setup-hints-title" });
+
+    const list = hints.createEl("ul");
+    list.createEl("li").innerHTML = "<strong>Claude</strong> &mdash; <code>npm install -g @anthropic-ai/claude-code</code>";
+    list.createEl("li").innerHTML = "<strong>Gemini</strong> &mdash; <code>npm install -g @anthropic-ai/gemini-cli</code> (or via Google)";
+    list.createEl("li").innerHTML = "<strong>Codex</strong> &mdash; <code>npm install -g @openai/codex</code>";
+    list.createEl("li").innerHTML = "<strong>Ollama</strong> &mdash; <a href='https://ollama.com'>ollama.com</a> (local, free)";
+  }
+
   private async renderSingleMessage(msg: ConversationMessage) {
     if (!this.messagesContainer) return;
 
@@ -1758,7 +1860,23 @@ export class ChatView extends ItemView {
     if (!this.messagesContainer) return;
 
     const errorEl = this.messagesContainer.createDiv({ cls: "llm-error-message" });
-    errorEl.setText(`Error: ${message}`);
+
+    const textEl = errorEl.createSpan({ text: `Error: ${message} ` });
+
+    // Add actionable "Open Settings" link for configuration-related errors
+    if (/not enabled|not installed|not found|not in path|authentication|api key|no model|enoent/i.test(message)) {
+      const link = textEl.createEl("a", {
+        text: "Open Settings",
+        cls: "llm-error-settings-link",
+        attr: { href: "#" },
+      });
+      link.addEventListener("click", (e) => {
+        e.preventDefault();
+        (this.app as unknown as { setting: { open: () => void; openTabById: (id: string) => void } }).setting.open();
+        (this.app as unknown as { setting: { openTabById: (id: string) => void } }).setting.openTabById("obsidian-llm");
+      });
+    }
+
     this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
   }
 

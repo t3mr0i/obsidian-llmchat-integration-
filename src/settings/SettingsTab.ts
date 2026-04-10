@@ -95,12 +95,19 @@ export class LLMSettingTab extends PluginSettingTab {
     // Default provider
     new Setting(containerEl)
       .setName("Default AI provider")
-      .setDesc("Which AI to use when you open a new chat")
+      .setDesc("Which AI to use when you open a new chat (only enabled providers shown)")
       .addDropdown((dropdown) => {
         const allProviders: LLMProvider[] = ["claude", "opencode", "codex", "gemini", "local"];
-        allProviders.forEach((provider) => {
+        const enabledProviders = allProviders.filter((p) => this.plugin.settings.providers[p]?.enabled);
+        // Show enabled providers, or all if none enabled (so user can pick one)
+        const toShow = enabledProviders.length > 0 ? enabledProviders : allProviders;
+        toShow.forEach((provider) => {
           dropdown.addOption(provider, PROVIDER_DISPLAY_NAMES[provider]);
         });
+        // If current default is not enabled, switch to first enabled
+        if (enabledProviders.length > 0 && !enabledProviders.includes(this.plugin.settings.defaultProvider)) {
+          this.plugin.settings.defaultProvider = enabledProviders[0];
+        }
         dropdown.setValue(this.plugin.settings.defaultProvider);
         dropdown.onChange(async (value) => {
           this.plugin.settings.defaultProvider = value as LLMProvider;
@@ -251,7 +258,9 @@ export class LLMSettingTab extends PluginSettingTab {
             }
             this.display();
             return;
-          } else if (needsSetup.length === 0) {
+          } else if (needsSetup.length > 0) {
+            new Notice("Software found but needs setup — see cards below.");
+          } else {
             new Notice("No AI providers found. Install a CLI tool or a local AI server like Ollama.");
           }
         } catch {

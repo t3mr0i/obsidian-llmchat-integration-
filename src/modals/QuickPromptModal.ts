@@ -57,7 +57,7 @@ export class QuickPromptModal extends Modal {
 
     const dropdown = new DropdownComponent(providerSelector);
 
-    const providers: LLMProvider[] = ["claude", "opencode", "codex", "gemini"];
+    const providers: LLMProvider[] = ["claude", "opencode", "codex", "gemini", "local"];
     providers.forEach((provider) => {
       if (this.plugin.settings.providers[provider].enabled) {
         dropdown.addOption(provider, PROVIDER_DISPLAY_NAMES[provider]);

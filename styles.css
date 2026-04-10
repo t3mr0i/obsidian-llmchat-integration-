@@ -373,6 +373,19 @@
   cursor: text;
 }
 
+.llm-error-settings-link {
+  display: inline-block;
+  margin-top: 6px;
+  color: var(--text-accent);
+  cursor: pointer;
+  text-decoration: underline;
+  font-size: var(--font-ui-small);
+}
+
+.llm-error-settings-link:hover {
+  color: var(--text-accent-hover);
+}
+
 /* ============================================
    Empty State
    ============================================ */
@@ -386,6 +399,133 @@
   margin-bottom: 10px;
   font-family: var(--llm-font);
   font-weight: 700;
+}
+
+/* ============================================
+   Setup Banner (first-run / no providers)
+   ============================================ */
+.llm-setup-banner {
+  padding: 24px 20px;
+  text-align: center;
+  color: var(--text-normal);
+}
+
+.llm-setup-banner h3 {
+  margin: 0 0 8px;
+  font-family: var(--llm-font);
+  font-weight: 700;
+  font-size: 1.1em;
+}
+
+.llm-setup-banner > p {
+  color: var(--text-muted);
+  margin: 0 0 16px;
+  font-size: 0.9em;
+}
+
+.llm-setup-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.llm-setup-scan-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border: none;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.9em;
+}
+
+.llm-setup-scan-btn:hover {
+  opacity: 0.9;
+}
+
+.llm-setup-scan-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.llm-setup-scan-icon {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+}
+
+.llm-setup-scan-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.llm-setup-settings-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  background: var(--background-modifier-border);
+  color: var(--text-normal);
+  border: none;
+  cursor: pointer;
+  font-size: 0.9em;
+}
+
+.llm-setup-settings-btn:hover {
+  background: var(--background-modifier-hover);
+}
+
+.llm-setup-status {
+  margin: 8px 0;
+}
+
+.llm-setup-success {
+  color: var(--llm-accent, var(--color-green));
+  font-weight: 500;
+}
+
+.llm-setup-hint {
+  color: var(--text-muted);
+  font-size: 0.85em;
+}
+
+.llm-setup-hints {
+  text-align: left;
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: var(--background-secondary);
+  border-radius: 6px;
+  font-size: 0.85em;
+}
+
+.llm-setup-hints-title {
+  margin: 0 0 6px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.llm-setup-hints ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.llm-setup-hints li {
+  margin: 4px 0;
+  color: var(--text-muted);
+}
+
+.llm-setup-hints code {
+  font-size: 0.9em;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--background-primary);
+}
+
+.llm-setup-hints a {
+  color: var(--text-accent);
 }
 
 /* ============================================

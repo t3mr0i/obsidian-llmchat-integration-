@@ -1736,11 +1736,19 @@ var LLMSettingTab = class extends import_obsidian.PluginSettingTab {
   // ════════════════════════════════════════════
   addGeneralSettings(containerEl) {
     containerEl.createEl("h3", { text: "General" });
-    new import_obsidian.Setting(containerEl).setName("Default AI provider").setDesc("Which AI to use when you open a new chat").addDropdown((dropdown) => {
+    new import_obsidian.Setting(containerEl).setName("Default AI provider").setDesc("Which AI to use when you open a new chat (only enabled providers shown)").addDropdown((dropdown) => {
       const allProviders = ["claude", "opencode", "codex", "gemini", "local"];
-      allProviders.forEach((provider) => {
+      const enabledProviders = allProviders.filter((p) => {
+        var _a3;
+        return (_a3 = this.plugin.settings.providers[p]) == null ? void 0 : _a3.enabled;
+      });
+      const toShow = enabledProviders.length > 0 ? enabledProviders : allProviders;
+      toShow.forEach((provider) => {
         dropdown.addOption(provider, PROVIDER_DISPLAY_NAMES2[provider]);
       });
+      if (enabledProviders.length > 0 && !enabledProviders.includes(this.plugin.settings.defaultProvider)) {
+        this.plugin.settings.defaultProvider = enabledProviders[0];
+      }
       dropdown.setValue(this.plugin.settings.defaultProvider);
       dropdown.onChange(async (value) => {
         this.plugin.settings.defaultProvider = value;
@@ -1852,7 +1860,9 @@ var LLMSettingTab = class extends import_obsidian.PluginSettingTab {
             }
             this.display();
             return;
-          } else if (needsSetup.length === 0) {
+          } else if (needsSetup.length > 0) {
+            new import_obsidian.Notice("Software found but needs setup \u2014 see cards below.");
+          } else {
             new import_obsidian.Notice("No AI providers found. Install a CLI tool or a local AI server like Ollama.");
           }
         } catch (e) {
@@ -2453,7 +2463,7 @@ var QuickPromptModal = class extends import_obsidian2.Modal {
     const providerSelector = header.createDiv({ cls: "llm-provider-selector" });
     providerSelector.createSpan({ text: "Provider: " });
     const dropdown = new import_obsidian2.DropdownComponent(providerSelector);
-    const providers = ["claude", "opencode", "codex", "gemini"];
+    const providers = ["claude", "opencode", "codex", "gemini", "local"];
     providers.forEach((provider) => {
       if (this.plugin.settings.providers[provider].enabled) {
         dropdown.addOption(provider, PROVIDER_DISPLAY_NAMES[provider]);
@@ -20850,6 +20860,9 @@ _VaultSearch.MAX_CHUNK_CHARS = 2e3;
 _VaultSearch.MODIFY_DEBOUNCE_MS = 1e3;
 var VaultSearch = _VaultSearch;
 
+// src/views/ChatView.ts
+init_autoDetect();
+
 // src/utils/collapsible.ts
 function setupCollapsible(wrapperEl, headerEl, contentEl, state, options = {}) {
   var _a3;
@@ -21210,14 +21223,21 @@ var ChatView = class extends import_obsidian4.ItemView {
       this.renderedCount = 0;
     }
     if (this.messages.length === 0) {
-      const emptyState = this.messagesContainer.createDiv({
-        cls: "llm-empty-state"
+      const allProviders = ["claude", "opencode", "codex", "gemini", "local"];
+      const enabledProviders = allProviders.filter((p) => {
+        var _a4;
+        return (_a4 = this.plugin.settings.providers[p]) == null ? void 0 : _a4.enabled;
       });
-      emptyState.createEl("p", { text: "Start a conversation with AI." });
-      emptyState.createEl("p", {
-        text: "Use the buttons above to quickly summarize, rewrite, or translate your notes.",
-        cls: "llm-empty-hint"
-      });
+      if (enabledProviders.length === 0) {
+        this.renderSetupBanner();
+      } else {
+        const emptyState = this.messagesContainer.createDiv({ cls: "llm-empty-state" });
+        emptyState.createEl("p", { text: "Start a conversation with AI." });
+        emptyState.createEl("p", {
+          text: "Type a message below, or select text in a note and use the command palette.",
+          cls: "llm-empty-hint"
+        });
+      }
       return;
     }
     (_a3 = this.messagesContainer.querySelector(".llm-empty-state")) == null ? void 0 : _a3.remove();
@@ -21231,6 +21251,85 @@ var ChatView = class extends import_obsidian4.ItemView {
   /**
    * Render a single message and append it to the messages container.
    */
+  /**
+   * Render the setup banner when no providers are enabled.
+   * Shows a welcome message with a scan button that auto-detects providers.
+   */
+  renderSetupBanner() {
+    if (!this.messagesContainer) return;
+    const banner = this.messagesContainer.createDiv({ cls: "llm-setup-banner" });
+    banner.createEl("h3", { text: "Welcome to AI Chat" });
+    banner.createEl("p", {
+      text: "No AI providers are configured yet. Let's find what's available on your system."
+    });
+    const actions = banner.createDiv({ cls: "llm-setup-actions" });
+    const scanBtn = actions.createEl("button", {
+      text: "Scan for providers",
+      cls: "llm-setup-scan-btn"
+    });
+    (0, import_obsidian4.setIcon)(scanBtn.createSpan({ cls: "llm-setup-scan-icon" }), "search");
+    const statusEl = banner.createDiv({ cls: "llm-setup-status" });
+    scanBtn.addEventListener("click", async () => {
+      scanBtn.disabled = true;
+      scanBtn.textContent = "Scanning...";
+      statusEl.empty();
+      try {
+        const result = await autoDetectProviders();
+        if (result.detected.length > 0) {
+          applyDetectionResults(this.plugin.settings, result);
+          await this.plugin.saveSettings();
+          const names = result.detected.map((d) => d.name).join(", ");
+          statusEl.empty();
+          statusEl.createEl("p", { text: `Found: ${names}`, cls: "llm-setup-success" });
+          statusEl.createEl("p", { text: "Reloading...", cls: "llm-setup-hint" });
+          setTimeout(async () => {
+            const allProviders = ["claude", "opencode", "codex", "gemini", "local"];
+            const enabled = allProviders.filter((p) => {
+              var _a3;
+              return (_a3 = this.plugin.settings.providers[p]) == null ? void 0 : _a3.enabled;
+            });
+            if (enabled.length > 0) {
+              this.currentProvider = enabled[0];
+            }
+            await this.onOpen();
+          }, 500);
+        } else {
+          statusEl.empty();
+          statusEl.createEl("p", {
+            text: "No providers detected.",
+            cls: "llm-setup-hint"
+          });
+          this.renderManualSetupHints(statusEl);
+        }
+      } catch (e) {
+        statusEl.empty();
+        statusEl.createEl("p", { text: "Scan failed. Try again or configure manually.", cls: "llm-setup-hint" });
+      }
+      scanBtn.disabled = false;
+      scanBtn.textContent = "Scan again";
+    });
+    const settingsBtn = actions.createEl("button", {
+      text: "Open settings",
+      cls: "llm-setup-settings-btn"
+    });
+    settingsBtn.addEventListener("click", () => {
+      this.app.setting.open();
+      this.app.setting.openTabById("obsidian-llm");
+    });
+    this.renderManualSetupHints(banner);
+  }
+  /**
+   * Render manual setup hints for common providers.
+   */
+  renderManualSetupHints(container) {
+    const hints = container.createDiv({ cls: "llm-setup-hints" });
+    hints.createEl("p", { text: "Quick setup options:", cls: "llm-setup-hints-title" });
+    const list = hints.createEl("ul");
+    list.createEl("li").innerHTML = "<strong>Claude</strong> &mdash; <code>npm install -g @anthropic-ai/claude-code</code>";
+    list.createEl("li").innerHTML = "<strong>Gemini</strong> &mdash; <code>npm install -g @anthropic-ai/gemini-cli</code> (or via Google)";
+    list.createEl("li").innerHTML = "<strong>Codex</strong> &mdash; <code>npm install -g @openai/codex</code>";
+    list.createEl("li").innerHTML = "<strong>Ollama</strong> &mdash; <a href='https://ollama.com'>ollama.com</a> (local, free)";
+  }
   async renderSingleMessage(msg) {
     var _a3;
     if (!this.messagesContainer) return;
@@ -22235,7 +22334,19 @@ ${content}`);
   showError(message) {
     if (!this.messagesContainer) return;
     const errorEl = this.messagesContainer.createDiv({ cls: "llm-error-message" });
-    errorEl.setText(`Error: ${message}`);
+    const textEl = errorEl.createSpan({ text: `Error: ${message} ` });
+    if (/not enabled|not installed|not found|not in path|authentication|api key|no model|enoent/i.test(message)) {
+      const link = textEl.createEl("a", {
+        text: "Open Settings",
+        cls: "llm-error-settings-link",
+        attr: { href: "#" }
+      });
+      link.addEventListener("click", (e) => {
+        e.preventDefault();
+        this.app.setting.open();
+        this.app.setting.openTabById("obsidian-llm");
+      });
+    }
     this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
   }
   /**
