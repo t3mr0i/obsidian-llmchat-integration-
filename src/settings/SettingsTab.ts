@@ -662,8 +662,28 @@ export class LLMSettingTab extends PluginSettingTab {
             await this.refreshLocalModels(modelDropdown);
           }
         } else {
-          resultEl.textContent = result.error || "Could not connect";
-          resultEl.className = "llm-connection-result llm-connection-error";
+          // Server not reachable — try to auto-start it
+          resultEl.textContent = "Server not running — trying to start...";
+          resultEl.className = "llm-connection-result";
+
+          const started = await this.tryAutoStartLocalServer(url, type);
+          if (started) {
+            resultEl.textContent = `Server started — checking models...`;
+            const retry = await LocalLLMExecutor.testConnection(url, type);
+            if (retry.ok) {
+              resultEl.textContent = `Connected — ${retry.models?.length || 0} models found`;
+              resultEl.className = "llm-connection-result llm-connection-success";
+              if (modelDropdown) {
+                await this.refreshLocalModels(modelDropdown);
+              }
+            } else {
+              resultEl.textContent = "Server started but connection still failing";
+              resultEl.className = "llm-connection-result llm-connection-error";
+            }
+          } else {
+            resultEl.textContent = `Cannot reach ${url} — is the server running?`;
+            resultEl.className = "llm-connection-result llm-connection-error";
+          }
         }
       });
     });
@@ -938,6 +958,35 @@ export class LLMSettingTab extends PluginSettingTab {
       this.populateModelDropdown(dropdown, models, currentValue, shouldUseCustom);
     } catch {
       // Keep static models on error
+    }
+  }
+
+  /**
+   * Try to auto-start a local LLM server (Ollama, LM Studio, etc.)
+   * when the connection test fails.
+   */
+  private async tryAutoStartLocalServer(_url: string, _type: string): Promise<boolean> {
+    try {
+      const { detectLocalSoftwareStatuses, startLocalServer: startSrv } = await import("../utils/autoDetect");
+      const statuses = await detectLocalSoftwareStatuses();
+      const startable = statuses.find((s) => s.installed && !s.serverRunning && s.canAutoStart);
+      if (!startable) return false;
+
+      new Notice(`Starting ${startable.name}...`);
+      const result = await startSrv(startable.name);
+      if (!result.ok) {
+        new Notice(`Failed to start ${startable.name}: ${result.error}`);
+        return false;
+      }
+
+      // Update settings to point at the started server
+      this.plugin.settings.providers.local.serverUrl = startable.url;
+      this.plugin.settings.providers.local.serverType = startable.type;
+      await this.plugin.saveSettings();
+      new Notice(`${startable.name} started`);
+      return true;
+    } catch {
+      return false;
     }
   }
 

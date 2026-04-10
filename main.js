@@ -2159,7 +2159,7 @@ var LLMSettingTab = class extends import_obsidian.PluginSettingTab {
       btn.setButtonText("Test connection");
       btn.setCta();
       btn.onClick(async () => {
-        var _a4;
+        var _a4, _b;
         resultEl.textContent = "Connecting...";
         resultEl.className = "llm-connection-result";
         const url2 = this.plugin.settings.providers.local.serverUrl || "http://127.0.0.1:11434";
@@ -2172,8 +2172,26 @@ var LLMSettingTab = class extends import_obsidian.PluginSettingTab {
             await this.refreshLocalModels(modelDropdown);
           }
         } else {
-          resultEl.textContent = result.error || "Could not connect";
-          resultEl.className = "llm-connection-result llm-connection-error";
+          resultEl.textContent = "Server not running \u2014 trying to start...";
+          resultEl.className = "llm-connection-result";
+          const started = await this.tryAutoStartLocalServer(url2, type);
+          if (started) {
+            resultEl.textContent = `Server started \u2014 checking models...`;
+            const retry = await LocalLLMExecutor.testConnection(url2, type);
+            if (retry.ok) {
+              resultEl.textContent = `Connected \u2014 ${((_b = retry.models) == null ? void 0 : _b.length) || 0} models found`;
+              resultEl.className = "llm-connection-result llm-connection-success";
+              if (modelDropdown) {
+                await this.refreshLocalModels(modelDropdown);
+              }
+            } else {
+              resultEl.textContent = "Server started but connection still failing";
+              resultEl.className = "llm-connection-result llm-connection-error";
+            }
+          } else {
+            resultEl.textContent = `Cannot reach ${url2} \u2014 is the server running?`;
+            resultEl.className = "llm-connection-result llm-connection-error";
+          }
         }
       });
     });
@@ -2386,6 +2404,31 @@ var LLMSettingTab = class extends import_obsidian.PluginSettingTab {
       const shouldUseCustom = isCustomMode || currentValue !== "" && !isInList;
       this.populateModelDropdown(dropdown, models, currentValue, shouldUseCustom);
     } catch (e) {
+    }
+  }
+  /**
+   * Try to auto-start a local LLM server (Ollama, LM Studio, etc.)
+   * when the connection test fails.
+   */
+  async tryAutoStartLocalServer(_url2, _type) {
+    try {
+      const { detectLocalSoftwareStatuses: detectLocalSoftwareStatuses2, startLocalServer: startSrv } = await Promise.resolve().then(() => (init_autoDetect(), autoDetect_exports));
+      const statuses = await detectLocalSoftwareStatuses2();
+      const startable = statuses.find((s) => s.installed && !s.serverRunning && s.canAutoStart);
+      if (!startable) return false;
+      new import_obsidian.Notice(`Starting ${startable.name}...`);
+      const result = await startSrv(startable.name);
+      if (!result.ok) {
+        new import_obsidian.Notice(`Failed to start ${startable.name}: ${result.error}`);
+        return false;
+      }
+      this.plugin.settings.providers.local.serverUrl = startable.url;
+      this.plugin.settings.providers.local.serverType = startable.type;
+      await this.plugin.saveSettings();
+      new import_obsidian.Notice(`${startable.name} started`);
+      return true;
+    } catch (e) {
+      return false;
     }
   }
   async refreshLocalModels(dropdown) {
