@@ -12,35 +12,22 @@ if you want to view the source, please visit the github repository of this plugi
 
 const prod = process.argv[2] === "production";
 
-const context = await esbuild.context({
-  banner: {
-    js: banner,
-  },
-  entryPoints: ["main.ts"],
-  bundle: true,
-  external: [
-    "obsidian",
-    "electron",
-    "@codemirror/autocomplete",
-    "@codemirror/collab",
-    "@codemirror/commands",
-    "@codemirror/language",
-    "@codemirror/lint",
-    "@codemirror/search",
-    "@codemirror/state",
-    "@codemirror/view",
-    "@lezer/common",
-    "@lezer/highlight",
-    "@lezer/lr",
-    ...builtins,
-  ],
-  format: "cjs",
-  target: "es2018",
-  logLevel: "info",
-  sourcemap: prod ? false : "inline",
-  treeShaking: true,
-  outfile: "main.js",
-});
+const external = [
+  "obsidian",
+  "electron",
+  "@codemirror/autocomplete",
+  "@codemirror/collab",
+  "@codemirror/commands",
+  "@codemirror/language",
+  "@codemirror/lint",
+  "@codemirror/search",
+  "@codemirror/state",
+  "@codemirror/view",
+  "@lezer/common",
+  "@lezer/highlight",
+  "@lezer/lr",
+  ...builtins,
+];
 
 // Deploy build artifacts to one or more Obsidian vault plugin directories.
 // Configure either:
@@ -85,50 +72,37 @@ function deploy() {
   }
 }
 
+const plugins = prod
+  ? []
+  : [
+      {
+        name: "deploy-on-rebuild",
+        setup(build) {
+          build.onEnd((result) => {
+            if (result.errors.length === 0) deploy();
+          });
+        },
+      },
+    ];
+
+const context = await esbuild.context({
+  banner: { js: banner },
+  entryPoints: ["main.ts"],
+  bundle: true,
+  external,
+  format: "cjs",
+  target: "es2018",
+  logLevel: "info",
+  sourcemap: prod ? false : "inline",
+  treeShaking: true,
+  outfile: "main.js",
+  plugins,
+});
+
 if (prod) {
   await context.rebuild();
   deploy();
   process.exit(0);
 } else {
-  // In watch mode, deploy after each rebuild
-  const deployPlugin = {
-    name: "deploy-on-rebuild",
-    setup(build) {
-      build.onEnd((result) => {
-        if (result.errors.length === 0) {
-          deploy();
-        }
-      });
-    },
-  };
-  await context.dispose();
-  const watchContext = await esbuild.context({
-    banner: { js: banner },
-    entryPoints: ["main.ts"],
-    bundle: true,
-    external: [
-      "obsidian",
-      "electron",
-      "@codemirror/autocomplete",
-      "@codemirror/collab",
-      "@codemirror/commands",
-      "@codemirror/language",
-      "@codemirror/lint",
-      "@codemirror/search",
-      "@codemirror/state",
-      "@codemirror/view",
-      "@lezer/common",
-      "@lezer/highlight",
-      "@lezer/lr",
-      ...builtins,
-    ],
-    format: "cjs",
-    target: "es2018",
-    logLevel: "info",
-    sourcemap: "inline",
-    treeShaking: true,
-    outfile: "main.js",
-    plugins: [deployPlugin],
-  });
-  await watchContext.watch();
+  await context.watch();
 }
