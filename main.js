@@ -20850,6 +20850,41 @@ _VaultSearch.MAX_CHUNK_CHARS = 2e3;
 _VaultSearch.MODIFY_DEBOUNCE_MS = 1e3;
 var VaultSearch = _VaultSearch;
 
+// src/utils/collapsible.ts
+function setupCollapsible(wrapperEl, headerEl, contentEl, state, options = {}) {
+  var _a3;
+  state.expanded = (_a3 = options.initiallyExpanded) != null ? _a3 : false;
+  applyState(wrapperEl, headerEl, contentEl, state, options.baseAriaLabel);
+  headerEl.setAttribute("tabindex", "0");
+  headerEl.setAttribute("role", "button");
+  const toggle = () => {
+    var _a4;
+    state.expanded = !state.expanded;
+    applyState(wrapperEl, headerEl, contentEl, state, options.baseAriaLabel);
+    (_a4 = options.onToggle) == null ? void 0 : _a4.call(options, state.expanded);
+  };
+  headerEl.addEventListener("click", toggle);
+  headerEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      toggle();
+    }
+  });
+}
+function collapseElement(wrapperEl, headerEl, contentEl, state, baseAriaLabel) {
+  state.expanded = false;
+  applyState(wrapperEl, headerEl, contentEl, state, baseAriaLabel);
+}
+function applyState(wrapperEl, headerEl, contentEl, state, baseAriaLabel) {
+  headerEl.setAttribute("aria-expanded", String(state.expanded));
+  contentEl.style.display = state.expanded ? "block" : "none";
+  wrapperEl.toggleClass("is-expanded", state.expanded);
+  if (baseAriaLabel) {
+    const suffix = state.expanded ? "click to collapse" : "click to expand";
+    headerEl.setAttribute("aria-label", `${baseAriaLabel} - ${suffix}`);
+  }
+}
+
 // src/views/ChatView.ts
 var CHAT_VIEW_TYPE = "llm-chat-view";
 var ChatView = class extends import_obsidian4.ItemView {
@@ -20869,6 +20904,17 @@ var ChatView = class extends import_obsidian4.ItemView {
     this.markdownComponents = [];
     this.toolHistory = [];
     this.acpConnectionPromise = null;
+    // Track in-flight ACP connection
+    // Thinking block state
+    this.thinkingBlockEl = null;
+    this.thinkingContentEl = null;
+    this.thinkingHeaderEl = null;
+    this.thinkingLabelEl = null;
+    this.thinkingState = { expanded: false };
+    this.thinkingStartTime = null;
+    this.thinkingTimerInterval = null;
+    // Thinking indicator debounce (400ms)
+    this.thinkingDebounceTimer = null;
     this.providerSelectEl = null;
     this.modelSelectEl = null;
     /** Number of messages already rendered in the DOM */
@@ -21765,22 +21811,29 @@ ${action.prompt}`;
     }
     switch (event.type) {
       case "tool_use": {
+        this.finalizeThinkingBlock();
+        this.clearThinkingDebounce();
         const toolDisplay = event.input ? `${event.tool}: ${event.input}` : event.tool;
         if (this.toolHistory[this.toolHistory.length - 1] !== toolDisplay) {
           this.toolHistory.push(toolDisplay);
         }
-        this.updateProgressDisplay(toolDisplay, "tool");
+        this.renderToolCall(event.tool, event.input, event.status);
+        if (event.status === "completed" && event.input && this.isEditTool(event.tool)) {
+          this.notifyVaultFileChange(event.input);
+        }
         break;
       }
       case "thinking": {
-        const thinkingMessage = event.content ? event.content.slice(0, 300) + (event.content.length > 300 ? "..." : "") : "Thinking...";
-        this.updateProgressDisplay(thinkingMessage, "thinking");
+        this.clearThinkingDebounce();
+        this.appendThinkingContent(event.content || "Thinking...");
         break;
       }
       case "status":
         this.updateProgressDisplay(event.message, "status");
         break;
       case "text":
+        this.finalizeThinkingBlock();
+        this.clearThinkingDebounce();
         if (event.content) {
           this.updateStreamingMessage(event.content);
         }
@@ -21789,6 +21842,7 @@ ${action.prompt}`;
         this.updateProgressDisplay(event.message, "status");
         break;
       case "done":
+        this.finalizeThinkingBlock();
         break;
       case "usage":
         break;
@@ -21905,11 +21959,157 @@ ${action.prompt}`;
    * Clear the progress display
    */
   clearProgress() {
+    this.finalizeThinkingBlock();
+    this.clearThinkingDebounce();
     if (this.progressContainer) {
       this.progressContainer.remove();
       this.progressContainer = null;
     }
     this.toolHistory = [];
+  }
+  // ─── Thinking Block ─────────────────────────────────────────────
+  /**
+   * Create or append to the thinking block with live timer.
+   * Pattern from Claudian (MIT).
+   */
+  appendThinkingContent(content) {
+    if (!this.progressContainer) return;
+    if (!this.thinkingBlockEl) {
+      this.thinkingBlockEl = this.progressContainer.createDiv({ cls: "llm-thinking-block" });
+      this.thinkingHeaderEl = this.thinkingBlockEl.createDiv({ cls: "llm-thinking-header" });
+      const iconEl = this.thinkingHeaderEl.createSpan({ cls: "llm-thinking-icon" });
+      (0, import_obsidian4.setIcon)(iconEl, "brain");
+      iconEl.setAttribute("aria-hidden", "true");
+      this.thinkingLabelEl = this.thinkingHeaderEl.createSpan({
+        cls: "llm-thinking-label",
+        text: "Thinking 0s..."
+      });
+      this.thinkingContentEl = this.thinkingBlockEl.createDiv({ cls: "llm-thinking-content" });
+      this.thinkingState = { expanded: false };
+      setupCollapsible(this.thinkingBlockEl, this.thinkingHeaderEl, this.thinkingContentEl, this.thinkingState, {
+        initiallyExpanded: false,
+        baseAriaLabel: "Extended thinking"
+      });
+      this.thinkingStartTime = Date.now();
+      this.thinkingTimerInterval = setInterval(() => {
+        var _a3, _b;
+        if (!((_a3 = this.thinkingLabelEl) == null ? void 0 : _a3.isConnected)) {
+          this.clearThinkingTimer();
+          return;
+        }
+        const elapsed = Math.floor((Date.now() - ((_b = this.thinkingStartTime) != null ? _b : Date.now())) / 1e3);
+        this.thinkingLabelEl.setText(`Thinking ${elapsed}s...`);
+      }, 1e3);
+    }
+    if (this.thinkingContentEl) {
+      this.thinkingContentEl.setText(content.slice(0, 500) + (content.length > 500 ? "..." : ""));
+    }
+    this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+  }
+  /**
+   * Finalize the thinking block: stop timer, show duration, auto-collapse.
+   */
+  finalizeThinkingBlock() {
+    if (!this.thinkingBlockEl || !this.thinkingHeaderEl || !this.thinkingContentEl) return;
+    this.clearThinkingTimer();
+    const elapsed = this.thinkingStartTime ? Math.floor((Date.now() - this.thinkingStartTime) / 1e3) : 0;
+    if (this.thinkingLabelEl) {
+      this.thinkingLabelEl.setText(`Thought for ${elapsed}s`);
+    }
+    collapseElement(this.thinkingBlockEl, this.thinkingHeaderEl, this.thinkingContentEl, this.thinkingState, "Extended thinking");
+    this.thinkingBlockEl = null;
+    this.thinkingHeaderEl = null;
+    this.thinkingContentEl = null;
+    this.thinkingLabelEl = null;
+    this.thinkingStartTime = null;
+  }
+  clearThinkingTimer() {
+    if (this.thinkingTimerInterval) {
+      clearInterval(this.thinkingTimerInterval);
+      this.thinkingTimerInterval = null;
+    }
+  }
+  /**
+   * Clear the 400ms thinking debounce timer.
+   */
+  clearThinkingDebounce() {
+    if (this.thinkingDebounceTimer) {
+      clearTimeout(this.thinkingDebounceTimer);
+      this.thinkingDebounceTimer = null;
+    }
+  }
+  // ─── Tool Call Rendering ────────────────────────────────────────
+  /**
+   * Render a tool call as a collapsible block with ARIA support.
+   */
+  renderToolCall(tool, input, status) {
+    if (!this.progressContainer) return;
+    const toolEl = this.progressContainer.createDiv({ cls: "llm-tool-block" });
+    const header = toolEl.createDiv({ cls: "llm-tool-header" });
+    const iconEl = header.createSpan({ cls: "llm-tool-icon" });
+    (0, import_obsidian4.setIcon)(iconEl, this.getToolIcon(tool));
+    iconEl.setAttribute("aria-hidden", "true");
+    header.createSpan({ text: tool, cls: "llm-tool-name" });
+    if (input) {
+      header.createSpan({ text: input, cls: "llm-tool-summary" });
+    }
+    const statusEl = header.createSpan({ cls: `llm-tool-status llm-tool-status-${status != null ? status : "started"}` });
+    const statusText = status === "completed" ? "done" : "running";
+    statusEl.setText(statusText);
+    statusEl.setAttribute("aria-label", `Status: ${statusText}`);
+    const contentEl = toolEl.createDiv({ cls: "llm-tool-block-content" });
+    if (input && this.isFilePath(input)) {
+      this.createFileLink(contentEl, input);
+    }
+    const state = { expanded: false };
+    const ariaLabel = input ? `${tool}: ${input}` : tool;
+    setupCollapsible(toolEl, header, contentEl, state, { baseAriaLabel: ariaLabel });
+    this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+  }
+  /**
+   * Get an appropriate icon for a tool type.
+   */
+  getToolIcon(tool) {
+    const t = tool.toLowerCase();
+    if (t.includes("read") || t.includes("cat")) return "file-text";
+    if (t.includes("write") || t.includes("edit") || t.includes("patch")) return "pencil";
+    if (t.includes("bash") || t.includes("exec") || t.includes("command")) return "terminal";
+    if (t.includes("glob") || t.includes("find") || t.includes("search") || t.includes("grep")) return "search";
+    if (t.includes("web") || t.includes("fetch") || t.includes("http")) return "globe";
+    if (t.includes("list") || t.includes("ls") || t.includes("dir")) return "folder";
+    return "wrench";
+  }
+  // ─── File Nudge ──────────────────────────────────────────────────
+  /**
+   * Check if a tool name is a file-editing tool.
+   */
+  isEditTool(tool) {
+    const t = tool.toLowerCase();
+    return t.includes("write") || t.includes("edit") || t.includes("patch") || t.includes("create") || t.includes("save") || t === "applypatch";
+  }
+  /**
+   * Notify Obsidian's vault API that a file was changed by an external tool.
+   * GUI Obsidian's FSWatcher on macOS (especially with iCloud) often misses
+   * direct fs writes. 200ms defer lets the filesystem settle first.
+   * Pattern from Claudian (MIT).
+   */
+  notifyVaultFileChange(filePath) {
+    var _a3;
+    const vaultPath = (_a3 = this.getVaultPath()) != null ? _a3 : "";
+    let relativePath = filePath;
+    if (filePath.startsWith("/") && vaultPath && filePath.startsWith(vaultPath)) {
+      relativePath = filePath.slice(vaultPath.length).replace(/^\//, "");
+    }
+    setTimeout(() => {
+      const file2 = this.app.vault.getAbstractFileByPath(relativePath);
+      if (file2 instanceof import_obsidian4.TFile) {
+        this.app.vault.trigger("modify", file2);
+      } else {
+        const parentDir = relativePath.includes("/") ? relativePath.slice(0, relativePath.lastIndexOf("/")) : "";
+        this.app.vault.adapter.list(parentDir).catch(() => {
+        });
+      }
+    }, 200);
   }
   /**
    * Resolve [[Note]] references in a prompt — read referenced notes and
