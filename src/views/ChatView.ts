@@ -1093,7 +1093,7 @@ export class ChatView extends ItemView {
     } catch (err) {
       // Connection failed
       const errorMsg = err instanceof Error ? err.message : String(err);
-      console.error("ACP connection failed:", errorMsg);
+      if (this.plugin.settings.debugMode) console.error("[ChatView] ACP connection failed:", errorMsg);
 
       // Ensure we disconnect to clean up any partial state
       await this.acpExecutor.disconnect();
@@ -1226,7 +1226,7 @@ export class ChatView extends ItemView {
 
         // Warn if response is unexpectedly empty
         if (!content && !acpResponse.error) {
-          console.warn("ACP response has no content - this may indicate a problem");
+          if (this.plugin.settings.debugMode) console.warn("[ChatView] ACP response has no content - this may indicate a problem");
         }
 
         response = {

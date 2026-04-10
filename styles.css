@@ -8,7 +8,6 @@
 
 /* Color palette — scoped to plugin containers */
 .llm-chat-view,
-.llm-chat-modal,
 .llm-quick-prompt-modal,
 .llm-provider-details {
   --llm-navy: #05164d;
@@ -27,7 +26,6 @@
 
 /* Dark mode adjustments */
 .theme-dark .llm-chat-view,
-.theme-dark .llm-chat-modal,
 .theme-dark .llm-quick-prompt-modal {
   --llm-bg-warm: #1a1d24;
   --llm-border: #252830;
@@ -60,15 +58,6 @@
 
 .llm-provider-settings {
   padding-left: 10px;
-}
-
-/* ============================================
-   Chat Modal
-   ============================================ */
-.llm-chat-modal {
-  padding: 20px;
-  min-width: 500px;
-  max-width: 800px;
 }
 
 .llm-chat-header {
@@ -451,17 +440,6 @@
 .llm-setup-scan-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-}
-
-.llm-setup-scan-icon {
-  display: inline-flex;
-  width: 14px;
-  height: 14px;
-}
-
-.llm-setup-scan-icon svg {
-  width: 14px;
-  height: 14px;
 }
 
 .llm-setup-settings-btn {
@@ -1284,36 +1262,6 @@
 
 .llm-setup-warning {
   color: var(--text-warning, #e5a100);
-}
-
-.llm-setup-btn {
-  padding: 6px 14px;
-  border-radius: 5px;
-  border: 1px solid var(--background-modifier-border);
-  background: var(--background-secondary);
-  cursor: pointer;
-  font-weight: 600;
-  margin-right: 8px;
-  margin-top: 4px;
-}
-
-.llm-setup-btn:hover {
-  background: var(--background-modifier-hover);
-}
-
-.llm-setup-btn[disabled] {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.llm-setup-btn-accent {
-  background: var(--llm-accent, #fdc300);
-  color: var(--llm-navy, #05164d);
-  border-color: var(--llm-accent, #fdc300);
-}
-
-.llm-setup-btn-accent:hover {
-  opacity: 0.9;
 }
 
 .llm-setup-pull {

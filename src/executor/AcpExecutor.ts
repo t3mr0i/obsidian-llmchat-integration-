@@ -680,7 +680,7 @@ export class AcpExecutor {
 
     try {
       this.debug("Setting thinking mode to:", value);
-      const response = await this.connection.unstable_setSessionConfigOption({
+      const response = await this.connection.setSessionConfigOption({
         sessionId: this.sessionId,
         configId: thoughtLevelOption.id,
         value,

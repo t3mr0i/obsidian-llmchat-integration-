@@ -16610,8 +16610,20 @@ config(en_default());
 // node_modules/@agentclientprotocol/sdk/dist/schema/index.js
 var AGENT_METHODS = {
   authenticate: "authenticate",
+  document_did_change: "document/didChange",
+  document_did_close: "document/didClose",
+  document_did_focus: "document/didFocus",
+  document_did_open: "document/didOpen",
+  document_did_save: "document/didSave",
   initialize: "initialize",
+  logout: "logout",
+  nes_accept: "nes/accept",
+  nes_close: "nes/close",
+  nes_reject: "nes/reject",
+  nes_start: "nes/start",
+  nes_suggest: "nes/suggest",
   session_cancel: "session/cancel",
+  session_close: "session/close",
   session_fork: "session/fork",
   session_list: "session/list",
   session_load: "session/load",
@@ -16625,6 +16637,8 @@ var AGENT_METHODS = {
 var CLIENT_METHODS = {
   fs_read_text_file: "fs/read_text_file",
   fs_write_text_file: "fs/write_text_file",
+  session_elicitation: "session/elicitation",
+  session_elicitation_complete: "session/elicitation/complete",
   session_request_permission: "session/request_permission",
   session_update: "session/update",
   terminal_create: "terminal/create",
@@ -16635,37 +16649,139 @@ var CLIENT_METHODS = {
 };
 
 // node_modules/@agentclientprotocol/sdk/dist/schema/zod.gen.js
-var zAuthMethod = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  description: external_exports.union([external_exports.string(), external_exports.null()]).optional(),
+var zAuthCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  terminal: external_exports.boolean().optional().default(false)
+});
+var zAuthEnvVar = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  label: external_exports.string().nullish(),
+  name: external_exports.string(),
+  optional: external_exports.boolean().optional().default(false),
+  secret: external_exports.boolean().optional().default(true)
+});
+var zAuthMethodAgent = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  description: external_exports.string().nullish(),
   id: external_exports.string(),
   name: external_exports.string()
 });
-var zAuthenticateRequest = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zAuthMethodEnvVar = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  description: external_exports.string().nullish(),
+  id: external_exports.string(),
+  link: external_exports.string().nullish(),
+  name: external_exports.string(),
+  vars: external_exports.array(zAuthEnvVar)
+});
+var zAuthMethodTerminal = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  args: external_exports.array(external_exports.string()).optional(),
+  description: external_exports.string().nullish(),
+  env: external_exports.record(external_exports.string(), external_exports.string()).optional(),
+  id: external_exports.string(),
+  name: external_exports.string()
+});
+var zAuthMethod = external_exports.union([
+  zAuthMethodEnvVar.and(external_exports.looseObject({
+    type: external_exports.literal("env_var")
+  })),
+  zAuthMethodTerminal.and(external_exports.looseObject({
+    type: external_exports.literal("terminal")
+  })),
+  zAuthMethodAgent
+]);
+var zAuthenticateRequest = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   methodId: external_exports.string()
 });
-var zAuthenticateResponse = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional()
+var zAuthenticateResponse = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish()
 });
-var zBlobResourceContents = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zBlobResourceContents = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   blob: external_exports.string(),
-  mimeType: external_exports.union([external_exports.string(), external_exports.null()]).optional(),
+  mimeType: external_exports.string().nullish(),
   uri: external_exports.string()
 });
-var zCreateTerminalResponse = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zBooleanPropertySchema = external_exports.looseObject({
+  default: external_exports.boolean().nullish(),
+  description: external_exports.string().nullish(),
+  title: external_exports.string().nullish()
+});
+var zCloseNesResponse = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish()
+});
+var zCloseSessionResponse = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish()
+});
+var zCost = external_exports.looseObject({
+  amount: external_exports.number(),
+  currency: external_exports.string()
+});
+var zCreateTerminalResponse = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   terminalId: external_exports.string()
 });
-var zDiff = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zDiff = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   newText: external_exports.string(),
-  oldText: external_exports.union([external_exports.string(), external_exports.null()]).optional(),
+  oldText: external_exports.string().nullish(),
   path: external_exports.string()
 });
-var zEnvVariable = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zElicitationContentValue = external_exports.union([
+  external_exports.string(),
+  external_exports.number(),
+  external_exports.number(),
+  external_exports.boolean(),
+  external_exports.array(external_exports.string())
+]);
+var zElicitationAcceptAction = external_exports.looseObject({
+  content: external_exports.record(external_exports.string(), zElicitationContentValue).nullish()
+});
+var zElicitationAction = external_exports.union([
+  zElicitationAcceptAction.and(external_exports.looseObject({
+    action: external_exports.literal("accept")
+  })),
+  external_exports.looseObject({
+    action: external_exports.literal("decline")
+  }),
+  external_exports.looseObject({
+    action: external_exports.literal("cancel")
+  })
+]);
+var zElicitationFormCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish()
+});
+var zElicitationId = external_exports.string();
+var zElicitationCompleteNotification = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  elicitationId: zElicitationId
+});
+var zElicitationResponse = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  action: zElicitationAction
+});
+var zElicitationSchemaType = external_exports.literal("object");
+var zElicitationStringType = external_exports.literal("string");
+var zElicitationUrlCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish()
+});
+var zElicitationCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  form: zElicitationFormCapabilities.nullish(),
+  url: zElicitationUrlCapabilities.nullish()
+});
+var zElicitationUrlMode = external_exports.looseObject({
+  elicitationId: zElicitationId,
+  url: external_exports.string().url()
+});
+var zEnumOption = external_exports.looseObject({
+  const: external_exports.string(),
+  title: external_exports.string()
+});
+var zEnvVariable = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   name: external_exports.string(),
   value: external_exports.string()
 });
@@ -16678,13 +16794,14 @@ var zErrorCode = external_exports.union([
   external_exports.literal(-32800),
   external_exports.literal(-32e3),
   external_exports.literal(-32002),
+  external_exports.literal(-32042),
   external_exports.number().int().min(-2147483648, {
     message: "Invalid value: Expected int32 to be >= -2147483648"
   }).max(2147483647, {
     message: "Invalid value: Expected int32 to be <= 2147483647"
   })
 ]);
-var zError = external_exports.object({
+var zError = external_exports.looseObject({
   code: zErrorCode,
   data: external_exports.unknown().optional(),
   message: external_exports.string()
@@ -16692,79 +16809,217 @@ var zError = external_exports.object({
 var zExtNotification = external_exports.unknown();
 var zExtRequest = external_exports.unknown();
 var zExtResponse = external_exports.unknown();
-var zFileSystemCapability = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zFileSystemCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   readTextFile: external_exports.boolean().optional().default(false),
   writeTextFile: external_exports.boolean().optional().default(false)
 });
-var zClientCapabilities = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  fs: zFileSystemCapability.optional().default({ readTextFile: false, writeTextFile: false }),
-  terminal: external_exports.boolean().optional().default(false)
-});
-var zHttpHeader = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zHttpHeader = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   name: external_exports.string(),
   value: external_exports.string()
 });
-var zImplementation = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zImplementation = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   name: external_exports.string(),
-  title: external_exports.union([external_exports.string(), external_exports.null()]).optional(),
+  title: external_exports.string().nullish(),
   version: external_exports.string()
 });
-var zKillTerminalCommandResponse = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional()
+var zIntegerPropertySchema = external_exports.looseObject({
+  default: external_exports.number().nullish(),
+  description: external_exports.string().nullish(),
+  maximum: external_exports.number().nullish(),
+  minimum: external_exports.number().nullish(),
+  title: external_exports.string().nullish()
 });
-var zListSessionsRequest = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  cursor: external_exports.union([external_exports.string(), external_exports.null()]).optional(),
-  cwd: external_exports.union([external_exports.string(), external_exports.null()]).optional()
+var zKillTerminalResponse = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish()
 });
-var zMcpCapabilities = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zListSessionsRequest = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  additionalDirectories: external_exports.array(external_exports.string()).optional(),
+  cursor: external_exports.string().nullish(),
+  cwd: external_exports.string().nullish()
+});
+var zLogoutCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish()
+});
+var zAgentAuthCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  logout: zLogoutCapabilities.nullish()
+});
+var zLogoutRequest = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish()
+});
+var zLogoutResponse = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish()
+});
+var zMcpCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   http: external_exports.boolean().optional().default(false),
   sse: external_exports.boolean().optional().default(false)
 });
-var zMcpServerHttp = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zMcpServerHttp = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   headers: external_exports.array(zHttpHeader),
   name: external_exports.string(),
   url: external_exports.string()
 });
-var zMcpServerSse = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zMcpServerSse = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   headers: external_exports.array(zHttpHeader),
   name: external_exports.string(),
   url: external_exports.string()
 });
-var zMcpServerStdio = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zMcpServerStdio = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   args: external_exports.array(external_exports.string()),
   command: external_exports.string(),
   env: external_exports.array(zEnvVariable),
   name: external_exports.string()
 });
 var zMcpServer = external_exports.union([
-  zMcpServerHttp.and(external_exports.object({
+  zMcpServerHttp.and(external_exports.looseObject({
     type: external_exports.literal("http")
   })),
-  zMcpServerSse.and(external_exports.object({
+  zMcpServerSse.and(external_exports.looseObject({
     type: external_exports.literal("sse")
   })),
   zMcpServerStdio
 ]);
 var zModelId = external_exports.string();
-var zModelInfo = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  description: external_exports.union([external_exports.string(), external_exports.null()]).optional(),
+var zModelInfo = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  description: external_exports.string().nullish(),
   modelId: zModelId,
   name: external_exports.string()
 });
-var zNewSessionRequest = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zNesDiagnosticSeverity = external_exports.union([
+  external_exports.literal("error"),
+  external_exports.literal("warning"),
+  external_exports.literal("information"),
+  external_exports.literal("hint")
+]);
+var zNesDiagnosticsCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish()
+});
+var zNesDocumentDidCloseCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish()
+});
+var zNesDocumentDidFocusCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish()
+});
+var zNesDocumentDidOpenCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish()
+});
+var zNesDocumentDidSaveCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish()
+});
+var zNesEditHistoryCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  maxCount: external_exports.number().int().gte(0).max(4294967295, {
+    message: "Invalid value: Expected uint32 to be <= 4294967295"
+  }).nullish()
+});
+var zNesEditHistoryEntry = external_exports.looseObject({
+  diff: external_exports.string(),
+  uri: external_exports.string()
+});
+var zNesExcerpt = external_exports.looseObject({
+  endLine: external_exports.number().int().gte(0).max(4294967295, {
+    message: "Invalid value: Expected uint32 to be <= 4294967295"
+  }),
+  startLine: external_exports.number().int().gte(0).max(4294967295, {
+    message: "Invalid value: Expected uint32 to be <= 4294967295"
+  }),
+  text: external_exports.string()
+});
+var zNesJumpCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish()
+});
+var zNesOpenFilesCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish()
+});
+var zNesRecentFile = external_exports.looseObject({
+  languageId: external_exports.string(),
+  text: external_exports.string(),
+  uri: external_exports.string()
+});
+var zNesRecentFilesCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  maxCount: external_exports.number().int().gte(0).max(4294967295, {
+    message: "Invalid value: Expected uint32 to be <= 4294967295"
+  }).nullish()
+});
+var zNesRejectReason = external_exports.union([
+  external_exports.literal("rejected"),
+  external_exports.literal("ignored"),
+  external_exports.literal("replaced"),
+  external_exports.literal("cancelled")
+]);
+var zNesRelatedSnippet = external_exports.looseObject({
+  excerpts: external_exports.array(zNesExcerpt),
+  uri: external_exports.string()
+});
+var zNesRelatedSnippetsCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish()
+});
+var zNesRenameCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish()
+});
+var zNesRepository = external_exports.looseObject({
+  name: external_exports.string(),
+  owner: external_exports.string(),
+  remoteUrl: external_exports.string()
+});
+var zNesSearchAndReplaceCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish()
+});
+var zClientNesCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  jump: zNesJumpCapabilities.nullish(),
+  rename: zNesRenameCapabilities.nullish(),
+  searchAndReplace: zNesSearchAndReplaceCapabilities.nullish()
+});
+var zNesSearchAndReplaceSuggestion = external_exports.looseObject({
+  id: external_exports.string(),
+  isRegex: external_exports.boolean().nullish(),
+  replace: external_exports.string(),
+  search: external_exports.string(),
+  uri: external_exports.string()
+});
+var zNesTriggerKind = external_exports.union([
+  external_exports.literal("automatic"),
+  external_exports.literal("diagnostic"),
+  external_exports.literal("manual")
+]);
+var zNesUserActionsCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  maxCount: external_exports.number().int().gte(0).max(4294967295, {
+    message: "Invalid value: Expected uint32 to be <= 4294967295"
+  }).nullish()
+});
+var zNesContextCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  diagnostics: zNesDiagnosticsCapabilities.nullish(),
+  editHistory: zNesEditHistoryCapabilities.nullish(),
+  openFiles: zNesOpenFilesCapabilities.nullish(),
+  recentFiles: zNesRecentFilesCapabilities.nullish(),
+  relatedSnippets: zNesRelatedSnippetsCapabilities.nullish(),
+  userActions: zNesUserActionsCapabilities.nullish()
+});
+var zNewSessionRequest = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  additionalDirectories: external_exports.array(external_exports.string()).optional(),
   cwd: external_exports.string(),
   mcpServers: external_exports.array(zMcpServer)
+});
+var zNumberPropertySchema = external_exports.looseObject({
+  default: external_exports.number().nullish(),
+  description: external_exports.string().nullish(),
+  maximum: external_exports.number().nullish(),
+  minimum: external_exports.number().nullish(),
+  title: external_exports.string().nullish()
 });
 var zPermissionOptionId = external_exports.string();
 var zPermissionOptionKind = external_exports.union([
@@ -16773,8 +17028,8 @@ var zPermissionOptionKind = external_exports.union([
   external_exports.literal("reject_once"),
   external_exports.literal("reject_always")
 ]);
-var zPermissionOption = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zPermissionOption = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   kind: zPermissionOptionKind,
   name: external_exports.string(),
   optionId: zPermissionOptionId
@@ -16789,104 +17044,187 @@ var zPlanEntryStatus = external_exports.union([
   external_exports.literal("in_progress"),
   external_exports.literal("completed")
 ]);
-var zPlanEntry = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zPlanEntry = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   content: external_exports.string(),
   priority: zPlanEntryPriority,
   status: zPlanEntryStatus
 });
-var zPlan = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zPlan = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   entries: external_exports.array(zPlanEntry)
 });
-var zPromptCapabilities = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zPosition = external_exports.looseObject({
+  character: external_exports.number().int().gte(0).max(4294967295, {
+    message: "Invalid value: Expected uint32 to be <= 4294967295"
+  }),
+  line: external_exports.number().int().gte(0).max(4294967295, {
+    message: "Invalid value: Expected uint32 to be <= 4294967295"
+  })
+});
+var zNesJumpSuggestion = external_exports.looseObject({
+  id: external_exports.string(),
+  position: zPosition,
+  uri: external_exports.string()
+});
+var zNesRenameSuggestion = external_exports.looseObject({
+  id: external_exports.string(),
+  newName: external_exports.string(),
+  position: zPosition,
+  uri: external_exports.string()
+});
+var zNesUserAction = external_exports.looseObject({
+  action: external_exports.string(),
+  position: zPosition,
+  timestampMs: external_exports.number(),
+  uri: external_exports.string()
+});
+var zPositionEncodingKind = external_exports.union([
+  external_exports.literal("utf-16"),
+  external_exports.literal("utf-32"),
+  external_exports.literal("utf-8")
+]);
+var zClientCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  auth: zAuthCapabilities.optional().default({ terminal: false }),
+  elicitation: zElicitationCapabilities.nullish(),
+  fs: zFileSystemCapabilities.optional().default({ readTextFile: false, writeTextFile: false }),
+  nes: zClientNesCapabilities.nullish(),
+  positionEncodings: external_exports.array(zPositionEncodingKind).optional(),
+  terminal: external_exports.boolean().optional().default(false)
+});
+var zPromptCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   audio: external_exports.boolean().optional().default(false),
   embeddedContext: external_exports.boolean().optional().default(false),
   image: external_exports.boolean().optional().default(false)
 });
 var zProtocolVersion = external_exports.number().int().gte(0).lte(65535);
-var zInitializeRequest = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zInitializeRequest = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   clientCapabilities: zClientCapabilities.optional().default({
+    auth: { terminal: false },
     fs: { readTextFile: false, writeTextFile: false },
     terminal: false
   }),
-  clientInfo: external_exports.union([zImplementation, external_exports.null()]).optional(),
+  clientInfo: zImplementation.nullish(),
   protocolVersion: zProtocolVersion
 });
-var zReadTextFileResponse = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zRange = external_exports.looseObject({
+  end: zPosition,
+  start: zPosition
+});
+var zNesDiagnostic = external_exports.looseObject({
+  message: external_exports.string(),
+  range: zRange,
+  severity: zNesDiagnosticSeverity,
+  uri: external_exports.string()
+});
+var zNesOpenFile = external_exports.looseObject({
+  languageId: external_exports.string(),
+  lastFocusedMs: external_exports.number().nullish(),
+  uri: external_exports.string(),
+  visibleRange: zRange.nullish()
+});
+var zNesSuggestContext = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  diagnostics: external_exports.array(zNesDiagnostic).nullish(),
+  editHistory: external_exports.array(zNesEditHistoryEntry).nullish(),
+  openFiles: external_exports.array(zNesOpenFile).nullish(),
+  recentFiles: external_exports.array(zNesRecentFile).nullish(),
+  relatedSnippets: external_exports.array(zNesRelatedSnippet).nullish(),
+  userActions: external_exports.array(zNesUserAction).nullish()
+});
+var zNesTextEdit = external_exports.looseObject({
+  newText: external_exports.string(),
+  range: zRange
+});
+var zNesEditSuggestion = external_exports.looseObject({
+  cursorPosition: zPosition.nullish(),
+  edits: external_exports.array(zNesTextEdit),
+  id: external_exports.string(),
+  uri: external_exports.string()
+});
+var zNesSuggestion = external_exports.union([
+  zNesEditSuggestion.and(external_exports.looseObject({
+    kind: external_exports.literal("edit")
+  })),
+  zNesJumpSuggestion.and(external_exports.looseObject({
+    kind: external_exports.literal("jump")
+  })),
+  zNesRenameSuggestion.and(external_exports.looseObject({
+    kind: external_exports.literal("rename")
+  })),
+  zNesSearchAndReplaceSuggestion.and(external_exports.looseObject({
+    kind: external_exports.literal("searchAndReplace")
+  }))
+]);
+var zReadTextFileResponse = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   content: external_exports.string()
 });
-var zReleaseTerminalResponse = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional()
+var zReleaseTerminalResponse = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish()
 });
-var zRequestId = external_exports.union([
-  external_exports.null(),
-  external_exports.coerce.bigint().min(BigInt("-9223372036854775808"), {
-    message: "Invalid value: Expected int64 to be >= -9223372036854775808"
-  }).max(BigInt("9223372036854775807"), {
-    message: "Invalid value: Expected int64 to be <= 9223372036854775807"
-  }),
-  external_exports.string()
-]);
-var zCancelRequestNotification = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zRequestId = external_exports.union([external_exports.number(), external_exports.string()]).nullable();
+var zCancelRequestNotification = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   requestId: zRequestId
 });
 var zRole = external_exports.enum(["assistant", "user"]);
-var zAnnotations = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  audience: external_exports.union([external_exports.array(zRole), external_exports.null()]).optional(),
-  lastModified: external_exports.union([external_exports.string(), external_exports.null()]).optional(),
-  priority: external_exports.union([external_exports.number(), external_exports.null()]).optional()
+var zAnnotations = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  audience: external_exports.array(zRole).nullish(),
+  lastModified: external_exports.string().nullish(),
+  priority: external_exports.number().nullish()
 });
-var zAudioContent = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  annotations: external_exports.union([zAnnotations, external_exports.null()]).optional(),
+var zAudioContent = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  annotations: zAnnotations.nullish(),
   data: external_exports.string(),
   mimeType: external_exports.string()
 });
-var zImageContent = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  annotations: external_exports.union([zAnnotations, external_exports.null()]).optional(),
+var zImageContent = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  annotations: zAnnotations.nullish(),
   data: external_exports.string(),
   mimeType: external_exports.string(),
-  uri: external_exports.union([external_exports.string(), external_exports.null()]).optional()
+  uri: external_exports.string().nullish()
 });
-var zResourceLink = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  annotations: external_exports.union([zAnnotations, external_exports.null()]).optional(),
-  description: external_exports.union([external_exports.string(), external_exports.null()]).optional(),
-  mimeType: external_exports.union([external_exports.string(), external_exports.null()]).optional(),
+var zResourceLink = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  annotations: zAnnotations.nullish(),
+  description: external_exports.string().nullish(),
+  mimeType: external_exports.string().nullish(),
   name: external_exports.string(),
-  size: external_exports.union([
-    external_exports.coerce.bigint().min(BigInt("-9223372036854775808"), {
-      message: "Invalid value: Expected int64 to be >= -9223372036854775808"
-    }).max(BigInt("9223372036854775807"), {
-      message: "Invalid value: Expected int64 to be <= 9223372036854775807"
-    }),
-    external_exports.null()
-  ]).optional(),
-  title: external_exports.union([external_exports.string(), external_exports.null()]).optional(),
+  size: external_exports.number().nullish(),
+  title: external_exports.string().nullish(),
   uri: external_exports.string()
 });
-var zSelectedPermissionOutcome = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zSelectedPermissionOutcome = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   optionId: zPermissionOptionId
 });
 var zRequestPermissionOutcome = external_exports.union([
-  external_exports.object({
+  external_exports.looseObject({
     outcome: external_exports.literal("cancelled")
   }),
-  zSelectedPermissionOutcome.and(external_exports.object({
+  zSelectedPermissionOutcome.and(external_exports.looseObject({
     outcome: external_exports.literal("selected")
   }))
 ]);
-var zRequestPermissionResponse = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zRequestPermissionResponse = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   outcome: zRequestPermissionOutcome
+});
+var zSessionAdditionalDirectoriesCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish()
+});
+var zSessionCloseCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish()
+});
+var zSessionConfigBoolean = external_exports.looseObject({
+  currentValue: external_exports.boolean()
 });
 var zSessionConfigGroupId = external_exports.string();
 var zSessionConfigId = external_exports.string();
@@ -16897,14 +17235,14 @@ var zSessionConfigOptionCategory = external_exports.union([
   external_exports.string()
 ]);
 var zSessionConfigValueId = external_exports.string();
-var zSessionConfigSelectOption = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  description: external_exports.union([external_exports.string(), external_exports.null()]).optional(),
+var zSessionConfigSelectOption = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  description: external_exports.string().nullish(),
   name: external_exports.string(),
   value: zSessionConfigValueId
 });
-var zSessionConfigSelectGroup = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zSessionConfigSelectGroup = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   group: zSessionConfigGroupId,
   name: external_exports.string(),
   options: external_exports.array(zSessionConfigSelectOption)
@@ -16913,174 +17251,374 @@ var zSessionConfigSelectOptions = external_exports.union([
   external_exports.array(zSessionConfigSelectOption),
   external_exports.array(zSessionConfigSelectGroup)
 ]);
-var zSessionConfigSelect = external_exports.object({
+var zSessionConfigSelect = external_exports.looseObject({
   currentValue: zSessionConfigValueId,
   options: zSessionConfigSelectOptions
 });
-var zSessionConfigOption = zSessionConfigSelect.and(external_exports.object({
-  type: external_exports.literal("select")
-})).and(external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  category: external_exports.union([zSessionConfigOptionCategory, external_exports.null()]).optional(),
-  description: external_exports.union([external_exports.string(), external_exports.null()]).optional(),
+var zSessionConfigOption = external_exports.intersection(external_exports.union([
+  zSessionConfigSelect.and(external_exports.looseObject({
+    type: external_exports.literal("select")
+  })),
+  zSessionConfigBoolean.and(external_exports.looseObject({
+    type: external_exports.literal("boolean")
+  }))
+]), external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  category: zSessionConfigOptionCategory.nullish(),
+  description: external_exports.string().nullish(),
   id: zSessionConfigId,
   name: external_exports.string()
 }));
-var zConfigOptionUpdate = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zConfigOptionUpdate = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   configOptions: external_exports.array(zSessionConfigOption)
 });
-var zSessionForkCapabilities = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional()
+var zSessionForkCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish()
 });
 var zSessionId = external_exports.string();
-var zCancelNotification = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zAcceptNesNotification = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  id: external_exports.string(),
   sessionId: zSessionId
 });
-var zClientNotification = external_exports.object({
-  method: external_exports.string(),
-  params: external_exports.union([external_exports.union([zCancelNotification, zExtNotification]), external_exports.null()]).optional()
+var zCancelNotification = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  sessionId: zSessionId
 });
-var zCreateTerminalRequest = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zCloseNesRequest = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  sessionId: zSessionId
+});
+var zCloseSessionRequest = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  sessionId: zSessionId
+});
+var zCreateTerminalRequest = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   args: external_exports.array(external_exports.string()).optional(),
   command: external_exports.string(),
-  cwd: external_exports.union([external_exports.string(), external_exports.null()]).optional(),
+  cwd: external_exports.string().nullish(),
   env: external_exports.array(zEnvVariable).optional(),
-  outputByteLimit: external_exports.union([
-    external_exports.coerce.bigint().gte(BigInt(0)).max(BigInt("18446744073709551615"), {
-      message: "Invalid value: Expected uint64 to be <= 18446744073709551615"
-    }),
-    external_exports.null()
-  ]).optional(),
+  outputByteLimit: external_exports.number().nullish(),
   sessionId: zSessionId
 });
-var zForkSessionRequest = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zDidCloseDocumentNotification = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  sessionId: zSessionId,
+  uri: external_exports.string()
+});
+var zDidFocusDocumentNotification = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  position: zPosition,
+  sessionId: zSessionId,
+  uri: external_exports.string(),
+  version: external_exports.number(),
+  visibleRange: zRange
+});
+var zDidOpenDocumentNotification = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  languageId: external_exports.string(),
+  sessionId: zSessionId,
+  text: external_exports.string(),
+  uri: external_exports.string(),
+  version: external_exports.number()
+});
+var zDidSaveDocumentNotification = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  sessionId: zSessionId,
+  uri: external_exports.string()
+});
+var zForkSessionRequest = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  additionalDirectories: external_exports.array(external_exports.string()).optional(),
   cwd: external_exports.string(),
   mcpServers: external_exports.array(zMcpServer).optional(),
   sessionId: zSessionId
 });
-var zKillTerminalCommandRequest = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zKillTerminalRequest = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   sessionId: zSessionId,
   terminalId: external_exports.string()
 });
-var zLoadSessionRequest = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zLoadSessionRequest = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  additionalDirectories: external_exports.array(external_exports.string()).optional(),
   cwd: external_exports.string(),
   mcpServers: external_exports.array(zMcpServer),
   sessionId: zSessionId
 });
-var zReadTextFileRequest = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  limit: external_exports.union([
-    external_exports.number().int().gte(0).max(4294967295, {
-      message: "Invalid value: Expected uint32 to be <= 4294967295"
-    }),
-    external_exports.null()
-  ]).optional(),
-  line: external_exports.union([
-    external_exports.number().int().gte(0).max(4294967295, {
-      message: "Invalid value: Expected uint32 to be <= 4294967295"
-    }),
-    external_exports.null()
-  ]).optional(),
+var zReadTextFileRequest = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  limit: external_exports.number().int().gte(0).max(4294967295, {
+    message: "Invalid value: Expected uint32 to be <= 4294967295"
+  }).nullish(),
+  line: external_exports.number().int().gte(0).max(4294967295, {
+    message: "Invalid value: Expected uint32 to be <= 4294967295"
+  }).nullish(),
   path: external_exports.string(),
   sessionId: zSessionId
 });
-var zReleaseTerminalRequest = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zRejectNesNotification = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  id: external_exports.string(),
+  reason: zNesRejectReason.nullish(),
+  sessionId: zSessionId
+});
+var zReleaseTerminalRequest = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   sessionId: zSessionId,
   terminalId: external_exports.string()
 });
-var zResumeSessionRequest = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zResumeSessionRequest = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  additionalDirectories: external_exports.array(external_exports.string()).optional(),
   cwd: external_exports.string(),
   mcpServers: external_exports.array(zMcpServer).optional(),
   sessionId: zSessionId
 });
-var zSessionInfo = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zSessionInfo = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  additionalDirectories: external_exports.array(external_exports.string()).optional(),
   cwd: external_exports.string(),
   sessionId: zSessionId,
-  title: external_exports.union([external_exports.string(), external_exports.null()]).optional(),
-  updatedAt: external_exports.union([external_exports.string(), external_exports.null()]).optional()
+  title: external_exports.string().nullish(),
+  updatedAt: external_exports.string().nullish()
 });
-var zListSessionsResponse = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  nextCursor: external_exports.union([external_exports.string(), external_exports.null()]).optional(),
+var zListSessionsResponse = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  nextCursor: external_exports.string().nullish(),
   sessions: external_exports.array(zSessionInfo)
 });
-var zSessionInfoUpdate = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  title: external_exports.union([external_exports.string(), external_exports.null()]).optional(),
-  updatedAt: external_exports.union([external_exports.string(), external_exports.null()]).optional()
+var zSessionInfoUpdate = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  title: external_exports.string().nullish(),
+  updatedAt: external_exports.string().nullish()
 });
-var zSessionListCapabilities = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional()
+var zSessionListCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish()
 });
 var zSessionModeId = external_exports.string();
-var zCurrentModeUpdate = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zCurrentModeUpdate = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   currentModeId: zSessionModeId
 });
-var zSessionMode = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  description: external_exports.union([external_exports.string(), external_exports.null()]).optional(),
+var zSessionMode = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  description: external_exports.string().nullish(),
   id: zSessionModeId,
   name: external_exports.string()
 });
-var zSessionModeState = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zSessionModeState = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   availableModes: external_exports.array(zSessionMode),
   currentModeId: zSessionModeId
 });
-var zSessionModelState = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zSessionModelState = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   availableModels: external_exports.array(zModelInfo),
   currentModelId: zModelId
 });
-var zForkSessionResponse = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  configOptions: external_exports.union([external_exports.array(zSessionConfigOption), external_exports.null()]).optional(),
-  models: external_exports.union([zSessionModelState, external_exports.null()]).optional(),
-  modes: external_exports.union([zSessionModeState, external_exports.null()]).optional(),
+var zForkSessionResponse = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  configOptions: external_exports.array(zSessionConfigOption).nullish(),
+  models: zSessionModelState.nullish(),
+  modes: zSessionModeState.nullish(),
   sessionId: zSessionId
 });
-var zLoadSessionResponse = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  configOptions: external_exports.union([external_exports.array(zSessionConfigOption), external_exports.null()]).optional(),
-  models: external_exports.union([zSessionModelState, external_exports.null()]).optional(),
-  modes: external_exports.union([zSessionModeState, external_exports.null()]).optional()
+var zLoadSessionResponse = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  configOptions: external_exports.array(zSessionConfigOption).nullish(),
+  models: zSessionModelState.nullish(),
+  modes: zSessionModeState.nullish()
 });
-var zNewSessionResponse = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  configOptions: external_exports.union([external_exports.array(zSessionConfigOption), external_exports.null()]).optional(),
-  models: external_exports.union([zSessionModelState, external_exports.null()]).optional(),
-  modes: external_exports.union([zSessionModeState, external_exports.null()]).optional(),
+var zNewSessionResponse = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  configOptions: external_exports.array(zSessionConfigOption).nullish(),
+  models: zSessionModelState.nullish(),
+  modes: zSessionModeState.nullish(),
   sessionId: zSessionId
 });
-var zResumeSessionResponse = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  configOptions: external_exports.union([external_exports.array(zSessionConfigOption), external_exports.null()]).optional(),
-  models: external_exports.union([zSessionModelState, external_exports.null()]).optional(),
-  modes: external_exports.union([zSessionModeState, external_exports.null()]).optional()
+var zResumeSessionResponse = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  configOptions: external_exports.array(zSessionConfigOption).nullish(),
+  models: zSessionModelState.nullish(),
+  modes: zSessionModeState.nullish()
 });
-var zSessionResumeCapabilities = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional()
+var zSessionResumeCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish()
 });
-var zSessionCapabilities = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  fork: external_exports.union([zSessionForkCapabilities, external_exports.null()]).optional(),
-  list: external_exports.union([zSessionListCapabilities, external_exports.null()]).optional(),
-  resume: external_exports.union([zSessionResumeCapabilities, external_exports.null()]).optional()
+var zSessionCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  additionalDirectories: zSessionAdditionalDirectoriesCapabilities.nullish(),
+  close: zSessionCloseCapabilities.nullish(),
+  fork: zSessionForkCapabilities.nullish(),
+  list: zSessionListCapabilities.nullish(),
+  resume: zSessionResumeCapabilities.nullish()
 });
-var zAgentCapabilities = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zSetSessionConfigOptionRequest = external_exports.intersection(external_exports.union([
+  external_exports.looseObject({
+    type: external_exports.literal("boolean"),
+    value: external_exports.boolean()
+  }),
+  external_exports.looseObject({
+    value: zSessionConfigValueId
+  })
+]), external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  configId: zSessionConfigId,
+  sessionId: zSessionId
+}));
+var zSetSessionConfigOptionResponse = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  configOptions: external_exports.array(zSessionConfigOption)
+});
+var zSetSessionModeRequest = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  modeId: zSessionModeId,
+  sessionId: zSessionId
+});
+var zSetSessionModeResponse = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish()
+});
+var zSetSessionModelRequest = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  modelId: zModelId,
+  sessionId: zSessionId
+});
+var zSetSessionModelResponse = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish()
+});
+var zStartNesResponse = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  sessionId: zSessionId
+});
+var zStopReason = external_exports.union([
+  external_exports.literal("end_turn"),
+  external_exports.literal("max_tokens"),
+  external_exports.literal("max_turn_requests"),
+  external_exports.literal("refusal"),
+  external_exports.literal("cancelled")
+]);
+var zStringFormat = external_exports.union([
+  external_exports.literal("email"),
+  external_exports.literal("uri"),
+  external_exports.literal("date"),
+  external_exports.literal("date-time")
+]);
+var zStringPropertySchema = external_exports.looseObject({
+  default: external_exports.string().nullish(),
+  description: external_exports.string().nullish(),
+  enum: external_exports.array(external_exports.string()).nullish(),
+  format: zStringFormat.nullish(),
+  maxLength: external_exports.number().int().gte(0).max(4294967295, {
+    message: "Invalid value: Expected uint32 to be <= 4294967295"
+  }).nullish(),
+  minLength: external_exports.number().int().gte(0).max(4294967295, {
+    message: "Invalid value: Expected uint32 to be <= 4294967295"
+  }).nullish(),
+  oneOf: external_exports.array(zEnumOption).nullish(),
+  pattern: external_exports.string().nullish(),
+  title: external_exports.string().nullish()
+});
+var zSuggestNesRequest = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  context: zNesSuggestContext.nullish(),
+  position: zPosition,
+  selection: zRange.nullish(),
+  sessionId: zSessionId,
+  triggerKind: zNesTriggerKind,
+  uri: external_exports.string(),
+  version: external_exports.number()
+});
+var zSuggestNesResponse = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  suggestions: external_exports.array(zNesSuggestion)
+});
+var zTerminal = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  terminalId: external_exports.string()
+});
+var zTerminalExitStatus = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  exitCode: external_exports.number().int().gte(0).max(4294967295, {
+    message: "Invalid value: Expected uint32 to be <= 4294967295"
+  }).nullish(),
+  signal: external_exports.string().nullish()
+});
+var zTerminalOutputRequest = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  sessionId: zSessionId,
+  terminalId: external_exports.string()
+});
+var zTerminalOutputResponse = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  exitStatus: zTerminalExitStatus.nullish(),
+  output: external_exports.string(),
+  truncated: external_exports.boolean()
+});
+var zTextContent = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  annotations: zAnnotations.nullish(),
+  text: external_exports.string()
+});
+var zTextDocumentContentChangeEvent = external_exports.looseObject({
+  range: zRange.nullish(),
+  text: external_exports.string()
+});
+var zDidChangeDocumentNotification = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  contentChanges: external_exports.array(zTextDocumentContentChangeEvent),
+  sessionId: zSessionId,
+  uri: external_exports.string(),
+  version: external_exports.number()
+});
+var zClientNotification = external_exports.looseObject({
+  method: external_exports.string(),
+  params: external_exports.union([
+    zCancelNotification,
+    zDidOpenDocumentNotification,
+    zDidChangeDocumentNotification,
+    zDidCloseDocumentNotification,
+    zDidSaveDocumentNotification,
+    zDidFocusDocumentNotification,
+    zAcceptNesNotification,
+    zRejectNesNotification,
+    zExtNotification
+  ]).nullish()
+});
+var zTextDocumentSyncKind = external_exports.union([
+  external_exports.literal("full"),
+  external_exports.literal("incremental")
+]);
+var zNesDocumentDidChangeCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  syncKind: zTextDocumentSyncKind
+});
+var zNesDocumentEventCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  didChange: zNesDocumentDidChangeCapabilities.nullish(),
+  didClose: zNesDocumentDidCloseCapabilities.nullish(),
+  didFocus: zNesDocumentDidFocusCapabilities.nullish(),
+  didOpen: zNesDocumentDidOpenCapabilities.nullish(),
+  didSave: zNesDocumentDidSaveCapabilities.nullish()
+});
+var zNesEventCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  document: zNesDocumentEventCapabilities.nullish()
+});
+var zNesCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  context: zNesContextCapabilities.nullish(),
+  events: zNesEventCapabilities.nullish()
+});
+var zAgentCapabilities = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  auth: zAgentAuthCapabilities.optional().default({}),
   loadSession: external_exports.boolean().optional().default(false),
   mcpCapabilities: zMcpCapabilities.optional().default({ http: false, sse: false }),
+  nes: zNesCapabilities.nullish(),
+  positionEncoding: zPositionEncodingKind.nullish(),
   promptCapabilities: zPromptCapabilities.optional().default({
     audio: false,
     embeddedContext: false,
@@ -17088,9 +17626,10 @@ var zAgentCapabilities = external_exports.object({
   }),
   sessionCapabilities: zSessionCapabilities.optional().default({})
 });
-var zInitializeResponse = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zInitializeResponse = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   agentCapabilities: zAgentCapabilities.optional().default({
+    auth: {},
     loadSession: false,
     mcpCapabilities: { http: false, sse: false },
     promptCapabilities: {
@@ -17100,103 +17639,13 @@ var zInitializeResponse = external_exports.object({
     },
     sessionCapabilities: {}
   }),
-  agentInfo: external_exports.union([zImplementation, external_exports.null()]).optional(),
+  agentInfo: zImplementation.nullish(),
   authMethods: external_exports.array(zAuthMethod).optional().default([]),
   protocolVersion: zProtocolVersion
 });
-var zSetSessionConfigOptionRequest = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  configId: zSessionConfigId,
-  sessionId: zSessionId,
-  value: zSessionConfigValueId
-});
-var zSetSessionConfigOptionResponse = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  configOptions: external_exports.array(zSessionConfigOption)
-});
-var zSetSessionModeRequest = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  modeId: zSessionModeId,
-  sessionId: zSessionId
-});
-var zSetSessionModeResponse = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional()
-});
-var zSetSessionModelRequest = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  modelId: zModelId,
-  sessionId: zSessionId
-});
-var zSetSessionModelResponse = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional()
-});
-var zStopReason = external_exports.union([
-  external_exports.literal("end_turn"),
-  external_exports.literal("max_tokens"),
-  external_exports.literal("max_turn_requests"),
-  external_exports.literal("refusal"),
-  external_exports.literal("cancelled")
-]);
-var zPromptResponse = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  stopReason: zStopReason
-});
-var zAgentResponse = external_exports.union([
-  external_exports.object({
-    id: zRequestId,
-    result: external_exports.union([
-      zInitializeResponse,
-      zAuthenticateResponse,
-      zNewSessionResponse,
-      zLoadSessionResponse,
-      zListSessionsResponse,
-      zForkSessionResponse,
-      zResumeSessionResponse,
-      zSetSessionModeResponse,
-      zSetSessionConfigOptionResponse,
-      zPromptResponse,
-      zSetSessionModelResponse,
-      zExtResponse
-    ])
-  }),
-  external_exports.object({
-    error: zError,
-    id: zRequestId
-  })
-]);
-var zTerminal = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  terminalId: external_exports.string()
-});
-var zTerminalExitStatus = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  exitCode: external_exports.union([
-    external_exports.number().int().gte(0).max(4294967295, {
-      message: "Invalid value: Expected uint32 to be <= 4294967295"
-    }),
-    external_exports.null()
-  ]).optional(),
-  signal: external_exports.union([external_exports.string(), external_exports.null()]).optional()
-});
-var zTerminalOutputRequest = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  sessionId: zSessionId,
-  terminalId: external_exports.string()
-});
-var zTerminalOutputResponse = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  exitStatus: external_exports.union([zTerminalExitStatus, external_exports.null()]).optional(),
-  output: external_exports.string(),
-  truncated: external_exports.boolean()
-});
-var zTextContent = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  annotations: external_exports.union([zAnnotations, external_exports.null()]).optional(),
-  text: external_exports.string()
-});
-var zTextResourceContents = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  mimeType: external_exports.union([external_exports.string(), external_exports.null()]).optional(),
+var zTextResourceContents = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  mimeType: external_exports.string().nullish(),
   text: external_exports.string(),
   uri: external_exports.string()
 });
@@ -17204,82 +17653,63 @@ var zEmbeddedResourceResource = external_exports.union([
   zTextResourceContents,
   zBlobResourceContents
 ]);
-var zEmbeddedResource = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  annotations: external_exports.union([zAnnotations, external_exports.null()]).optional(),
+var zEmbeddedResource = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  annotations: zAnnotations.nullish(),
   resource: zEmbeddedResourceResource
 });
 var zContentBlock = external_exports.union([
-  zTextContent.and(external_exports.object({
+  zTextContent.and(external_exports.looseObject({
     type: external_exports.literal("text")
   })),
-  zImageContent.and(external_exports.object({
+  zImageContent.and(external_exports.looseObject({
     type: external_exports.literal("image")
   })),
-  zAudioContent.and(external_exports.object({
+  zAudioContent.and(external_exports.looseObject({
     type: external_exports.literal("audio")
   })),
-  zResourceLink.and(external_exports.object({
+  zResourceLink.and(external_exports.looseObject({
     type: external_exports.literal("resource_link")
   })),
-  zEmbeddedResource.and(external_exports.object({
+  zEmbeddedResource.and(external_exports.looseObject({
     type: external_exports.literal("resource")
   }))
 ]);
-var zContent = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zContent = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   content: zContentBlock
 });
-var zContentChunk = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  content: zContentBlock
+var zContentChunk = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  content: zContentBlock,
+  messageId: external_exports.string().nullish()
 });
-var zPromptRequest = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zPromptRequest = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  messageId: external_exports.string().nullish(),
   prompt: external_exports.array(zContentBlock),
   sessionId: zSessionId
 });
-var zClientRequest = external_exports.object({
-  id: zRequestId,
-  method: external_exports.string(),
-  params: external_exports.union([
-    external_exports.union([
-      zInitializeRequest,
-      zAuthenticateRequest,
-      zNewSessionRequest,
-      zLoadSessionRequest,
-      zListSessionsRequest,
-      zForkSessionRequest,
-      zResumeSessionRequest,
-      zSetSessionModeRequest,
-      zSetSessionConfigOptionRequest,
-      zPromptRequest,
-      zSetSessionModelRequest,
-      zExtRequest
-    ]),
-    external_exports.null()
-  ]).optional()
+var zTitledMultiSelectItems = external_exports.looseObject({
+  anyOf: external_exports.array(zEnumOption)
 });
 var zToolCallContent = external_exports.union([
-  zContent.and(external_exports.object({
+  zContent.and(external_exports.looseObject({
     type: external_exports.literal("content")
   })),
-  zDiff.and(external_exports.object({
+  zDiff.and(external_exports.looseObject({
     type: external_exports.literal("diff")
   })),
-  zTerminal.and(external_exports.object({
+  zTerminal.and(external_exports.looseObject({
     type: external_exports.literal("terminal")
   }))
 ]);
 var zToolCallId = external_exports.string();
-var zToolCallLocation = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  line: external_exports.union([
-    external_exports.number().int().gte(0).max(4294967295, {
-      message: "Invalid value: Expected uint32 to be <= 4294967295"
-    }),
-    external_exports.null()
-  ]).optional(),
+var zToolCallLocation = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  line: external_exports.number().int().gte(0).max(4294967295, {
+    message: "Invalid value: Expected uint32 to be <= 4294967295"
+  }).nullish(),
   path: external_exports.string()
 });
 var zToolCallStatus = external_exports.union([
@@ -17300,8 +17730,8 @@ var zToolKind = external_exports.union([
   external_exports.literal("switch_mode"),
   external_exports.literal("other")
 ]);
-var zToolCall = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zToolCall = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   content: external_exports.array(zToolCallContent).optional(),
   kind: zToolKind.optional(),
   locations: external_exports.array(zToolCallLocation).optional(),
@@ -17311,123 +17741,261 @@ var zToolCall = external_exports.object({
   title: external_exports.string(),
   toolCallId: zToolCallId
 });
-var zToolCallUpdate = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  content: external_exports.union([external_exports.array(zToolCallContent), external_exports.null()]).optional(),
-  kind: external_exports.union([zToolKind, external_exports.null()]).optional(),
-  locations: external_exports.union([external_exports.array(zToolCallLocation), external_exports.null()]).optional(),
+var zToolCallUpdate = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  content: external_exports.array(zToolCallContent).nullish(),
+  kind: zToolKind.nullish(),
+  locations: external_exports.array(zToolCallLocation).nullish(),
   rawInput: external_exports.unknown().optional(),
   rawOutput: external_exports.unknown().optional(),
-  status: external_exports.union([zToolCallStatus, external_exports.null()]).optional(),
-  title: external_exports.union([external_exports.string(), external_exports.null()]).optional(),
+  status: zToolCallStatus.nullish(),
+  title: external_exports.string().nullish(),
   toolCallId: zToolCallId
 });
-var zRequestPermissionRequest = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zRequestPermissionRequest = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   options: external_exports.array(zPermissionOption),
   sessionId: zSessionId,
   toolCall: zToolCallUpdate
 });
-var zUnstructuredCommandInput = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zUnstructuredCommandInput = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   hint: external_exports.string()
 });
 var zAvailableCommandInput = zUnstructuredCommandInput;
-var zAvailableCommand = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zAvailableCommand = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   description: external_exports.string(),
-  input: external_exports.union([zAvailableCommandInput, external_exports.null()]).optional(),
+  input: zAvailableCommandInput.nullish(),
   name: external_exports.string()
 });
-var zAvailableCommandsUpdate = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zAvailableCommandsUpdate = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   availableCommands: external_exports.array(zAvailableCommand)
 });
-var zSessionUpdate = external_exports.union([
-  zContentChunk.and(external_exports.object({
-    sessionUpdate: external_exports.literal("user_message_chunk")
+var zUntitledMultiSelectItems = external_exports.looseObject({
+  enum: external_exports.array(external_exports.string()),
+  type: zElicitationStringType
+});
+var zMultiSelectItems = external_exports.union([
+  zUntitledMultiSelectItems,
+  zTitledMultiSelectItems
+]);
+var zMultiSelectPropertySchema = external_exports.looseObject({
+  default: external_exports.array(external_exports.string()).nullish(),
+  description: external_exports.string().nullish(),
+  items: zMultiSelectItems,
+  maxItems: external_exports.number().nullish(),
+  minItems: external_exports.number().nullish(),
+  title: external_exports.string().nullish()
+});
+var zElicitationPropertySchema = external_exports.union([
+  zStringPropertySchema.and(external_exports.looseObject({
+    type: external_exports.literal("string")
   })),
-  zContentChunk.and(external_exports.object({
-    sessionUpdate: external_exports.literal("agent_message_chunk")
+  zNumberPropertySchema.and(external_exports.looseObject({
+    type: external_exports.literal("number")
   })),
-  zContentChunk.and(external_exports.object({
-    sessionUpdate: external_exports.literal("agent_thought_chunk")
+  zIntegerPropertySchema.and(external_exports.looseObject({
+    type: external_exports.literal("integer")
   })),
-  zToolCall.and(external_exports.object({
-    sessionUpdate: external_exports.literal("tool_call")
+  zBooleanPropertySchema.and(external_exports.looseObject({
+    type: external_exports.literal("boolean")
   })),
-  zToolCallUpdate.and(external_exports.object({
-    sessionUpdate: external_exports.literal("tool_call_update")
-  })),
-  zPlan.and(external_exports.object({
-    sessionUpdate: external_exports.literal("plan")
-  })),
-  zAvailableCommandsUpdate.and(external_exports.object({
-    sessionUpdate: external_exports.literal("available_commands_update")
-  })),
-  zCurrentModeUpdate.and(external_exports.object({
-    sessionUpdate: external_exports.literal("current_mode_update")
-  })),
-  zConfigOptionUpdate.and(external_exports.object({
-    sessionUpdate: external_exports.literal("config_option_update")
-  })),
-  zSessionInfoUpdate.and(external_exports.object({
-    sessionUpdate: external_exports.literal("session_info_update")
+  zMultiSelectPropertySchema.and(external_exports.looseObject({
+    type: external_exports.literal("array")
   }))
 ]);
-var zSessionNotification = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zElicitationSchema = external_exports.looseObject({
+  description: external_exports.string().nullish(),
+  properties: external_exports.record(external_exports.string(), zElicitationPropertySchema).optional().default({}),
+  required: external_exports.array(external_exports.string()).nullish(),
+  title: external_exports.string().nullish(),
+  type: zElicitationSchemaType.optional().default("object")
+});
+var zElicitationFormMode = external_exports.looseObject({
+  requestedSchema: zElicitationSchema
+});
+var zElicitationRequest = external_exports.intersection(external_exports.union([
+  zElicitationFormMode.and(external_exports.looseObject({
+    mode: external_exports.literal("form")
+  })),
+  zElicitationUrlMode.and(external_exports.looseObject({
+    mode: external_exports.literal("url")
+  }))
+]), external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  message: external_exports.string(),
+  sessionId: zSessionId
+}));
+var zUsage = external_exports.looseObject({
+  cachedReadTokens: external_exports.number().nullish(),
+  cachedWriteTokens: external_exports.number().nullish(),
+  inputTokens: external_exports.number(),
+  outputTokens: external_exports.number(),
+  thoughtTokens: external_exports.number().nullish(),
+  totalTokens: external_exports.number()
+});
+var zPromptResponse = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  stopReason: zStopReason,
+  usage: zUsage.nullish(),
+  userMessageId: external_exports.string().nullish()
+});
+var zAgentResponse = external_exports.union([
+  external_exports.looseObject({
+    id: zRequestId,
+    result: external_exports.union([
+      zInitializeResponse,
+      zAuthenticateResponse,
+      zLogoutResponse,
+      zNewSessionResponse,
+      zLoadSessionResponse,
+      zListSessionsResponse,
+      zForkSessionResponse,
+      zResumeSessionResponse,
+      zCloseSessionResponse,
+      zSetSessionModeResponse,
+      zSetSessionConfigOptionResponse,
+      zPromptResponse,
+      zSetSessionModelResponse,
+      zStartNesResponse,
+      zSuggestNesResponse,
+      zCloseNesResponse,
+      zExtResponse
+    ])
+  }),
+  external_exports.looseObject({
+    error: zError,
+    id: zRequestId
+  })
+]);
+var zUsageUpdate = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  cost: zCost.nullish(),
+  size: external_exports.number(),
+  used: external_exports.number()
+});
+var zSessionUpdate = external_exports.union([
+  zContentChunk.and(external_exports.looseObject({
+    sessionUpdate: external_exports.literal("user_message_chunk")
+  })),
+  zContentChunk.and(external_exports.looseObject({
+    sessionUpdate: external_exports.literal("agent_message_chunk")
+  })),
+  zContentChunk.and(external_exports.looseObject({
+    sessionUpdate: external_exports.literal("agent_thought_chunk")
+  })),
+  zToolCall.and(external_exports.looseObject({
+    sessionUpdate: external_exports.literal("tool_call")
+  })),
+  zToolCallUpdate.and(external_exports.looseObject({
+    sessionUpdate: external_exports.literal("tool_call_update")
+  })),
+  zPlan.and(external_exports.looseObject({
+    sessionUpdate: external_exports.literal("plan")
+  })),
+  zAvailableCommandsUpdate.and(external_exports.looseObject({
+    sessionUpdate: external_exports.literal("available_commands_update")
+  })),
+  zCurrentModeUpdate.and(external_exports.looseObject({
+    sessionUpdate: external_exports.literal("current_mode_update")
+  })),
+  zConfigOptionUpdate.and(external_exports.looseObject({
+    sessionUpdate: external_exports.literal("config_option_update")
+  })),
+  zSessionInfoUpdate.and(external_exports.looseObject({
+    sessionUpdate: external_exports.literal("session_info_update")
+  })),
+  zUsageUpdate.and(external_exports.looseObject({
+    sessionUpdate: external_exports.literal("usage_update")
+  }))
+]);
+var zSessionNotification = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   sessionId: zSessionId,
   update: zSessionUpdate
 });
-var zAgentNotification = external_exports.object({
+var zAgentNotification = external_exports.looseObject({
   method: external_exports.string(),
-  params: external_exports.union([external_exports.union([zSessionNotification, zExtNotification]), external_exports.null()]).optional()
+  params: external_exports.union([
+    zSessionNotification,
+    zElicitationCompleteNotification,
+    zExtNotification
+  ]).nullish()
 });
-var zWaitForTerminalExitRequest = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zWaitForTerminalExitRequest = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   sessionId: zSessionId,
   terminalId: external_exports.string()
 });
-var zWaitForTerminalExitResponse = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
-  exitCode: external_exports.union([
-    external_exports.number().int().gte(0).max(4294967295, {
-      message: "Invalid value: Expected uint32 to be <= 4294967295"
-    }),
-    external_exports.null()
-  ]).optional(),
-  signal: external_exports.union([external_exports.string(), external_exports.null()]).optional()
+var zWaitForTerminalExitResponse = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  exitCode: external_exports.number().int().gte(0).max(4294967295, {
+    message: "Invalid value: Expected uint32 to be <= 4294967295"
+  }).nullish(),
+  signal: external_exports.string().nullish()
 });
-var zWriteTextFileRequest = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional(),
+var zWorkspaceFolder = external_exports.looseObject({
+  name: external_exports.string(),
+  uri: external_exports.string()
+});
+var zStartNesRequest = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
+  repository: zNesRepository.nullish(),
+  workspaceFolders: external_exports.array(zWorkspaceFolder).nullish(),
+  workspaceUri: external_exports.string().nullish()
+});
+var zClientRequest = external_exports.looseObject({
+  id: zRequestId,
+  method: external_exports.string(),
+  params: external_exports.union([
+    zInitializeRequest,
+    zAuthenticateRequest,
+    zLogoutRequest,
+    zNewSessionRequest,
+    zLoadSessionRequest,
+    zListSessionsRequest,
+    zForkSessionRequest,
+    zResumeSessionRequest,
+    zCloseSessionRequest,
+    zSetSessionModeRequest,
+    zSetSessionConfigOptionRequest,
+    zPromptRequest,
+    zSetSessionModelRequest,
+    zStartNesRequest,
+    zSuggestNesRequest,
+    zCloseNesRequest,
+    zExtRequest
+  ]).nullish()
+});
+var zWriteTextFileRequest = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish(),
   content: external_exports.string(),
   path: external_exports.string(),
   sessionId: zSessionId
 });
-var zAgentRequest = external_exports.object({
+var zAgentRequest = external_exports.looseObject({
   id: zRequestId,
   method: external_exports.string(),
   params: external_exports.union([
-    external_exports.union([
-      zWriteTextFileRequest,
-      zReadTextFileRequest,
-      zRequestPermissionRequest,
-      zCreateTerminalRequest,
-      zTerminalOutputRequest,
-      zReleaseTerminalRequest,
-      zWaitForTerminalExitRequest,
-      zKillTerminalCommandRequest,
-      zExtRequest
-    ]),
-    external_exports.null()
-  ]).optional()
+    zWriteTextFileRequest,
+    zReadTextFileRequest,
+    zRequestPermissionRequest,
+    zCreateTerminalRequest,
+    zTerminalOutputRequest,
+    zReleaseTerminalRequest,
+    zWaitForTerminalExitRequest,
+    zKillTerminalRequest,
+    zElicitationRequest,
+    zExtRequest
+  ]).nullish()
 });
-var zWriteTextFileResponse = external_exports.object({
-  _meta: external_exports.union([external_exports.record(external_exports.string(), external_exports.unknown()), external_exports.null()]).optional()
+var zWriteTextFileResponse = external_exports.looseObject({
+  _meta: external_exports.record(external_exports.string(), external_exports.unknown()).nullish()
 });
 var zClientResponse = external_exports.union([
-  external_exports.object({
+  external_exports.looseObject({
     id: zRequestId,
     result: external_exports.union([
       zWriteTextFileResponse,
@@ -17437,11 +18005,12 @@ var zClientResponse = external_exports.union([
       zTerminalOutputResponse,
       zReleaseTerminalResponse,
       zWaitForTerminalExitResponse,
-      zKillTerminalCommandResponse,
+      zKillTerminalResponse,
+      zElicitationResponse,
       zExtResponse
     ])
   }),
-  external_exports.object({
+  external_exports.looseObject({
     error: zError,
     id: zRequestId
   })
@@ -17479,10 +18048,13 @@ function ndJsonStream(output, input) {
             }
           }
         }
+      } catch (err) {
+        controller.error(err);
+        return;
       } finally {
         reader.releaseLock();
-        controller.close();
       }
+      controller.close();
     }
   });
   const writable = new WritableStream({
@@ -17550,7 +18122,7 @@ var ClientSideConnection = class {
           return (_f = client.waitForTerminalExit) == null ? void 0 : _f.call(client, validatedParams);
         }
         case CLIENT_METHODS.terminal_kill: {
-          const validatedParams = zKillTerminalCommandRequest.parse(params);
+          const validatedParams = zKillTerminalRequest.parse(params);
           const result = await ((_g = client.killTerminal) == null ? void 0 : _g.call(client, validatedParams));
           return result != null ? result : {};
         }
@@ -17601,6 +18173,9 @@ var ClientSideConnection = class {
    * - Connect to any specified MCP servers
    * - Return a unique session ID for future requests
    *
+   * The request may include `additionalDirectories` to expand the session's filesystem
+   * scope beyond `cwd` without changing the base for relative paths.
+   *
    * May return an `auth_required` error if the agent requires authentication.
    *
    * See protocol docs: [Session Setup](https://agentclientprotocol.com/protocol/session-setup)
@@ -17618,6 +18193,9 @@ var ClientSideConnection = class {
    * - Connect to the specified MCP servers
    * - Stream the entire conversation history back to the client via notifications
    *
+   * The request may include `additionalDirectories` to set the complete list of
+   * additional workspace roots for the loaded session.
+   *
    * See protocol docs: [Loading Sessions](https://agentclientprotocol.com/protocol/session-setup#loading-sessions)
    */
   async loadSession(params) {
@@ -17634,6 +18212,9 @@ var ClientSideConnection = class {
    * Creates a new session based on the context of an existing one, allowing
    * operations like generating summaries without affecting the original session's history.
    *
+   * The request may include `additionalDirectories` to set the complete list of
+   * additional workspace roots for the forked session.
+   *
    * This method is only available if the agent advertises the `session.fork` capability.
    *
    * @experimental
@@ -17642,21 +18223,15 @@ var ClientSideConnection = class {
     return await __privateGet(this, _connection).sendRequest(AGENT_METHODS.session_fork, params);
   }
   /**
-   * **UNSTABLE**
-   *
-   * This capability is not part of the spec yet, and may be removed or changed at any point.
-   *
    * Lists existing sessions from the agent.
    *
    * This method is only available if the agent advertises the `listSessions` capability.
    *
    * Returns a list of sessions with metadata like session ID, working directory,
-   * title, and last update time. Supports filtering by working directory and
-   * cursor-based pagination.
-   *
-   * @experimental
+   * title, and last update time. Supports filtering by working directory,
+   * `additionalDirectories`, and cursor-based pagination.
    */
-  async unstable_listSessions(params) {
+  async listSessions(params) {
     return await __privateGet(this, _connection).sendRequest(AGENT_METHODS.session_list, params);
   }
   /**
@@ -17671,10 +18246,30 @@ var ClientSideConnection = class {
    * The agent should resume the session context, allowing the conversation to continue
    * without replaying the message history (unlike `session/load`).
    *
+   * The request may include `additionalDirectories` to set the complete list of
+   * additional workspace roots for the resumed session.
+   *
    * @experimental
    */
   async unstable_resumeSession(params) {
     return await __privateGet(this, _connection).sendRequest(AGENT_METHODS.session_resume, params);
+  }
+  /**
+   * **UNSTABLE**
+   *
+   * This capability is not part of the spec yet, and may be removed or changed at any point.
+   *
+   * Closes an active session and frees up any resources associated with it.
+   *
+   * This method is only available if the agent advertises the `session.close` capability.
+   *
+   * The agent must cancel any ongoing work (as if `session/cancel` was called)
+   * and then free up any resources associated with the session.
+   *
+   * @experimental
+   */
+  async unstable_closeSession(params) {
+    return await __privateGet(this, _connection).sendRequest(AGENT_METHODS.session_close, params);
   }
   /**
    * Sets the operational mode for a session.
@@ -17709,18 +18304,12 @@ var ClientSideConnection = class {
     return (_a3 = await __privateGet(this, _connection).sendRequest(AGENT_METHODS.session_set_model, params)) != null ? _a3 : {};
   }
   /**
-   * **UNSTABLE**
-   *
-   * This capability is not part of the spec yet, and may be removed or changed at any point.
-   *
    * Set a configuration option for a given session.
    *
    * The response contains the full set of configuration options and their current values,
    * as changing one option may affect the available values or state of other options.
-   *
-   * @experimental
    */
-  async unstable_setSessionConfigOption(params) {
+  async setSessionConfigOption(params) {
     return await __privateGet(this, _connection).sendRequest(AGENT_METHODS.session_set_config_option, params);
   }
   /**
@@ -17737,6 +18326,17 @@ var ClientSideConnection = class {
   async authenticate(params) {
     var _a3;
     return (_a3 = await __privateGet(this, _connection).sendRequest(AGENT_METHODS.authenticate, params)) != null ? _a3 : {};
+  }
+  /**
+   * Terminates the current authenticated session.
+   *
+   * **UNSTABLE**: This capability is not part of the spec yet, and may be removed or changed at any point.
+   *
+   * @experimental
+   */
+  async unstable_logout(params) {
+    var _a3;
+    return (_a3 = await __privateGet(this, _connection).sendRequest(AGENT_METHODS.logout, params)) != null ? _a3 : {};
   }
   /**
    * Processes a user prompt within a session.
@@ -17769,6 +18369,107 @@ var ClientSideConnection = class {
    */
   async cancel(params) {
     return await __privateGet(this, _connection).sendNotification(AGENT_METHODS.session_cancel, params);
+  }
+  /**
+   * **UNSTABLE**: This capability is not part of the spec yet, and may be removed or changed at any point.
+   *
+   * Starts a NES (Next Edit Suggestions) session.
+   *
+   * @experimental
+   */
+  async unstable_startNes(params) {
+    return await __privateGet(this, _connection).sendRequest(AGENT_METHODS.nes_start, params);
+  }
+  /**
+   * **UNSTABLE**: This capability is not part of the spec yet, and may be removed or changed at any point.
+   *
+   * Sends a NES suggestion request.
+   *
+   * @experimental
+   */
+  async unstable_suggestNes(params) {
+    return await __privateGet(this, _connection).sendRequest(AGENT_METHODS.nes_suggest, params);
+  }
+  /**
+   * **UNSTABLE**: This capability is not part of the spec yet, and may be removed or changed at any point.
+   *
+   * Closes a NES session.
+   *
+   * @experimental
+   */
+  async unstable_closeNes(params) {
+    var _a3;
+    return (_a3 = await __privateGet(this, _connection).sendRequest(AGENT_METHODS.nes_close, params)) != null ? _a3 : {};
+  }
+  /**
+   * **UNSTABLE**: This capability is not part of the spec yet, and may be removed or changed at any point.
+   *
+   * Notifies the agent that a document was opened.
+   *
+   * @experimental
+   */
+  async unstable_didOpenDocument(params) {
+    return await __privateGet(this, _connection).sendNotification(AGENT_METHODS.document_did_open, params);
+  }
+  /**
+   * **UNSTABLE**: This capability is not part of the spec yet, and may be removed or changed at any point.
+   *
+   * Notifies the agent that a document was changed.
+   *
+   * @experimental
+   */
+  async unstable_didChangeDocument(params) {
+    return await __privateGet(this, _connection).sendNotification(AGENT_METHODS.document_did_change, params);
+  }
+  /**
+   * **UNSTABLE**: This capability is not part of the spec yet, and may be removed or changed at any point.
+   *
+   * Notifies the agent that a document was closed.
+   *
+   * @experimental
+   */
+  async unstable_didCloseDocument(params) {
+    return await __privateGet(this, _connection).sendNotification(AGENT_METHODS.document_did_close, params);
+  }
+  /**
+   * **UNSTABLE**: This capability is not part of the spec yet, and may be removed or changed at any point.
+   *
+   * Notifies the agent that a document was saved.
+   *
+   * @experimental
+   */
+  async unstable_didSaveDocument(params) {
+    return await __privateGet(this, _connection).sendNotification(AGENT_METHODS.document_did_save, params);
+  }
+  /**
+   * **UNSTABLE**: This capability is not part of the spec yet, and may be removed or changed at any point.
+   *
+   * Notifies the agent that a document received focus.
+   *
+   * @experimental
+   */
+  async unstable_didFocusDocument(params) {
+    return await __privateGet(this, _connection).sendNotification(AGENT_METHODS.document_did_focus, params);
+  }
+  /**
+   * **UNSTABLE**: This capability is not part of the spec yet, and may be removed or changed at any point.
+   *
+   * Notifies the agent that a NES suggestion was accepted.
+   *
+   * @experimental
+   */
+  async unstable_acceptNes(params) {
+    return await __privateGet(this, _connection).sendNotification(AGENT_METHODS.nes_accept, params);
+  }
+  /**
+   * **UNSTABLE**: This capability is not part of the spec yet, and may be removed or changed at any point.
+   *
+   * Notifies the agent that a NES suggestion was rejected.
+   *
+   * @experimental
+   */
+  async unstable_rejectNes(params) {
+    return await __privateGet(this, _connection).sendNotification(AGENT_METHODS.nes_reject, params);
   }
   /**
    * Extension method
@@ -17837,7 +18538,7 @@ var ClientSideConnection = class {
   }
 };
 _connection = new WeakMap();
-var _pendingResponses, _nextRequestId, _requestHandler, _notificationHandler, _stream, _writeQueue, _abortController, _closedPromise, _Connection_instances, receive_fn, processMessage_fn, tryCallRequestHandler_fn, tryCallNotificationHandler_fn, handleResponse_fn, sendMessage_fn;
+var _pendingResponses, _nextRequestId, _requestHandler, _notificationHandler, _stream, _writeQueue, _abortController, _closedPromise, _Connection_instances, receive_fn, close_fn, processMessage_fn, tryCallRequestHandler_fn, tryCallNotificationHandler_fn, handleResponse_fn, throwIfClosed_fn, sendMessage_fn;
 var Connection = class {
   constructor(requestHandler, notificationHandler, stream) {
     __privateAdd(this, _Connection_instances);
@@ -17855,7 +18556,7 @@ var Connection = class {
     __privateSet(this, _closedPromise, new Promise((resolve) => {
       __privateGet(this, _abortController).signal.addEventListener("abort", () => resolve());
     }));
-    __privateMethod(this, _Connection_instances, receive_fn).call(this);
+    void __privateMethod(this, _Connection_instances, receive_fn).call(this);
   }
   /**
    * AbortSignal that aborts when the connection closes.
@@ -17886,6 +18587,7 @@ var Connection = class {
     return __privateGet(this, _closedPromise);
   }
   async sendRequest(method, params) {
+    __privateMethod(this, _Connection_instances, throwIfClosed_fn).call(this);
     const id = __privateWrapper(this, _nextRequestId)._++;
     const responsePromise = new Promise((resolve, reject) => {
       __privateGet(this, _pendingResponses).set(id, { resolve, reject });
@@ -17894,6 +18596,7 @@ var Connection = class {
     return responsePromise;
   }
   async sendNotification(method, params) {
+    __privateMethod(this, _Connection_instances, throwIfClosed_fn).call(this);
     await __privateMethod(this, _Connection_instances, sendMessage_fn).call(this, { jsonrpc: "2.0", method, params });
   }
 };
@@ -17907,36 +18610,53 @@ _abortController = new WeakMap();
 _closedPromise = new WeakMap();
 _Connection_instances = new WeakSet();
 receive_fn = async function() {
-  const reader = __privateGet(this, _stream).readable.getReader();
+  let closeError = void 0;
   try {
-    while (true) {
-      const { value: message, done } = await reader.read();
-      if (done) {
-        break;
-      }
-      if (!message) {
-        continue;
-      }
-      try {
-        __privateMethod(this, _Connection_instances, processMessage_fn).call(this, message);
-      } catch (err) {
-        console.error("Unexpected error during message processing:", message, err);
-        if ("id" in message && message.id !== void 0) {
-          __privateMethod(this, _Connection_instances, sendMessage_fn).call(this, {
-            jsonrpc: "2.0",
-            id: message.id,
-            error: {
-              code: -32700,
-              message: "Parse error"
-            }
-          });
+    const reader = __privateGet(this, _stream).readable.getReader();
+    try {
+      while (!__privateGet(this, _abortController).signal.aborted) {
+        const { value: message, done } = await reader.read();
+        if (done) {
+          break;
+        }
+        if (!message) {
+          continue;
+        }
+        try {
+          __privateMethod(this, _Connection_instances, processMessage_fn).call(this, message);
+        } catch (err) {
+          console.error("Unexpected error during message processing:", message, err);
+          if ("id" in message && message.id !== void 0) {
+            __privateMethod(this, _Connection_instances, sendMessage_fn).call(this, {
+              jsonrpc: "2.0",
+              id: message.id,
+              error: {
+                code: -32700,
+                message: "Parse error"
+              }
+            });
+          }
         }
       }
+    } finally {
+      reader.releaseLock();
     }
+  } catch (error48) {
+    closeError = error48;
   } finally {
-    reader.releaseLock();
-    __privateGet(this, _abortController).abort();
+    __privateMethod(this, _Connection_instances, close_fn).call(this, closeError);
   }
+};
+close_fn = function(error48) {
+  if (__privateGet(this, _abortController).signal.aborted) {
+    return;
+  }
+  const closeError = error48 != null ? error48 : new Error("ACP connection closed");
+  for (const pendingResponse of __privateGet(this, _pendingResponses).values()) {
+    pendingResponse.reject(closeError);
+  }
+  __privateGet(this, _pendingResponses).clear();
+  __privateGet(this, _abortController).abort(closeError);
 };
 processMessage_fn = async function(message) {
   if ("method" in message && "id" in message) {
@@ -18014,11 +18734,18 @@ handleResponse_fn = function(response) {
     if ("result" in response) {
       pendingResponse.resolve(response.result);
     } else if ("error" in response) {
-      pendingResponse.reject(response.error);
+      const { code, message, data } = response.error;
+      pendingResponse.reject(new RequestError(code, message, data));
     }
     __privateGet(this, _pendingResponses).delete(response.id);
   } else {
     console.error("Got response to unknown request", response.id);
+  }
+};
+throwIfClosed_fn = function() {
+  var _a3;
+  if (__privateGet(this, _abortController).signal.aborted) {
+    throw (_a3 = __privateGet(this, _abortController).signal.reason) != null ? _a3 : new Error("ACP connection closed");
   }
 };
 sendMessage_fn = async function(message) {
@@ -18030,7 +18757,7 @@ sendMessage_fn = async function(message) {
       writer.releaseLock();
     }
   }).catch((error48) => {
-    console.error("ACP write error:", error48);
+    __privateMethod(this, _Connection_instances, close_fn).call(this, error48);
   }));
   return __privateGet(this, _writeQueue);
 };
@@ -18596,7 +19323,7 @@ var AcpExecutor = class {
     }
     try {
       this.debug("Setting thinking mode to:", value);
-      const response = await this.connection.unstable_setSessionConfigOption({
+      const response = await this.connection.setSessionConfigOption({
         sessionId: this.sessionId,
         configId: thoughtLevelOption.id,
         value
@@ -21770,7 +22497,7 @@ ${action.prompt}`;
       this.clearProgress();
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      console.error("ACP connection failed:", errorMsg);
+      if (this.plugin.settings.debugMode) console.error("[ChatView] ACP connection failed:", errorMsg);
       await this.acpExecutor.disconnect();
       this.plugin.updateStatusBar(targetProvider, void 0, "idle");
       new import_obsidian4.Notice(`ACP connection failed: ${errorMsg.slice(0, 100)}`, 5e3);
@@ -21853,7 +22580,7 @@ ${action.prompt}`;
         const acpResponse = await this.acpExecutor.prompt(contextPrompt, { onProgress });
         const content = acpResponse.content;
         if (!content && !acpResponse.error) {
-          console.warn("ACP response has no content - this may indicate a problem");
+          if (this.plugin.settings.debugMode) console.warn("[ChatView] ACP response has no content - this may indicate a problem");
         }
         response = {
           content,
