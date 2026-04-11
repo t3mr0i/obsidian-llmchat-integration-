@@ -28,4 +28,4 @@ jobs:
       - name: Upload release assets
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "$GITHUB_REF_NAME" main.js manifest.json styles.css
+        run: gh release upload "$GITHUB_REF_NAME" main.js manifest.json styles.css --clobber
