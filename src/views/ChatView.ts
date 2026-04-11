@@ -31,6 +31,7 @@ export class ChatView extends ItemView {
   private currentProvider: LLMProvider;
   private isLoading = false;
   private messagesContainer: HTMLElement | null = null;
+  private pendingActionCallback: ((response: string) => Promise<void>) | null = null;
   private inputEl: HTMLTextAreaElement | null = null;
   private sendBtn: HTMLButtonElement | null = null;
   private cancelBtn: HTMLButtonElement | null = null;
@@ -631,10 +632,13 @@ export class ChatView extends ItemView {
     // Quick action buttons
     this.renderQuickActions(inputContainer);
 
-    this.inputEl = inputContainer.createEl("textarea", {
+    // New wrapper for the input and send button
+    const inputWrapper = inputContainer.createDiv({ cls: "llm-input-wrapper" });
+
+    this.inputEl = inputWrapper.createEl("textarea", {
       cls: "llm-chat-input",
       attr: {
-        placeholder: "Ask anything about your notes... (Enter to send)",
+        placeholder: "Ask anything... (Enter to send)",
         rows: "1",
       },
     });
@@ -643,7 +647,7 @@ export class ChatView extends ItemView {
     const autoGrow = () => {
       if (!this.inputEl) return;
       this.inputEl.style.height = "auto";
-      this.inputEl.style.height = Math.min(this.inputEl.scrollHeight, 200) + "px";
+      this.inputEl.style.height = Math.min(this.inputEl.scrollHeight, 120) + "px";
     };
     this.inputEl.addEventListener("input", autoGrow);
 
@@ -785,18 +789,18 @@ export class ChatView extends ItemView {
       }
     }, true);
 
-    const buttonRow = inputContainer.createDiv({ cls: "llm-input-buttons" });
-
-    this.sendBtn = buttonRow.createEl("button", {
-      text: "Send",
-      cls: "llm-chat-send mod-cta",
+    this.sendBtn = inputWrapper.createEl("button", {
+      cls: "llm-chat-send",
+      attr: { "aria-label": "Send message" },
     });
+    setIcon(this.sendBtn, "send");
     this.sendBtn.addEventListener("click", () => this.sendMessage());
 
-    this.cancelBtn = buttonRow.createEl("button", {
-      text: "Cancel",
+    this.cancelBtn = inputWrapper.createEl("button", {
       cls: "llm-chat-cancel",
+      attr: { "aria-label": "Cancel" },
     });
+    setIcon(this.cancelBtn, "square");
     this.cancelBtn.style.display = "none";
     this.cancelBtn.addEventListener("click", () => this.cancelRequest());
   }
@@ -807,10 +811,61 @@ export class ChatView extends ItemView {
   private renderQuickActions(container: HTMLElement) {
     const actions = container.createDiv({ cls: "llm-quick-actions" });
 
-    const quickActions = [
-      { label: "Summarize", icon: "file-text", prompt: "Summarize the current note concisely. Keep the key points and structure." },
-      { label: "Rewrite", icon: "pen-line", prompt: "Rewrite the current note more clearly and professionally. Keep the meaning, improve the structure and wording." },
-      { label: "Translate", icon: "languages", prompt: "Translate the current note. If it's in German, translate to English. If it's in English, translate to German. Keep formatting intact." },
+    const quickActions: {
+      label: string;
+      icon: string;
+      prompt: (title: string, content: string) => string;
+      onResponse?: (response: string, title: string, file: TFile) => Promise<void>;
+    }[] = [
+      {
+        label: "Summarize",
+        icon: "file-text",
+        prompt: (title, content) =>
+          `Summarize this note concisely. Output only the summary as clean Markdown — no intro, no "here is a summary".\n\nNote: ${title}\n\n${content}`,
+        onResponse: async (response, title) => {
+          const summaryPath = `${title} — Summary.md`;
+          const existing = this.app.vault.getAbstractFileByPath(summaryPath);
+          if (existing instanceof TFile) {
+            await this.app.vault.modify(existing, response);
+          } else {
+            await this.app.vault.create(summaryPath, response);
+          }
+          new Notice(`Summary saved: ${summaryPath}`);
+        },
+      },
+      {
+        label: "Rewrite",
+        icon: "pen-line",
+        prompt: (title, content) =>
+          `Rewrite the following note more clearly and professionally. Keep the meaning and structure, improve wording and flow. Output only the rewritten Markdown — no intro text.\n\nNote: ${title}\n\n${content}`,
+        onResponse: async (response, _title, file) => {
+          const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+          if (activeView?.file?.path === file.path) {
+            activeView.editor.setValue(response);
+          } else {
+            await this.app.vault.modify(file, response);
+          }
+          new Notice("Note rewritten");
+        },
+      },
+      {
+        label: "Feynman",
+        icon: "graduation-cap",
+        prompt: (title, content) =>
+          `Explain the core idea of the following note using the Feynman technique: as if explaining to a curious 12-year-old. Use simple words, concrete analogies, and no jargon. If there are gaps or unclear parts in the original, point them out.\n\nNote: ${title}\n\n${content}`,
+      },
+      {
+        label: "Key Points",
+        icon: "list-checks",
+        prompt: (title, content) =>
+          `Extract the most important key points from this note as a concise bullet list. Max 7 points. Output only the bullet list.\n\nNote: ${title}\n\n${content}`,
+      },
+      {
+        label: "Find Gaps",
+        icon: "search-x",
+        prompt: (title, content) =>
+          `Analyze this note critically. What is missing, unclear, or contradictory? What questions does it raise but not answer? Be specific and direct.\n\nNote: ${title}\n\n${content}`,
+      },
     ];
 
     for (const action of quickActions) {
@@ -823,15 +878,27 @@ export class ChatView extends ItemView {
 
       btn.addEventListener("click", () => {
         if (this.isLoading || !this.inputEl) return;
-        const noteContent = this.getActiveNoteContent();
-        const noteTitle = this.getActiveNoteTitle();
-        if (noteContent) {
-          // Send full note content — RAG search in sendMessage() adds vault context
-          this.inputEl.value = `[Note: ${noteTitle || "Untitled"}]\n${noteContent}\n\n---\n${action.prompt}`;
-        } else {
-          this.inputEl.value = action.prompt;
-          new Notice("No active note found — sending prompt without context");
+        const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+        const noteContent = activeView?.editor.getValue() ?? null;
+        const noteTitle = activeView?.file?.basename ?? null;
+        const noteFile = activeView?.file ?? null;
+
+        if (!noteContent || !noteTitle || !noteFile) {
+          new Notice("Open a note first");
+          return;
         }
+
+        const prompt = action.prompt(noteTitle, noteContent);
+        // Store callback for after response
+        if (action.onResponse) {
+          this.pendingActionCallback = async (response: string) => {
+            await action.onResponse!(response, noteTitle, noteFile);
+          };
+        } else {
+          this.pendingActionCallback = null;
+        }
+
+        this.inputEl.value = prompt;
         this.sendMessage();
       });
     }
@@ -875,11 +942,11 @@ export class ChatView extends ItemView {
    */
   private updateButtonStates() {
     if (this.sendBtn) {
-      this.sendBtn.style.display = this.isLoading ? "none" : "block";
+      this.sendBtn.style.display = this.isLoading ? "none" : "flex";
       this.sendBtn.disabled = this.isLoading;
     }
     if (this.cancelBtn) {
-      this.cancelBtn.style.display = this.isLoading ? "block" : "none";
+      this.cancelBtn.style.display = this.isLoading ? "flex" : "none";
     }
     if (this.inputEl) {
       this.inputEl.disabled = this.isLoading;
@@ -1263,6 +1330,17 @@ export class ChatView extends ItemView {
         await this.renderMessagesContent();
         // Auto-save after each exchange
         await this.persistSessions();
+
+        // Run pending action callback (e.g. save summary, rewrite note)
+        if (this.pendingActionCallback) {
+          const cb = this.pendingActionCallback;
+          this.pendingActionCallback = null;
+          try {
+            await cb(response.content);
+          } catch (err) {
+            new Notice(`Action failed: ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }
       }
     } catch (error) {
       // Restore input so user can retry
