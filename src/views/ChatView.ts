@@ -55,6 +55,10 @@ export class ChatView extends ItemView {
   private thinkingDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   private vaultSearch: VaultSearch;
   private quickActionsEl: HTMLElement | null = null;
+  private contextChipEl: HTMLElement | null = null;
+  private lastNoteContext: "code" | "tasks" | "questions" | "concept" | "prose" = "prose";
+  // Track how often each action label was clicked (persisted in memory only, resets on reload)
+  private actionClickCounts: Record<string, number> = {};
 
   constructor(leaf: WorkspaceLeaf, plugin: LLMPlugin) {
     super(leaf);
@@ -428,6 +432,11 @@ export class ChatView extends ItemView {
       this.renderedCount = 0;
     }
 
+    // Remove stale follow-up chips on rebuild
+    if (force) {
+      this.messagesContainer.querySelector(".llm-followup-chips")?.remove();
+    }
+
     // Empty state — show setup guidance if no providers enabled
     if (this.messages.length === 0) {
       const allProviders: LLMProvider[] = ["claude", "opencode", "codex", "gemini", "local"];
@@ -636,6 +645,10 @@ export class ChatView extends ItemView {
 
   private renderInput(container: HTMLElement) {
     const inputContainer = container.createDiv({ cls: "llm-chat-input-container" });
+
+    // Context chip — shows active note name and detected context type
+    this.contextChipEl = inputContainer.createDiv({ cls: "llm-context-chip" });
+    this.updateContextChip();
 
     // Quick action buttons
     this.renderQuickActions(inputContainer);
@@ -1010,7 +1023,22 @@ export class ChatView extends ItemView {
       },
     ];
 
-    const allActions = [...staticActions, ...this.getDynamicActions(context)];
+    // Sort dynamic actions: most-clicked first (within same context)
+    const dynamicActions = this.getDynamicActions(context).sort((a, b) => {
+      const aCount = this.actionClickCounts[`${context}:${a.label}`] ?? 0;
+      const bCount = this.actionClickCounts[`${context}:${b.label}`] ?? 0;
+      return bCount - aCount;
+    });
+
+    const allActions = [...staticActions, ...dynamicActions];
+
+    // Animate buttons if context changed
+    const contextChanged = context !== this.lastNoteContext;
+    if (contextChanged) {
+      this.lastNoteContext = context;
+      this.quickActionsEl.addClass("llm-quick-actions-fade");
+      setTimeout(() => this.quickActionsEl?.removeClass("llm-quick-actions-fade"), 300);
+    }
 
     for (const action of allActions) {
       const btn = this.quickActionsEl.createEl("button", {
@@ -1023,7 +1051,10 @@ export class ChatView extends ItemView {
       btn.addEventListener("click", () => {
         if (this.isLoading || !this.inputEl) return;
         const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-        const noteContent = activeView?.editor.getValue() ?? null;
+
+        // Selection-aware: use selected text if available, else whole note
+        const selection = activeView?.editor.getSelection() ?? "";
+        const noteContent = (selection.trim() || activeView?.editor.getValue()) ?? null;
         const noteTitle = activeView?.file?.basename ?? null;
         const noteFile = activeView?.file ?? null;
 
@@ -1032,8 +1063,15 @@ export class ChatView extends ItemView {
           return;
         }
 
-        const prompt = action.prompt(noteTitle, noteContent);
-        if (action.onResponse) {
+        // Track click for future ordering
+        const countKey = `${context}:${action.label}`;
+        this.actionClickCounts[countKey] = (this.actionClickCounts[countKey] ?? 0) + 1;
+
+        const isSelection = selection.trim().length > 0;
+        const contextNote = isSelection ? `Selected text from "${noteTitle}"` : `Note: ${noteTitle}`;
+        const prompt = action.prompt(contextNote, noteContent);
+
+        if (action.onResponse && !isSelection) {
           this.pendingActionCallback = async (response: string) => {
             await action.onResponse!(response, noteTitle, noteFile);
           };
@@ -1048,10 +1086,128 @@ export class ChatView extends ItemView {
   }
 
   /**
-   * Called on active-leaf-change to refresh the dynamic buttons.
+   * Called on active-leaf-change to refresh the dynamic buttons and context chip.
    */
   private updateDynamicQuickActions() {
+    this.updateContextChip();
     this.renderQuickActionButtons();
+  }
+
+  /**
+   * Update the context chip showing the active note name and detected context.
+   */
+  private updateContextChip() {
+    if (!this.contextChipEl) return;
+    this.contextChipEl.empty();
+
+    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+    if (!activeView?.file) {
+      this.contextChipEl.style.display = "none";
+      return;
+    }
+
+    this.contextChipEl.style.display = "flex";
+    const content = activeView.editor.getValue();
+    const context = this.detectNoteContext(content);
+
+    const contextIcons: Record<string, string> = {
+      code: "code",
+      tasks: "check-square",
+      questions: "help-circle",
+      concept: "book-open",
+      prose: "file-text",
+    };
+    const contextLabels: Record<string, string> = {
+      code: "Code",
+      tasks: "Tasks",
+      questions: "Questions",
+      concept: "Concept",
+      prose: "Prose",
+    };
+
+    const iconEl = this.contextChipEl.createSpan({ cls: "llm-context-chip-icon" });
+    setIcon(iconEl, "file-text");
+
+    this.contextChipEl.createSpan({
+      cls: "llm-context-chip-note",
+      text: activeView.file.basename,
+    });
+
+    const typeEl = this.contextChipEl.createSpan({ cls: "llm-context-chip-type" });
+    const typeIconEl = typeEl.createSpan({ cls: "llm-context-chip-type-icon" });
+    setIcon(typeIconEl, contextIcons[context]);
+    typeEl.createSpan({ text: contextLabels[context] });
+  }
+
+  /**
+   * Get a context-specific system prompt addition for quick actions.
+   */
+  private getContextSystemPromptAddition(context: "code" | "tasks" | "questions" | "concept" | "prose"): string {
+    switch (context) {
+      case "code":
+        return "You are a senior software engineer. Be precise, practical, and show code examples where relevant.";
+      case "tasks":
+        return "You are a skilled project manager and productivity coach. Be concise, actionable, and prioritize clarity.";
+      case "questions":
+        return "You are a knowledgeable research assistant. Answer questions directly, cite reasoning, and flag uncertainty.";
+      case "concept":
+        return "You are an expert teacher. Explain concepts clearly, use analogies, and build intuition before detail.";
+      default:
+        return "You are a clear and concise writing assistant. Focus on structure, clarity, and impact.";
+    }
+  }
+
+  /**
+   * Show follow-up suggestion chips after the last assistant message.
+   */
+  private renderFollowUpChips(lastUserPrompt: string) {
+    if (!this.messagesContainer) return;
+
+    // Remove any existing follow-up chips
+    this.messagesContainer.querySelector(".llm-followup-chips")?.remove();
+
+    const suggestions = this.getFollowUpSuggestions(lastUserPrompt);
+    if (suggestions.length === 0) return;
+
+    const chipsEl = this.messagesContainer.createDiv({ cls: "llm-followup-chips" });
+    for (const suggestion of suggestions) {
+      const chip = chipsEl.createEl("button", {
+        cls: "llm-followup-chip",
+        text: suggestion,
+      });
+      chip.addEventListener("click", () => {
+        if (!this.inputEl || this.isLoading) return;
+        chipsEl.remove();
+        this.inputEl.value = suggestion;
+        this.sendMessage();
+      });
+    }
+
+    this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+  }
+
+  /**
+   * Generate contextual follow-up suggestions based on the last prompt.
+   */
+  private getFollowUpSuggestions(prompt: string): string[] {
+    const lower = prompt.toLowerCase();
+    if (lower.includes("summarize") || lower.includes("summary")) {
+      return ["Go deeper on the key points", "What's missing from this summary?", "Create action items from this"];
+    }
+    if (lower.includes("explain") || lower.includes("feynman")) {
+      return ["Give a concrete example", "What are common misconceptions about this?", "How does this connect to related concepts?"];
+    }
+    if (lower.includes("rewrite") || lower.includes("improve")) {
+      return ["Make it more concise", "Make it more formal", "Add more structure with headings"];
+    }
+    if (lower.includes("code") || lower.includes("review")) {
+      return ["How would you refactor this?", "What tests should I write?", "Are there security concerns?"];
+    }
+    if (lower.includes("task") || lower.includes("prioritize")) {
+      return ["What should I tackle first?", "What dependencies are there?", "What can I delegate?"];
+    }
+    // Generic follow-ups
+    return ["Go deeper", "Give an example", "What's missing?"];
   }
 
   /**
@@ -1158,10 +1314,16 @@ export class ChatView extends ItemView {
       parts.push(`The vault is called "${vaultName}".`);
     }
 
-    // Active note context
-    const noteTitle = this.getActiveNoteTitle();
+    // Active note context + context-specific persona
+    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+    const noteTitle = activeView?.file?.basename ?? null;
     if (noteTitle) {
       parts.push(`The user currently has the note "${noteTitle}" open.`);
+      const content = activeView?.editor.getValue() ?? "";
+      if (content) {
+        const context = this.detectNoteContext(content);
+        parts.push(this.getContextSystemPromptAddition(context));
+      }
     }
 
     // Formatting guidelines
@@ -1491,6 +1653,9 @@ export class ChatView extends ItemView {
             new Notice(`Action failed: ${err instanceof Error ? err.message : String(err)}`);
           }
         }
+
+        // Show follow-up suggestion chips
+        this.renderFollowUpChips(prompt);
       }
     } catch (error) {
       // Restore input so user can retry
