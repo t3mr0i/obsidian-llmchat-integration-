@@ -54,6 +54,7 @@ export class ChatView extends ItemView {
   // Thinking indicator debounce (400ms)
   private thinkingDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   private vaultSearch: VaultSearch;
+  private quickActionsEl: HTMLElement | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: LLMPlugin) {
     super(leaf);
@@ -97,6 +98,13 @@ export class ChatView extends ItemView {
 
     // Eagerly connect to ACP if enabled for the current provider
     this.connectAcpIfEnabled();
+
+    // Re-render dynamic quick-action buttons when the active note changes
+    this.registerEvent(
+      this.app.workspace.on("active-leaf-change", () => {
+        this.updateDynamicQuickActions();
+      })
+    );
   }
 
   async onClose() {
@@ -806,12 +814,164 @@ export class ChatView extends ItemView {
   }
 
   /**
-   * Quick action buttons above the input — common tasks with one click
+   * Detect what kind of content a note contains, to pick context-aware actions.
+   */
+  private detectNoteContext(content: string): "code" | "tasks" | "questions" | "concept" | "prose" {
+    const codeBlockCount = (content.match(/```/g) ?? []).length / 2;
+    if (codeBlockCount >= 1) return "code";
+
+    const taskCount = (content.match(/^- \[[ x]\]/gm) ?? []).length;
+    if (taskCount >= 3) return "tasks";
+
+    const questionCount = (content.match(/\?/g) ?? []).length;
+    if (questionCount >= 3) return "questions";
+
+    // Concept-heavy: many headings or inline code or bold terms
+    const headingCount = (content.match(/^#{1,6} /gm) ?? []).length;
+    const boldCount = (content.match(/\*\*/g) ?? []).length / 2;
+    if (headingCount >= 3 || boldCount >= 5) return "concept";
+
+    return "prose";
+  }
+
+  /**
+   * Returns the 3 dynamic action definitions based on note context.
+   */
+  private getDynamicActions(context: "code" | "tasks" | "questions" | "concept" | "prose"): {
+    label: string;
+    icon: string;
+    prompt: (title: string, content: string) => string;
+    onResponse?: (response: string, title: string, file: TFile) => Promise<void>;
+  }[] {
+    switch (context) {
+      case "code":
+        return [
+          {
+            label: "Explain Code",
+            icon: "code",
+            prompt: (title, content) =>
+              `Explain what the code in this note does. Describe the purpose, logic, and any noteworthy patterns. Be clear and concise.\n\nNote: ${title}\n\n${content}`,
+          },
+          {
+            label: "Review",
+            icon: "shield-check",
+            prompt: (title, content) =>
+              `Review the code in this note. Point out bugs, edge cases, security issues, and improvement opportunities. Be specific.\n\nNote: ${title}\n\n${content}`,
+          },
+          {
+            label: "Add Tests",
+            icon: "flask-conical",
+            prompt: (title, content) =>
+              `Write test cases for the code in this note. Cover happy paths, edge cases, and error conditions. Output only the test code.\n\nNote: ${title}\n\n${content}`,
+          },
+        ];
+      case "tasks":
+        return [
+          {
+            label: "Prioritize",
+            icon: "arrow-up-down",
+            prompt: (title, content) =>
+              `Analyze this task list and suggest a priority order. Group by urgency/importance, flag blockers, and recommend what to tackle first and why.\n\nNote: ${title}\n\n${content}`,
+          },
+          {
+            label: "Next Steps",
+            icon: "arrow-right-circle",
+            prompt: (title, content) =>
+              `Based on this task list, what concrete next steps should be taken? Identify dependencies, suggest quick wins, and flag anything unclear.\n\nNote: ${title}\n\n${content}`,
+          },
+          {
+            label: "Find Gaps",
+            icon: "search-x",
+            prompt: (title, content) =>
+              `What tasks or steps are missing from this list? What has been overlooked or is implied but not written?\n\nNote: ${title}\n\n${content}`,
+          },
+        ];
+      case "questions":
+        return [
+          {
+            label: "Answer",
+            icon: "message-circle",
+            prompt: (title, content) =>
+              `Answer the questions in this note as clearly and precisely as possible. Address each question individually.\n\nNote: ${title}\n\n${content}`,
+          },
+          {
+            label: "Research Plan",
+            icon: "map",
+            prompt: (title, content) =>
+              `Create a research plan to find answers to the questions in this note. Suggest sources, methods, and key search terms.\n\nNote: ${title}\n\n${content}`,
+          },
+          {
+            label: "Find Gaps",
+            icon: "search-x",
+            prompt: (title, content) =>
+              `What important questions are missing from this note? What should also be asked but isn't?\n\nNote: ${title}\n\n${content}`,
+          },
+        ];
+      case "concept":
+        return [
+          {
+            label: "Feynman",
+            icon: "graduation-cap",
+            prompt: (title, content) =>
+              `Explain the core idea of the following note using the Feynman technique: as if explaining to a curious 12-year-old. Use simple words, concrete analogies, and no jargon. If there are gaps or unclear parts in the original, point them out.\n\nNote: ${title}\n\n${content}`,
+          },
+          {
+            label: "Key Points",
+            icon: "list-checks",
+            prompt: (title, content) =>
+              `Extract the most important key points from this note as a concise bullet list. Max 7 points. Output only the bullet list.\n\nNote: ${title}\n\n${content}`,
+          },
+          {
+            label: "Find Gaps",
+            icon: "search-x",
+            prompt: (title, content) =>
+              `Analyze this note critically. What is missing, unclear, or contradictory? What questions does it raise but not answer? Be specific and direct.\n\nNote: ${title}\n\n${content}`,
+          },
+        ];
+      default: // prose
+        return [
+          {
+            label: "Key Points",
+            icon: "list-checks",
+            prompt: (title, content) =>
+              `Extract the most important key points from this note as a concise bullet list. Max 7 points. Output only the bullet list.\n\nNote: ${title}\n\n${content}`,
+          },
+          {
+            label: "Feynman",
+            icon: "graduation-cap",
+            prompt: (title, content) =>
+              `Explain the core idea of the following note using the Feynman technique: as if explaining to a curious 12-year-old. Use simple words, concrete analogies, and no jargon.\n\nNote: ${title}\n\n${content}`,
+          },
+          {
+            label: "Find Gaps",
+            icon: "search-x",
+            prompt: (title, content) =>
+              `Analyze this note critically. What is missing, unclear, or contradictory? What questions does it raise but not answer? Be specific and direct.\n\nNote: ${title}\n\n${content}`,
+          },
+        ];
+    }
+  }
+
+  /**
+   * Quick action buttons above the input — 2 static + 3 context-aware buttons.
    */
   private renderQuickActions(container: HTMLElement) {
-    const actions = container.createDiv({ cls: "llm-quick-actions" });
+    this.quickActionsEl = container.createDiv({ cls: "llm-quick-actions" });
+    this.renderQuickActionButtons();
+  }
 
-    const quickActions: {
+  /**
+   * (Re-)populate quick action buttons based on the active note context.
+   */
+  private renderQuickActionButtons() {
+    if (!this.quickActionsEl) return;
+    this.quickActionsEl.empty();
+
+    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+    const noteContent = activeView?.editor.getValue() ?? null;
+    const context = noteContent ? this.detectNoteContext(noteContent) : "prose";
+
+    const staticActions: {
       label: string;
       icon: string;
       prompt: (title: string, content: string) => string;
@@ -848,28 +1008,12 @@ export class ChatView extends ItemView {
           new Notice("Note rewritten");
         },
       },
-      {
-        label: "Feynman",
-        icon: "graduation-cap",
-        prompt: (title, content) =>
-          `Explain the core idea of the following note using the Feynman technique: as if explaining to a curious 12-year-old. Use simple words, concrete analogies, and no jargon. If there are gaps or unclear parts in the original, point them out.\n\nNote: ${title}\n\n${content}`,
-      },
-      {
-        label: "Key Points",
-        icon: "list-checks",
-        prompt: (title, content) =>
-          `Extract the most important key points from this note as a concise bullet list. Max 7 points. Output only the bullet list.\n\nNote: ${title}\n\n${content}`,
-      },
-      {
-        label: "Find Gaps",
-        icon: "search-x",
-        prompt: (title, content) =>
-          `Analyze this note critically. What is missing, unclear, or contradictory? What questions does it raise but not answer? Be specific and direct.\n\nNote: ${title}\n\n${content}`,
-      },
     ];
 
-    for (const action of quickActions) {
-      const btn = actions.createEl("button", {
+    const allActions = [...staticActions, ...this.getDynamicActions(context)];
+
+    for (const action of allActions) {
+      const btn = this.quickActionsEl.createEl("button", {
         cls: "llm-quick-action-btn",
         attr: { "aria-label": action.label },
       });
@@ -889,7 +1033,6 @@ export class ChatView extends ItemView {
         }
 
         const prompt = action.prompt(noteTitle, noteContent);
-        // Store callback for after response
         if (action.onResponse) {
           this.pendingActionCallback = async (response: string) => {
             await action.onResponse!(response, noteTitle, noteFile);
@@ -902,6 +1045,13 @@ export class ChatView extends ItemView {
         this.sendMessage();
       });
     }
+  }
+
+  /**
+   * Called on active-leaf-change to refresh the dynamic buttons.
+   */
+  private updateDynamicQuickActions() {
+    this.renderQuickActionButtons();
   }
 
   /**
