@@ -105,8 +105,7 @@ tab. If you don't know which path is firing, the developer console will show
 
 - [ ] The previously failing prompt now succeeds end-to-end.
 - [ ] The `parseErrorMessage` mapping for the failure mode is still useful (or update it).
-- [ ] Add or update a test in `test/specs/providers.e2e.ts` if the failure was
-      reproducible at the e2e level.
+- [ ] If the failure mode is reliably reproducible, document the repro steps in `context/setup.md` "Common Issues".
 - [ ] If the root cause was a CLI version drift, note the version in `setup.md` "Common
       Issues".
 

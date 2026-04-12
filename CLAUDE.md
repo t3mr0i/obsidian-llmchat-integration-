@@ -26,10 +26,6 @@ Desktop-only Obsidian community plugin that adds a sidebar chat against Claude /
 ## Commands
 - Dev (esbuild watch + auto-deploy): `npm run dev`
 - Build (typecheck + production bundle + deploy): `npm run build`
-- E2E full: `npm run test:e2e`
-- E2E fast (smoke only): `npm run test:e2e:fast`
-- E2E filtered: `npm run test:e2e:claude` / `:gemini` / `:providers` / `:files`
-- WDIO direct (no rebuild): `npm run wdio`
 
 Configure `npm run dev` deploy targets via `OBSIDIAN_PLUGIN_DIRS` env var or `deploy-targets.json` at the repo root — see `esbuild.config.mjs` `getDeployDirs`.
 

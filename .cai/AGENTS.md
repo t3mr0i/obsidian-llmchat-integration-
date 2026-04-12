@@ -36,10 +36,6 @@ shelling out to the user's installed CLIs — no bundled vendor SDKs, no API key
 
 - Dev (watch + auto-deploy): `npm run dev`
 - Build (typecheck + production esbuild + deploy): `npm run build`
-- E2E (full): `npm run test:e2e`
-- E2E (fast — plugin smoke only): `npm run test:e2e:fast`
-- E2E filtered: `npm run test:e2e:claude` / `:gemini` / `:providers` / `:files`
-- WDIO direct (no rebuild): `npm run wdio`
 
 Configure `npm run dev` deploy targets via `OBSIDIAN_PLUGIN_DIRS` env var or
 `deploy-targets.json` at the repo root — see `esbuild.config.mjs:49`.

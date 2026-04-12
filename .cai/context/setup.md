@@ -1,14 +1,12 @@
 ---
 name: setup
-description: Dev environment setup, build, deploy-to-vault, and e2e test commands for obsidian-llm. Load when setting up the project for the first time or running it locally.
+description: Dev environment setup, build, and deploy-to-vault commands for obsidian-llm. Load when setting up the project for the first time or running it locally.
 triggers:
   - "setup"
   - "install"
   - "build"
   - "dev"
   - "deploy"
-  - "wdio"
-  - "test"
   - "how do I run"
 edges:
   - target: context/stack.md
@@ -67,13 +65,6 @@ manually.
 |---|---|
 | `npm run dev` | esbuild watch + auto-deploy on each rebuild. Use this while developing. |
 | `npm run build` | Type-check (`tsc -noEmit -skipLibCheck`) then production esbuild and deploy once. |
-| `npm run test:e2e` | Build, then run the full WebdriverIO suite against a real Obsidian. |
-| `npm run test:e2e:fast` | Build + run only `test/specs/plugin.e2e.ts`. |
-| `npm run test:e2e:claude` | Run only mocha tests tagged `@claude`. |
-| `npm run test:e2e:gemini` | Run only mocha tests tagged `@gemini`. |
-| `npm run test:e2e:providers` | Run only `@provider`-tagged tests. |
-| `npm run test:e2e:files` | Run only `@files`-tagged tests. |
-| `npm run wdio` | Run WDIO directly without rebuilding. |
 
 ## Environment Variables
 
@@ -102,5 +93,3 @@ each user-installed CLI or local server.
   `mergeBeforeSave` and lose remote changes.
 - **OpenCode + ACP toggle is greyed-out / off** — intentional. OpenCode ACP is HTTP-only,
   not stdio. See decisions.md.
-- **e2e tests cannot find Obsidian binary** — `wdio-obsidian-service` downloads it on first
-  run; ensure network access and disk space. The wdio config lives at `wdio.conf.ts`.
