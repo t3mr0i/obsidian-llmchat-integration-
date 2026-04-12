@@ -635,6 +635,34 @@ export class ChatView extends ItemView {
 
       this.attachCheckboxHandlers(contentEl, msg);
       this.attachButtonHandlers(contentEl);
+
+      // Add copy buttons to code blocks
+      contentEl.querySelectorAll("pre > code").forEach((codeEl) => {
+        const pre = codeEl.parentElement!;
+        pre.style.position = "relative";
+        const copyCodeBtn = pre.createEl("button", {
+          cls: "llm-code-copy-btn",
+          attr: { "aria-label": "Copy code" },
+        });
+        setIcon(copyCodeBtn, "copy");
+        copyCodeBtn.addEventListener("click", () => {
+          navigator.clipboard.writeText((codeEl as HTMLElement).innerText);
+          setIcon(copyCodeBtn, "check");
+          setTimeout(() => setIcon(copyCodeBtn, "copy"), 1500);
+        });
+      });
+
+      // Token + duration badge
+      if (msg.durationMs || msg.tokensUsed) {
+        const badgeEl = msgEl.createDiv({ cls: "llm-message-badge" });
+        if (msg.tokensUsed) {
+          const total = msg.tokensUsed.input + msg.tokensUsed.output;
+          badgeEl.createSpan({ text: `↗ ${total.toLocaleString()} tokens` });
+        }
+        if (msg.durationMs) {
+          badgeEl.createSpan({ text: `${(msg.durationMs / 1000).toFixed(1)}s` });
+        }
+      }
     } else {
       contentEl.setText(msg.content);
     }
@@ -664,11 +692,25 @@ export class ChatView extends ItemView {
       },
     });
 
+    // Char counter — shown once input exceeds 200 chars
+    const charCounterEl = inputWrapper.createSpan({ cls: "llm-char-counter" });
+    charCounterEl.style.display = "none";
+
     // Auto-grow textarea as user types
     const autoGrow = () => {
       if (!this.inputEl) return;
       this.inputEl.style.height = "auto";
       this.inputEl.style.height = Math.min(this.inputEl.scrollHeight, 120) + "px";
+
+      // Update char counter
+      const len = this.inputEl.value.length;
+      if (len >= 200) {
+        charCounterEl.style.display = "block";
+        charCounterEl.setText(len >= 1000 ? `${(len / 1000).toFixed(1)}k` : `${len}`);
+        charCounterEl.toggleClass("llm-char-counter-warn", len >= 4000);
+      } else {
+        charCounterEl.style.display = "none";
+      }
     };
     this.inputEl.addEventListener("input", autoGrow);
 
@@ -1534,7 +1576,7 @@ export class ChatView extends ItemView {
       }
       const useAcp = providerConfig.useAcp && ACP_SUPPORTED_PROVIDERS.includes(this.currentProvider);
 
-      let response: { content: string; provider: LLMProvider; durationMs: number; error?: string };
+      let response: { content: string; provider: LLMProvider; durationMs: number; error?: string; tokensUsed?: { input: number; output: number } };
 
       if (this.currentProvider === "local") {
         // Use local HTTP executor
@@ -1637,8 +1679,19 @@ export class ChatView extends ItemView {
           content: response.content,
           timestamp: Date.now(),
           provider: this.currentProvider,
+          durationMs: response.durationMs,
+          tokensUsed: response.tokensUsed,
         };
         this.messages.push(assistantMessage);
+
+        // Auto-name tab from first user message (if still default name)
+        const activeTab = this.chatTabs.find((t) => t.id === this.activeChatId);
+        if (activeTab && /^Chat \d+$/.test(activeTab.name) && this.messages.length === 2) {
+          const firstUser = this.messages[0].content;
+          activeTab.name = firstUser.slice(0, 30).replace(/\n/g, " ").trim() + (firstUser.length > 30 ? "…" : "");
+          this.renderTabs();
+        }
+
         await this.renderMessagesContent();
         // Auto-save after each exchange
         await this.persistSessions();
@@ -2213,7 +2266,7 @@ export class ChatView extends ItemView {
 
     const contentEl = streamingEl.querySelector(".llm-message-content") as HTMLElement;
     if (contentEl) {
-      // Clear and render markdown
+      // Clear and render markdown (append cursor placeholder so ▋ renders inline)
       contentEl.empty();
       const activeFile = this.app.workspace.getActiveFile();
       const sourcePath = activeFile?.path ?? "";
@@ -2230,6 +2283,12 @@ export class ChatView extends ItemView {
       );
       // Don't track this component - it gets replaced on each update
       component.unload();
+
+      // Append blinking cursor after the last text node
+      const cursor = contentEl.createSpan({ cls: "llm-streaming-cursor", text: "▋" });
+      // Move cursor to end of last paragraph/element if possible
+      const lastP = contentEl.lastElementChild;
+      if (lastP && lastP !== cursor) lastP.appendChild(cursor);
     }
 
     this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;

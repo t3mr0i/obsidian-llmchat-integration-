@@ -390,6 +390,79 @@
   border-style: solid;
 }
 
+/* Token + duration badge below assistant messages */
+.llm-message-badge {
+  display: flex;
+  gap: 8px;
+  padding: 2px 0 0 2px;
+  font-size: 10px;
+  color: var(--text-faint);
+  user-select: none;
+}
+
+/* Streaming cursor */
+@keyframes llm-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+.llm-streaming-cursor {
+  display: inline-block;
+  animation: llm-blink 0.8s step-start infinite;
+  color: var(--llm-accent);
+  font-size: 0.9em;
+  line-height: 1;
+  vertical-align: baseline;
+}
+
+/* Code block copy button */
+pre {
+  position: relative;
+}
+
+.llm-code-copy-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 3px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--llm-border);
+  background-color: var(--background-primary);
+  color: var(--text-faint);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+  line-height: 1;
+}
+
+pre:hover .llm-code-copy-btn {
+  opacity: 1;
+}
+
+.llm-code-copy-btn:hover {
+  color: var(--text-normal);
+}
+
+.llm-code-copy-btn svg {
+  width: 12px;
+  height: 12px;
+  display: block;
+}
+
+/* Input char counter */
+.llm-char-counter {
+  font-size: 10px;
+  color: var(--text-faint);
+  align-self: flex-end;
+  padding-bottom: 6px;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.llm-char-counter-warn {
+  color: var(--text-accent-hover, var(--color-orange));
+}
+
 /* Input Wrapper */
 .llm-input-wrapper {
   display: flex;

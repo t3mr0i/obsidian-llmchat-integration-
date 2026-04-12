@@ -206,6 +206,8 @@ export interface ConversationMessage {
   content: string;
   timestamp: number;
   provider: LLMProvider;
+  durationMs?: number;
+  tokensUsed?: { input: number; output: number };
 }
 
 /**
