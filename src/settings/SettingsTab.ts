@@ -55,6 +55,7 @@ const PROVIDER_DESCRIPTIONS: Record<LLMProvider, string> = {
 
 export class LLMSettingTab extends PluginSettingTab {
   plugin: LLMPlugin;
+  private expertMode = false;
 
   constructor(app: App, plugin: LLMPlugin) {
     super(app, plugin);
@@ -66,24 +67,29 @@ export class LLMSettingTab extends PluginSettingTab {
     containerEl.empty();
     containerEl.addClass("llm-settings");
 
-    // ── Header ──
-    containerEl.createEl("h2", { text: "LLM Integration" });
-    containerEl.createEl("p", {
-      text: "Chat with AI models directly in Obsidian. Choose a provider below to get started.",
-      cls: "setting-item-description",
+    // ── Header with expert mode toggle ──
+    const header = containerEl.createDiv({ cls: "llm-settings-header" });
+    header.createEl("h2", { text: "AI Chat" });
+
+    const expertToggle = header.createEl("button", {
+      cls: `llm-expert-toggle ${this.expertMode ? "llm-expert-toggle-on" : ""}`,
+      text: this.expertMode ? "Expert mode" : "Simple mode",
+      attr: { "aria-label": "Toggle expert mode" },
+    });
+    expertToggle.addEventListener("click", () => {
+      this.expertMode = !this.expertMode;
+      this.display();
     });
 
-    // ── Section 1: General ──
-    this.addGeneralSettings(containerEl);
-
-    // ── Section 2: Providers ──
+    // ── Providers (always visible — the core feature) ──
     this.addProvidersSection(containerEl);
 
-    // ── Section 3: Conversation ──
-    this.addConversationSettings(containerEl);
-
-    // ── Section 4: Advanced (collapsed) ──
-    this.addAdvancedSettings(containerEl);
+    // ── Expert: General + Conversation + Advanced ──
+    if (this.expertMode) {
+      this.addGeneralSettings(containerEl);
+      this.addConversationSettings(containerEl);
+      this.addAdvancedSettings(containerEl);
+    }
   }
 
   // ════════════════════════════════════════════
@@ -428,43 +434,31 @@ export class LLMSettingTab extends PluginSettingTab {
     const providerConfig = this.plugin.settings.providers[provider];
     const displayName = PROVIDER_DISPLAY_NAMES[provider];
 
-    const detailsEl = containerEl.createEl("details", {
-      cls: "llm-provider-details",
+    const card = containerEl.createDiv({
+      cls: `llm-provider-card ${providerConfig.enabled ? "llm-provider-card-enabled" : ""}`,
     });
 
-    // Summary with enable toggle inline
-    const summaryEl = detailsEl.createEl("summary");
-    const summaryContent = summaryEl.createDiv({ cls: "llm-provider-summary" });
-    summaryContent.createSpan({ text: displayName, cls: "llm-provider-name" });
-    summaryContent.createSpan({
-      text: providerConfig.enabled ? "Enabled" : "Disabled",
-      cls: `llm-provider-badge ${providerConfig.enabled ? "llm-badge-enabled" : "llm-badge-disabled"}`,
+    // ── Card header: name + description + toggle ──
+    const cardHeader = card.createDiv({ cls: "llm-provider-card-header" });
+    const cardInfo = cardHeader.createDiv({ cls: "llm-provider-card-info" });
+    cardInfo.createDiv({ text: displayName, cls: "llm-provider-card-name" });
+    cardInfo.createDiv({ text: PROVIDER_DESCRIPTIONS[provider], cls: "llm-provider-card-desc" });
+
+    // Enable toggle — right side of header
+    const toggleWrapper = cardHeader.createDiv({ cls: "llm-provider-card-toggle" });
+    const toggleEl = toggleWrapper.createEl("input", { type: "checkbox", cls: "llm-provider-toggle-input" });
+    toggleEl.checked = providerConfig.enabled;
+    toggleEl.addEventListener("change", async () => {
+      this.plugin.settings.providers[provider].enabled = toggleEl.checked;
+      card.toggleClass("llm-provider-card-enabled", toggleEl.checked);
+      await this.plugin.saveSettings();
     });
 
+    // ── Expandable settings (only in expert mode, or when enabled) ──
+    const detailsEl = card.createEl("details", { cls: "llm-provider-details" });
+    const summaryEl = detailsEl.createEl("summary", { cls: "llm-provider-details-summary" });
+    summaryEl.setText(this.expertMode ? "Settings" : "Configure");
     const settingsContainer = detailsEl.createDiv({ cls: "llm-provider-settings" });
-
-    // Description
-    settingsContainer.createEl("p", {
-      text: PROVIDER_DESCRIPTIONS[provider],
-      cls: "setting-item-description llm-provider-desc",
-    });
-
-    // Enable toggle
-    new Setting(settingsContainer)
-      .setName("Enable")
-      .addToggle((toggle) => {
-        toggle.setValue(providerConfig.enabled);
-        toggle.onChange(async (value) => {
-          this.plugin.settings.providers[provider].enabled = value;
-          // Update badge in summary
-          const badge = summaryContent.querySelector(".llm-provider-badge");
-          if (badge) {
-            badge.textContent = value ? "Enabled" : "Disabled";
-            badge.className = `llm-provider-badge ${value ? "llm-badge-enabled" : "llm-badge-disabled"}`;
-          }
-          await this.plugin.saveSettings();
-        });
-      });
 
     // Model selection
     this.addModelSetting(settingsContainer, provider, providerConfig.model ?? "");
@@ -560,40 +554,29 @@ export class LLMSettingTab extends PluginSettingTab {
   private addLocalProviderSettings(containerEl: HTMLElement): void {
     const providerConfig = this.plugin.settings.providers.local;
 
-    const detailsEl = containerEl.createEl("details", {
-      cls: "llm-provider-details",
+    const card = containerEl.createDiv({
+      cls: `llm-provider-card ${providerConfig.enabled ? "llm-provider-card-enabled" : ""}`,
     });
 
-    const summaryEl = detailsEl.createEl("summary");
-    const summaryContent = summaryEl.createDiv({ cls: "llm-provider-summary" });
-    summaryContent.createSpan({ text: "Local LLM", cls: "llm-provider-name" });
-    summaryContent.createSpan({
-      text: providerConfig.enabled ? "Enabled" : "Disabled",
-      cls: `llm-provider-badge ${providerConfig.enabled ? "llm-badge-enabled" : "llm-badge-disabled"}`,
+    // ── Card header ──
+    const cardHeader = card.createDiv({ cls: "llm-provider-card-header" });
+    const cardInfo = cardHeader.createDiv({ cls: "llm-provider-card-info" });
+    cardInfo.createDiv({ text: "Local LLM", cls: "llm-provider-card-name" });
+    cardInfo.createDiv({ text: PROVIDER_DESCRIPTIONS.local, cls: "llm-provider-card-desc" });
+
+    const toggleWrapper = cardHeader.createDiv({ cls: "llm-provider-card-toggle" });
+    const toggleEl = toggleWrapper.createEl("input", { type: "checkbox", cls: "llm-provider-toggle-input" });
+    toggleEl.checked = providerConfig.enabled;
+    toggleEl.addEventListener("change", async () => {
+      this.plugin.settings.providers.local.enabled = toggleEl.checked;
+      card.toggleClass("llm-provider-card-enabled", toggleEl.checked);
+      await this.plugin.saveSettings();
     });
 
+    const detailsEl = card.createEl("details", { cls: "llm-provider-details" });
+    const summaryEl = detailsEl.createEl("summary", { cls: "llm-provider-details-summary" });
+    summaryEl.setText("Configure");
     const settingsContainer = detailsEl.createDiv({ cls: "llm-provider-settings" });
-
-    settingsContainer.createEl("p", {
-      text: PROVIDER_DESCRIPTIONS.local,
-      cls: "setting-item-description llm-provider-desc",
-    });
-
-    // Enable
-    new Setting(settingsContainer)
-      .setName("Enable")
-      .addToggle((toggle) => {
-        toggle.setValue(providerConfig.enabled);
-        toggle.onChange(async (value) => {
-          this.plugin.settings.providers.local.enabled = value;
-          const badge = summaryContent.querySelector(".llm-provider-badge");
-          if (badge) {
-            badge.textContent = value ? "Enabled" : "Disabled";
-            badge.className = `llm-provider-badge ${value ? "llm-badge-enabled" : "llm-badge-disabled"}`;
-          }
-          await this.plugin.saveSettings();
-        });
-      });
 
     // Server type
     new Setting(settingsContainer)

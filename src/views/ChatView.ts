@@ -1022,7 +1022,7 @@ export class ChatView extends ItemView {
     if (!this.quickActionsEl) return;
     this.quickActionsEl.empty();
 
-    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+    const activeView = this.getEditorView();
     const noteContent = activeView?.editor.getValue() ?? null;
     const context = noteContent ? this.detectNoteContext(noteContent) : "prose";
 
@@ -1054,7 +1054,7 @@ export class ChatView extends ItemView {
         prompt: (title, content) =>
           `Rewrite the following note more clearly and professionally. Keep the meaning and structure, improve wording and flow. Output only the rewritten Markdown — no intro text.\n\nNote: ${title}\n\n${content}`,
         onResponse: async (response, _title, file) => {
-          const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+          const activeView = this.getEditorView();
           if (activeView?.file?.path === file.path) {
             activeView.editor.setValue(response);
           } else {
@@ -1092,7 +1092,7 @@ export class ChatView extends ItemView {
 
       btn.addEventListener("click", () => {
         if (this.isLoading || !this.inputEl) return;
-        const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+        const activeView = this.getEditorView();
 
         // Selection-aware: use selected text if available, else whole note
         const selection = activeView?.editor.getSelection() ?? "";
@@ -1142,7 +1142,7 @@ export class ChatView extends ItemView {
     if (!this.contextChipEl) return;
     this.contextChipEl.empty();
 
-    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+    const activeView = this.getEditorView();
     if (!activeView?.file) {
       this.contextChipEl.style.display = "none";
       return;
@@ -1253,23 +1253,39 @@ export class ChatView extends ItemView {
   }
 
   /**
+   * Returns the most recently visible MarkdownView — works even when focus is in the
+   * chat sidebar (where getActiveViewOfType returns null because the active leaf is us).
+   */
+  private getEditorView(): MarkdownView | null {
+    // Try the standard path first (works when editor is focused)
+    const active = this.getEditorView();
+    if (active) return active;
+
+    // Fallback: find the most recently used markdown leaf in the main editor area
+    const leaves = this.app.workspace.getLeavesOfType("markdown");
+    if (leaves.length === 0) return null;
+    // Prefer leaves in the root (main editor), not sidebars
+    const mainLeaf = leaves.find((l) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const parent = (l as any).parent;
+      return parent && parent.constructor?.name !== "WorkspaceSidedock";
+    });
+    const leaf = mainLeaf ?? leaves[0];
+    return leaf.view instanceof MarkdownView ? leaf.view : null;
+  }
+
+  /**
    * Get the content of the currently active note (the one visible in the editor)
    */
   private getActiveNoteContent(): string | null {
-    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-    if (!activeView?.file) return null;
-
-    const editor = activeView.editor;
-    return editor.getValue();
+    return this.getEditorView()?.editor.getValue() ?? null;
   }
 
   /**
    * Get the title of the currently active note
    */
   private getActiveNoteTitle(): string | null {
-    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-    if (!activeView?.file) return null;
-    return activeView.file.basename;
+    return this.getEditorView()?.file?.basename ?? null;
   }
 
   /**
@@ -1357,7 +1373,7 @@ export class ChatView extends ItemView {
     }
 
     // Active note context + context-specific persona
-    const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+    const activeView = this.getEditorView();
     const noteTitle = activeView?.file?.basename ?? null;
     if (noteTitle) {
       parts.push(`The user currently has the note "${noteTitle}" open.`);

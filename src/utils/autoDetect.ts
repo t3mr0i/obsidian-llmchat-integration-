@@ -434,22 +434,19 @@ export function applyDetectionResults(
 ): boolean {
   let changed = false;
 
-  const hasAnyEnabled = Object.values(settings.providers).some((p) => p.enabled);
-
   for (const det of result.detected) {
     const config = settings.providers[det.provider];
 
     if (det.provider === "local" && det.serverUrl && det.serverType) {
-      if (!config.enabled || !config.model) {
-        config.enabled = true;
-        config.serverUrl = det.serverUrl;
-        config.serverType = det.serverType;
-        if (det.models && det.models.length > 0 && !config.model) {
-          config.model = det.models[0];
-        }
-        changed = true;
+      config.enabled = true;
+      config.serverUrl = det.serverUrl;
+      config.serverType = det.serverType;
+      if (det.models && det.models.length > 0 && !config.model) {
+        config.model = det.models[0];
       }
-    } else if (!config.enabled && !hasAnyEnabled) {
+      changed = true;
+    } else if (!config.enabled) {
+      // Auto-enable every detected provider
       config.enabled = true;
       changed = true;
     }

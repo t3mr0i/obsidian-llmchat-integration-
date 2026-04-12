@@ -37,3 +37,6 @@
 {"ts":1775981834178,"prompt":"deploy neue version","source":"claude-code-hook","stack":"package.json"}
 {"ts":1775983132220,"prompt":"❯ quick wins and apply","source":"claude-code-hook","stack":"package.json"}
 {"ts":1776026883246,"prompt":"remove the e2e tests from the code and github","source":"claude-code-hook","stack":"package.json"}
+{"ts":1776027857714,"prompt":"dann deploy neue verison","source":"claude-code-hook","stack":"package.json"}
+{"ts":1776028430028,"prompt":"'/var/folders/pc/tm7c6s3x3_xc0lg1qdsjrp100000gq/T/TemporaryItems/NSIRD_screencaptureui_NFrOzG/Bildschirmfoto 2026-04-12 um 23.13.42.png' its not gettig the updste in brat","source":"claude-code-hook","stack":"package.json"}
+{"ts":1776028590716,"prompt":"'/var/folders/pc/tm7c6s3x3_xc0lg1qdsjrp100000gq/T/TemporaryItems/NSIRD_screencaptureui_0rCcFw/Bildschirmfoto 2026-04-12 um 23.16.14.png' Wir müssen hier an der Ui arbeiten, das müssen cards sein, die man ausklappen kann. Aber insgesamt sieht das ja alles zu komplex, zu viele infos, die man gar nicht wegen braucht. Vielleicht gibt es eine experten-view, aber das Meiste sollte ein bisschen einfacher.","source":"claude-code-hook","stack":"package.json"}

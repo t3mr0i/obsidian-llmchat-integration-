@@ -673,3 +673,164 @@ pre:hover .llm-code-copy-btn {
   margin-top: 12px;
   max-width: 200px;
 }
+
+/* ============================================
+   Settings — Header & Expert Toggle
+   ============================================ */
+.llm-settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.llm-settings-header h2 {
+  margin: 0;
+}
+
+.llm-expert-toggle {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--llm-border);
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.llm-expert-toggle-on {
+  background: var(--llm-accent-subtle);
+  border-color: var(--llm-accent);
+  color: var(--text-normal);
+}
+
+/* ============================================
+   Settings — Provider Cards
+   ============================================ */
+.llm-provider-card {
+  border: 1px solid var(--llm-border);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  background: var(--background-secondary);
+  transition: border-color 0.15s, background 0.15s;
+  overflow: hidden;
+}
+
+.llm-provider-card-enabled {
+  border-color: var(--llm-accent);
+  background: var(--llm-accent-subtle);
+}
+
+.llm-provider-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  gap: 12px;
+}
+
+.llm-provider-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.llm-provider-card-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-normal);
+  margin-bottom: 2px;
+}
+
+.llm-provider-card-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+/* Native checkbox styled as a toggle */
+.llm-provider-card-toggle {
+  flex-shrink: 0;
+}
+
+.llm-provider-toggle-input {
+  width: 36px;
+  height: 20px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--background-modifier-border);
+  border-radius: 10px;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s;
+  outline: none;
+}
+
+.llm-provider-toggle-input::after {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--background-primary);
+  top: 2px;
+  left: 2px;
+  transition: transform 0.2s;
+}
+
+.llm-provider-toggle-input:checked {
+  background: var(--llm-accent);
+}
+
+.llm-provider-toggle-input:checked::after {
+  transform: translateX(16px);
+}
+
+/* Expand/configure section */
+.llm-provider-details {
+  border-top: 1px solid var(--llm-border);
+}
+
+.llm-provider-details-summary {
+  padding: 8px 14px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  user-select: none;
+}
+
+.llm-provider-details-summary::-webkit-details-marker { display: none; }
+
+.llm-provider-details-summary::before {
+  content: "›";
+  font-size: 14px;
+  transition: transform 0.15s;
+  display: inline-block;
+}
+
+.llm-provider-details[open] > .llm-provider-details-summary::before {
+  transform: rotate(90deg);
+}
+
+.llm-provider-settings {
+  padding: 8px 14px 14px;
+}
+
+/* Advanced toggle inside provider */
+.llm-advanced-toggle > summary {
+  font-size: 12px;
+  color: var(--text-faint);
+  cursor: pointer;
+  padding: 6px 0;
+  list-style: none;
+}
+
+.llm-advanced-toggle > summary::-webkit-details-marker { display: none; }
+
+.llm-advanced-settings {
+  padding-top: 4px;
+}

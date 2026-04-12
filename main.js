@@ -1402,20 +1402,17 @@ async function pullModel(softwareName, modelName, onProgress) {
 function applyDetectionResults(settings, result) {
   var _a3;
   let changed = false;
-  const hasAnyEnabled = Object.values(settings.providers).some((p) => p.enabled);
   for (const det of result.detected) {
     const config2 = settings.providers[det.provider];
     if (det.provider === "local" && det.serverUrl && det.serverType) {
-      if (!config2.enabled || !config2.model) {
-        config2.enabled = true;
-        config2.serverUrl = det.serverUrl;
-        config2.serverType = det.serverType;
-        if (det.models && det.models.length > 0 && !config2.model) {
-          config2.model = det.models[0];
-        }
-        changed = true;
+      config2.enabled = true;
+      config2.serverUrl = det.serverUrl;
+      config2.serverType = det.serverType;
+      if (det.models && det.models.length > 0 && !config2.model) {
+        config2.model = det.models[0];
       }
-    } else if (!config2.enabled && !hasAnyEnabled) {
+      changed = true;
+    } else if (!config2.enabled) {
       config2.enabled = true;
       changed = true;
     }
@@ -1715,21 +1712,30 @@ var PROVIDER_DESCRIPTIONS = {
 var LLMSettingTab = class extends import_obsidian.PluginSettingTab {
   constructor(app, plugin) {
     super(app, plugin);
+    this.expertMode = false;
     this.plugin = plugin;
   }
   display() {
     const { containerEl } = this;
     containerEl.empty();
     containerEl.addClass("llm-settings");
-    containerEl.createEl("h2", { text: "LLM Integration" });
-    containerEl.createEl("p", {
-      text: "Chat with AI models directly in Obsidian. Choose a provider below to get started.",
-      cls: "setting-item-description"
+    const header = containerEl.createDiv({ cls: "llm-settings-header" });
+    header.createEl("h2", { text: "AI Chat" });
+    const expertToggle = header.createEl("button", {
+      cls: `llm-expert-toggle ${this.expertMode ? "llm-expert-toggle-on" : ""}`,
+      text: this.expertMode ? "Expert mode" : "Simple mode",
+      attr: { "aria-label": "Toggle expert mode" }
     });
-    this.addGeneralSettings(containerEl);
+    expertToggle.addEventListener("click", () => {
+      this.expertMode = !this.expertMode;
+      this.display();
+    });
     this.addProvidersSection(containerEl);
-    this.addConversationSettings(containerEl);
-    this.addAdvancedSettings(containerEl);
+    if (this.expertMode) {
+      this.addGeneralSettings(containerEl);
+      this.addConversationSettings(containerEl);
+      this.addAdvancedSettings(containerEl);
+    }
   }
   // ════════════════════════════════════════════
   //  General Settings
@@ -2001,33 +2007,25 @@ var LLMSettingTab = class extends import_obsidian.PluginSettingTab {
     var _a3;
     const providerConfig = this.plugin.settings.providers[provider];
     const displayName = PROVIDER_DISPLAY_NAMES2[provider];
-    const detailsEl = containerEl.createEl("details", {
-      cls: "llm-provider-details"
+    const card = containerEl.createDiv({
+      cls: `llm-provider-card ${providerConfig.enabled ? "llm-provider-card-enabled" : ""}`
     });
-    const summaryEl = detailsEl.createEl("summary");
-    const summaryContent = summaryEl.createDiv({ cls: "llm-provider-summary" });
-    summaryContent.createSpan({ text: displayName, cls: "llm-provider-name" });
-    summaryContent.createSpan({
-      text: providerConfig.enabled ? "Enabled" : "Disabled",
-      cls: `llm-provider-badge ${providerConfig.enabled ? "llm-badge-enabled" : "llm-badge-disabled"}`
+    const cardHeader = card.createDiv({ cls: "llm-provider-card-header" });
+    const cardInfo = cardHeader.createDiv({ cls: "llm-provider-card-info" });
+    cardInfo.createDiv({ text: displayName, cls: "llm-provider-card-name" });
+    cardInfo.createDiv({ text: PROVIDER_DESCRIPTIONS[provider], cls: "llm-provider-card-desc" });
+    const toggleWrapper = cardHeader.createDiv({ cls: "llm-provider-card-toggle" });
+    const toggleEl = toggleWrapper.createEl("input", { type: "checkbox", cls: "llm-provider-toggle-input" });
+    toggleEl.checked = providerConfig.enabled;
+    toggleEl.addEventListener("change", async () => {
+      this.plugin.settings.providers[provider].enabled = toggleEl.checked;
+      card.toggleClass("llm-provider-card-enabled", toggleEl.checked);
+      await this.plugin.saveSettings();
     });
+    const detailsEl = card.createEl("details", { cls: "llm-provider-details" });
+    const summaryEl = detailsEl.createEl("summary", { cls: "llm-provider-details-summary" });
+    summaryEl.setText(this.expertMode ? "Settings" : "Configure");
     const settingsContainer = detailsEl.createDiv({ cls: "llm-provider-settings" });
-    settingsContainer.createEl("p", {
-      text: PROVIDER_DESCRIPTIONS[provider],
-      cls: "setting-item-description llm-provider-desc"
-    });
-    new import_obsidian.Setting(settingsContainer).setName("Enable").addToggle((toggle) => {
-      toggle.setValue(providerConfig.enabled);
-      toggle.onChange(async (value) => {
-        this.plugin.settings.providers[provider].enabled = value;
-        const badge = summaryContent.querySelector(".llm-provider-badge");
-        if (badge) {
-          badge.textContent = value ? "Enabled" : "Disabled";
-          badge.className = `llm-provider-badge ${value ? "llm-badge-enabled" : "llm-badge-disabled"}`;
-        }
-        await this.plugin.saveSettings();
-      });
-    });
     this.addModelSetting(settingsContainer, provider, (_a3 = providerConfig.model) != null ? _a3 : "");
     if (provider === "gemini") {
       new import_obsidian.Setting(settingsContainer).setName("Auto-confirm actions").setDesc("Allow Gemini to run commands without asking for permission each time").addToggle((toggle) => {
@@ -2096,33 +2094,25 @@ var LLMSettingTab = class extends import_obsidian.PluginSettingTab {
   addLocalProviderSettings(containerEl) {
     var _a3;
     const providerConfig = this.plugin.settings.providers.local;
-    const detailsEl = containerEl.createEl("details", {
-      cls: "llm-provider-details"
+    const card = containerEl.createDiv({
+      cls: `llm-provider-card ${providerConfig.enabled ? "llm-provider-card-enabled" : ""}`
     });
-    const summaryEl = detailsEl.createEl("summary");
-    const summaryContent = summaryEl.createDiv({ cls: "llm-provider-summary" });
-    summaryContent.createSpan({ text: "Local LLM", cls: "llm-provider-name" });
-    summaryContent.createSpan({
-      text: providerConfig.enabled ? "Enabled" : "Disabled",
-      cls: `llm-provider-badge ${providerConfig.enabled ? "llm-badge-enabled" : "llm-badge-disabled"}`
+    const cardHeader = card.createDiv({ cls: "llm-provider-card-header" });
+    const cardInfo = cardHeader.createDiv({ cls: "llm-provider-card-info" });
+    cardInfo.createDiv({ text: "Local LLM", cls: "llm-provider-card-name" });
+    cardInfo.createDiv({ text: PROVIDER_DESCRIPTIONS.local, cls: "llm-provider-card-desc" });
+    const toggleWrapper = cardHeader.createDiv({ cls: "llm-provider-card-toggle" });
+    const toggleEl = toggleWrapper.createEl("input", { type: "checkbox", cls: "llm-provider-toggle-input" });
+    toggleEl.checked = providerConfig.enabled;
+    toggleEl.addEventListener("change", async () => {
+      this.plugin.settings.providers.local.enabled = toggleEl.checked;
+      card.toggleClass("llm-provider-card-enabled", toggleEl.checked);
+      await this.plugin.saveSettings();
     });
+    const detailsEl = card.createEl("details", { cls: "llm-provider-details" });
+    const summaryEl = detailsEl.createEl("summary", { cls: "llm-provider-details-summary" });
+    summaryEl.setText("Configure");
     const settingsContainer = detailsEl.createDiv({ cls: "llm-provider-settings" });
-    settingsContainer.createEl("p", {
-      text: PROVIDER_DESCRIPTIONS.local,
-      cls: "setting-item-description llm-provider-desc"
-    });
-    new import_obsidian.Setting(settingsContainer).setName("Enable").addToggle((toggle) => {
-      toggle.setValue(providerConfig.enabled);
-      toggle.onChange(async (value) => {
-        this.plugin.settings.providers.local.enabled = value;
-        const badge = summaryContent.querySelector(".llm-provider-badge");
-        if (badge) {
-          badge.textContent = value ? "Enabled" : "Disabled";
-          badge.className = `llm-provider-badge ${value ? "llm-badge-enabled" : "llm-badge-disabled"}`;
-        }
-        await this.plugin.saveSettings();
-      });
-    });
     new import_obsidian.Setting(settingsContainer).setName("Server software").setDesc("What's running your local models?").addDropdown((dropdown) => {
       dropdown.addOption("ollama", "Ollama");
       dropdown.addOption("openai-compatible", "LM Studio / vLLM / other");
@@ -22543,7 +22533,7 @@ ${content}`
     var _a3;
     if (!this.quickActionsEl) return;
     this.quickActionsEl.empty();
-    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+    const activeView = this.getEditorView();
     const noteContent = (_a3 = activeView == null ? void 0 : activeView.editor.getValue()) != null ? _a3 : null;
     const context = noteContent ? this.detectNoteContext(noteContent) : "prose";
     const staticActions = [
@@ -22576,7 +22566,7 @@ Note: ${title}
 ${content}`,
         onResponse: async (response, _title, file2) => {
           var _a4;
-          const activeView2 = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+          const activeView2 = this.getEditorView();
           if (((_a4 = activeView2 == null ? void 0 : activeView2.file) == null ? void 0 : _a4.path) === file2.path) {
             activeView2.editor.setValue(response);
           } else {
@@ -22612,7 +22602,7 @@ ${content}`,
       btn.addEventListener("click", () => {
         var _a4, _b, _c, _d, _e, _f;
         if (this.isLoading || !this.inputEl) return;
-        const activeView2 = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+        const activeView2 = this.getEditorView();
         const selection = (_a4 = activeView2 == null ? void 0 : activeView2.editor.getSelection()) != null ? _a4 : "";
         const noteContent2 = (_b = selection.trim() || (activeView2 == null ? void 0 : activeView2.editor.getValue())) != null ? _b : null;
         const noteTitle = (_d = (_c = activeView2 == null ? void 0 : activeView2.file) == null ? void 0 : _c.basename) != null ? _d : null;
@@ -22651,7 +22641,7 @@ ${content}`,
   updateContextChip() {
     if (!this.contextChipEl) return;
     this.contextChipEl.empty();
-    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+    const activeView = this.getEditorView();
     if (!(activeView == null ? void 0 : activeView.file)) {
       this.contextChipEl.style.display = "none";
       return;
@@ -22748,21 +22738,35 @@ ${content}`,
     return ["Go deeper", "Give an example", "What's missing?"];
   }
   /**
+   * Returns the most recently visible MarkdownView — works even when focus is in the
+   * chat sidebar (where getActiveViewOfType returns null because the active leaf is us).
+   */
+  getEditorView() {
+    const active = this.getEditorView();
+    if (active) return active;
+    const leaves = this.app.workspace.getLeavesOfType("markdown");
+    if (leaves.length === 0) return null;
+    const mainLeaf = leaves.find((l) => {
+      var _a3;
+      const parent = l.parent;
+      return parent && ((_a3 = parent.constructor) == null ? void 0 : _a3.name) !== "WorkspaceSidedock";
+    });
+    const leaf = mainLeaf != null ? mainLeaf : leaves[0];
+    return leaf.view instanceof import_obsidian4.MarkdownView ? leaf.view : null;
+  }
+  /**
    * Get the content of the currently active note (the one visible in the editor)
    */
   getActiveNoteContent() {
-    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
-    if (!(activeView == null ? void 0 : activeView.file)) return null;
-    const editor = activeView.editor;
-    return editor.getValue();
+    var _a3, _b;
+    return (_b = (_a3 = this.getEditorView()) == null ? void 0 : _a3.editor.getValue()) != null ? _b : null;
   }
   /**
    * Get the title of the currently active note
    */
   getActiveNoteTitle() {
-    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
-    if (!(activeView == null ? void 0 : activeView.file)) return null;
-    return activeView.file.basename;
+    var _a3, _b, _c;
+    return (_c = (_b = (_a3 = this.getEditorView()) == null ? void 0 : _a3.file) == null ? void 0 : _b.basename) != null ? _c : null;
   }
   /**
    * Cancel the current request
@@ -22843,7 +22847,7 @@ ${content}`,
     if (vaultName) {
       parts.push(`The vault is called "${vaultName}".`);
     }
-    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+    const activeView = this.getEditorView();
     const noteTitle = (_b = (_a3 = activeView == null ? void 0 : activeView.file) == null ? void 0 : _a3.basename) != null ? _b : null;
     if (noteTitle) {
       parts.push(`The user currently has the note "${noteTitle}" open.`);
