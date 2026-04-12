@@ -21699,6 +21699,11 @@ var ChatView = class extends import_obsidian4.ItemView {
     this.thinkingTimerInterval = null;
     // Thinking indicator debounce (400ms)
     this.thinkingDebounceTimer = null;
+    this.quickActionsEl = null;
+    this.contextChipEl = null;
+    this.lastNoteContext = "prose";
+    // Track how often each action label was clicked (persisted in memory only, resets on reload)
+    this.actionClickCounts = {};
     this.providerSelectEl = null;
     this.modelSelectEl = null;
     /** Number of messages already rendered in the DOM */
@@ -21733,6 +21738,11 @@ var ChatView = class extends import_obsidian4.ItemView {
     }, 50);
     this.vaultSearch.ensureIndex();
     this.connectAcpIfEnabled();
+    this.registerEvent(
+      this.app.workspace.on("active-leaf-change", () => {
+        this.updateDynamicQuickActions();
+      })
+    );
   }
   async onClose() {
     await this.persistSessions();
@@ -21985,13 +21995,16 @@ var ChatView = class extends import_obsidian4.ItemView {
    * Pass force=true (or call after tab switch) for full rebuild.
    */
   async renderMessagesContent(force = false) {
-    var _a3;
+    var _a3, _b;
     if (!this.messagesContainer) return;
     if (force || this.renderedCount > this.messages.length) {
       this.markdownComponents.forEach((c) => c.unload());
       this.markdownComponents = [];
       this.messagesContainer.empty();
       this.renderedCount = 0;
+    }
+    if (force) {
+      (_a3 = this.messagesContainer.querySelector(".llm-followup-chips")) == null ? void 0 : _a3.remove();
     }
     if (this.messages.length === 0) {
       const allProviders = ["claude", "opencode", "codex", "gemini", "local"];
@@ -22011,7 +22024,7 @@ var ChatView = class extends import_obsidian4.ItemView {
       }
       return;
     }
-    (_a3 = this.messagesContainer.querySelector(".llm-empty-state")) == null ? void 0 : _a3.remove();
+    (_b = this.messagesContainer.querySelector(".llm-empty-state")) == null ? void 0 : _b.remove();
     const startIdx = this.renderedCount;
     for (let i = startIdx; i < this.messages.length; i++) {
       await this.renderSingleMessage(this.messages[i]);
@@ -22159,6 +22172,30 @@ var ChatView = class extends import_obsidian4.ItemView {
       });
       this.attachCheckboxHandlers(contentEl, msg);
       this.attachButtonHandlers(contentEl);
+      contentEl.querySelectorAll("pre > code").forEach((codeEl) => {
+        const pre = codeEl.parentElement;
+        pre.style.position = "relative";
+        const copyCodeBtn = pre.createEl("button", {
+          cls: "llm-code-copy-btn",
+          attr: { "aria-label": "Copy code" }
+        });
+        (0, import_obsidian4.setIcon)(copyCodeBtn, "copy");
+        copyCodeBtn.addEventListener("click", () => {
+          navigator.clipboard.writeText(codeEl.innerText);
+          (0, import_obsidian4.setIcon)(copyCodeBtn, "check");
+          setTimeout(() => (0, import_obsidian4.setIcon)(copyCodeBtn, "copy"), 1500);
+        });
+      });
+      if (msg.durationMs || msg.tokensUsed) {
+        const badgeEl = msgEl.createDiv({ cls: "llm-message-badge" });
+        if (msg.tokensUsed) {
+          const total = msg.tokensUsed.input + msg.tokensUsed.output;
+          badgeEl.createSpan({ text: `\u2197 ${total.toLocaleString()} tokens` });
+        }
+        if (msg.durationMs) {
+          badgeEl.createSpan({ text: `${(msg.durationMs / 1e3).toFixed(1)}s` });
+        }
+      }
     } else {
       contentEl.setText(msg.content);
     }
@@ -22166,6 +22203,8 @@ var ChatView = class extends import_obsidian4.ItemView {
   }
   renderInput(container) {
     const inputContainer = container.createDiv({ cls: "llm-chat-input-container" });
+    this.contextChipEl = inputContainer.createDiv({ cls: "llm-context-chip" });
+    this.updateContextChip();
     this.renderQuickActions(inputContainer);
     const inputWrapper = inputContainer.createDiv({ cls: "llm-input-wrapper" });
     this.inputEl = inputWrapper.createEl("textarea", {
@@ -22175,10 +22214,20 @@ var ChatView = class extends import_obsidian4.ItemView {
         rows: "1"
       }
     });
+    const charCounterEl = inputWrapper.createSpan({ cls: "llm-char-counter" });
+    charCounterEl.style.display = "none";
     const autoGrow = () => {
       if (!this.inputEl) return;
       this.inputEl.style.height = "auto";
       this.inputEl.style.height = Math.min(this.inputEl.scrollHeight, 120) + "px";
+      const len = this.inputEl.value.length;
+      if (len >= 200) {
+        charCounterEl.style.display = "block";
+        charCounterEl.setText(len >= 1e3 ? `${(len / 1e3).toFixed(1)}k` : `${len}`);
+        charCounterEl.toggleClass("llm-char-counter-warn", len >= 4e3);
+      } else {
+        charCounterEl.style.display = "none";
+      }
     };
     this.inputEl.addEventListener("input", autoGrow);
     const suggestContainer = inputContainer.createDiv({ cls: "llm-note-suggest" });
@@ -22308,11 +22357,196 @@ var ChatView = class extends import_obsidian4.ItemView {
     this.cancelBtn.addEventListener("click", () => this.cancelRequest());
   }
   /**
-   * Quick action buttons above the input — common tasks with one click
+   * Detect what kind of content a note contains, to pick context-aware actions.
+   */
+  detectNoteContext(content) {
+    var _a3, _b, _c, _d, _e;
+    const codeBlockCount = ((_a3 = content.match(/```/g)) != null ? _a3 : []).length / 2;
+    if (codeBlockCount >= 1) return "code";
+    const taskCount = ((_b = content.match(/^- \[[ x]\]/gm)) != null ? _b : []).length;
+    if (taskCount >= 3) return "tasks";
+    const questionCount = ((_c = content.match(/\?/g)) != null ? _c : []).length;
+    if (questionCount >= 3) return "questions";
+    const headingCount = ((_d = content.match(/^#{1,6} /gm)) != null ? _d : []).length;
+    const boldCount = ((_e = content.match(/\*\*/g)) != null ? _e : []).length / 2;
+    if (headingCount >= 3 || boldCount >= 5) return "concept";
+    return "prose";
+  }
+  /**
+   * Returns the 3 dynamic action definitions based on note context.
+   */
+  getDynamicActions(context) {
+    switch (context) {
+      case "code":
+        return [
+          {
+            label: "Explain Code",
+            icon: "code",
+            prompt: (title, content) => `Explain what the code in this note does. Describe the purpose, logic, and any noteworthy patterns. Be clear and concise.
+
+Note: ${title}
+
+${content}`
+          },
+          {
+            label: "Review",
+            icon: "shield-check",
+            prompt: (title, content) => `Review the code in this note. Point out bugs, edge cases, security issues, and improvement opportunities. Be specific.
+
+Note: ${title}
+
+${content}`
+          },
+          {
+            label: "Add Tests",
+            icon: "flask-conical",
+            prompt: (title, content) => `Write test cases for the code in this note. Cover happy paths, edge cases, and error conditions. Output only the test code.
+
+Note: ${title}
+
+${content}`
+          }
+        ];
+      case "tasks":
+        return [
+          {
+            label: "Prioritize",
+            icon: "arrow-up-down",
+            prompt: (title, content) => `Analyze this task list and suggest a priority order. Group by urgency/importance, flag blockers, and recommend what to tackle first and why.
+
+Note: ${title}
+
+${content}`
+          },
+          {
+            label: "Next Steps",
+            icon: "arrow-right-circle",
+            prompt: (title, content) => `Based on this task list, what concrete next steps should be taken? Identify dependencies, suggest quick wins, and flag anything unclear.
+
+Note: ${title}
+
+${content}`
+          },
+          {
+            label: "Find Gaps",
+            icon: "search-x",
+            prompt: (title, content) => `What tasks or steps are missing from this list? What has been overlooked or is implied but not written?
+
+Note: ${title}
+
+${content}`
+          }
+        ];
+      case "questions":
+        return [
+          {
+            label: "Answer",
+            icon: "message-circle",
+            prompt: (title, content) => `Answer the questions in this note as clearly and precisely as possible. Address each question individually.
+
+Note: ${title}
+
+${content}`
+          },
+          {
+            label: "Research Plan",
+            icon: "map",
+            prompt: (title, content) => `Create a research plan to find answers to the questions in this note. Suggest sources, methods, and key search terms.
+
+Note: ${title}
+
+${content}`
+          },
+          {
+            label: "Find Gaps",
+            icon: "search-x",
+            prompt: (title, content) => `What important questions are missing from this note? What should also be asked but isn't?
+
+Note: ${title}
+
+${content}`
+          }
+        ];
+      case "concept":
+        return [
+          {
+            label: "Feynman",
+            icon: "graduation-cap",
+            prompt: (title, content) => `Explain the core idea of the following note using the Feynman technique: as if explaining to a curious 12-year-old. Use simple words, concrete analogies, and no jargon. If there are gaps or unclear parts in the original, point them out.
+
+Note: ${title}
+
+${content}`
+          },
+          {
+            label: "Key Points",
+            icon: "list-checks",
+            prompt: (title, content) => `Extract the most important key points from this note as a concise bullet list. Max 7 points. Output only the bullet list.
+
+Note: ${title}
+
+${content}`
+          },
+          {
+            label: "Find Gaps",
+            icon: "search-x",
+            prompt: (title, content) => `Analyze this note critically. What is missing, unclear, or contradictory? What questions does it raise but not answer? Be specific and direct.
+
+Note: ${title}
+
+${content}`
+          }
+        ];
+      default:
+        return [
+          {
+            label: "Key Points",
+            icon: "list-checks",
+            prompt: (title, content) => `Extract the most important key points from this note as a concise bullet list. Max 7 points. Output only the bullet list.
+
+Note: ${title}
+
+${content}`
+          },
+          {
+            label: "Feynman",
+            icon: "graduation-cap",
+            prompt: (title, content) => `Explain the core idea of the following note using the Feynman technique: as if explaining to a curious 12-year-old. Use simple words, concrete analogies, and no jargon.
+
+Note: ${title}
+
+${content}`
+          },
+          {
+            label: "Find Gaps",
+            icon: "search-x",
+            prompt: (title, content) => `Analyze this note critically. What is missing, unclear, or contradictory? What questions does it raise but not answer? Be specific and direct.
+
+Note: ${title}
+
+${content}`
+          }
+        ];
+    }
+  }
+  /**
+   * Quick action buttons above the input — 2 static + 3 context-aware buttons.
    */
   renderQuickActions(container) {
-    const actions = container.createDiv({ cls: "llm-quick-actions" });
-    const quickActions = [
+    this.quickActionsEl = container.createDiv({ cls: "llm-quick-actions" });
+    this.renderQuickActionButtons();
+  }
+  /**
+   * (Re-)populate quick action buttons based on the active note context.
+   */
+  renderQuickActionButtons() {
+    var _a3;
+    if (!this.quickActionsEl) return;
+    this.quickActionsEl.empty();
+    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+    const noteContent = (_a3 = activeView == null ? void 0 : activeView.editor.getValue()) != null ? _a3 : null;
+    const context = noteContent ? this.detectNoteContext(noteContent) : "prose";
+    const staticActions = [
       {
         label: "Summarize",
         icon: "file-text",
@@ -22341,64 +22575,58 @@ Note: ${title}
 
 ${content}`,
         onResponse: async (response, _title, file2) => {
-          var _a3;
-          const activeView = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
-          if (((_a3 = activeView == null ? void 0 : activeView.file) == null ? void 0 : _a3.path) === file2.path) {
-            activeView.editor.setValue(response);
+          var _a4;
+          const activeView2 = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+          if (((_a4 = activeView2 == null ? void 0 : activeView2.file) == null ? void 0 : _a4.path) === file2.path) {
+            activeView2.editor.setValue(response);
           } else {
             await this.app.vault.modify(file2, response);
           }
           new import_obsidian4.Notice("Note rewritten");
         }
-      },
-      {
-        label: "Feynman",
-        icon: "graduation-cap",
-        prompt: (title, content) => `Explain the core idea of the following note using the Feynman technique: as if explaining to a curious 12-year-old. Use simple words, concrete analogies, and no jargon. If there are gaps or unclear parts in the original, point them out.
-
-Note: ${title}
-
-${content}`
-      },
-      {
-        label: "Key Points",
-        icon: "list-checks",
-        prompt: (title, content) => `Extract the most important key points from this note as a concise bullet list. Max 7 points. Output only the bullet list.
-
-Note: ${title}
-
-${content}`
-      },
-      {
-        label: "Find Gaps",
-        icon: "search-x",
-        prompt: (title, content) => `Analyze this note critically. What is missing, unclear, or contradictory? What questions does it raise but not answer? Be specific and direct.
-
-Note: ${title}
-
-${content}`
       }
     ];
-    for (const action of quickActions) {
-      const btn = actions.createEl("button", {
+    const dynamicActions = this.getDynamicActions(context).sort((a, b) => {
+      var _a4, _b;
+      const aCount = (_a4 = this.actionClickCounts[`${context}:${a.label}`]) != null ? _a4 : 0;
+      const bCount = (_b = this.actionClickCounts[`${context}:${b.label}`]) != null ? _b : 0;
+      return bCount - aCount;
+    });
+    const allActions = [...staticActions, ...dynamicActions];
+    const contextChanged = context !== this.lastNoteContext;
+    if (contextChanged) {
+      this.lastNoteContext = context;
+      this.quickActionsEl.addClass("llm-quick-actions-fade");
+      setTimeout(() => {
+        var _a4;
+        return (_a4 = this.quickActionsEl) == null ? void 0 : _a4.removeClass("llm-quick-actions-fade");
+      }, 300);
+    }
+    for (const action of allActions) {
+      const btn = this.quickActionsEl.createEl("button", {
         cls: "llm-quick-action-btn",
         attr: { "aria-label": action.label }
       });
       (0, import_obsidian4.setIcon)(btn, action.icon);
       btn.createSpan({ text: action.label });
       btn.addEventListener("click", () => {
-        var _a3, _b, _c, _d;
+        var _a4, _b, _c, _d, _e, _f;
         if (this.isLoading || !this.inputEl) return;
-        const activeView = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
-        const noteContent = (_a3 = activeView == null ? void 0 : activeView.editor.getValue()) != null ? _a3 : null;
-        const noteTitle = (_c = (_b = activeView == null ? void 0 : activeView.file) == null ? void 0 : _b.basename) != null ? _c : null;
-        const noteFile = (_d = activeView == null ? void 0 : activeView.file) != null ? _d : null;
-        if (!noteContent || !noteTitle || !noteFile) {
+        const activeView2 = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+        const selection = (_a4 = activeView2 == null ? void 0 : activeView2.editor.getSelection()) != null ? _a4 : "";
+        const noteContent2 = (_b = selection.trim() || (activeView2 == null ? void 0 : activeView2.editor.getValue())) != null ? _b : null;
+        const noteTitle = (_d = (_c = activeView2 == null ? void 0 : activeView2.file) == null ? void 0 : _c.basename) != null ? _d : null;
+        const noteFile = (_e = activeView2 == null ? void 0 : activeView2.file) != null ? _e : null;
+        if (!noteContent2 || !noteTitle || !noteFile) {
           new import_obsidian4.Notice("Open a note first");
           return;
         }
-        const prompt = action.prompt(noteTitle, noteContent);
-        if (action.onResponse) {
+        const countKey = `${context}:${action.label}`;
+        this.actionClickCounts[countKey] = ((_f = this.actionClickCounts[countKey]) != null ? _f : 0) + 1;
+        const isSelection = selection.trim().length > 0;
+        const contextNote = isSelection ? `Selected text from "${noteTitle}"` : `Note: ${noteTitle}`;
+        const prompt = action.prompt(contextNote, noteContent2);
+        if (action.onResponse && !isSelection) {
           this.pendingActionCallback = async (response) => {
             await action.onResponse(response, noteTitle, noteFile);
           };
@@ -22409,6 +22637,115 @@ ${content}`
         this.sendMessage();
       });
     }
+  }
+  /**
+   * Called on active-leaf-change to refresh the dynamic buttons and context chip.
+   */
+  updateDynamicQuickActions() {
+    this.updateContextChip();
+    this.renderQuickActionButtons();
+  }
+  /**
+   * Update the context chip showing the active note name and detected context.
+   */
+  updateContextChip() {
+    if (!this.contextChipEl) return;
+    this.contextChipEl.empty();
+    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+    if (!(activeView == null ? void 0 : activeView.file)) {
+      this.contextChipEl.style.display = "none";
+      return;
+    }
+    this.contextChipEl.style.display = "flex";
+    const content = activeView.editor.getValue();
+    const context = this.detectNoteContext(content);
+    const contextIcons = {
+      code: "code",
+      tasks: "check-square",
+      questions: "help-circle",
+      concept: "book-open",
+      prose: "file-text"
+    };
+    const contextLabels = {
+      code: "Code",
+      tasks: "Tasks",
+      questions: "Questions",
+      concept: "Concept",
+      prose: "Prose"
+    };
+    const iconEl = this.contextChipEl.createSpan({ cls: "llm-context-chip-icon" });
+    (0, import_obsidian4.setIcon)(iconEl, "file-text");
+    this.contextChipEl.createSpan({
+      cls: "llm-context-chip-note",
+      text: activeView.file.basename
+    });
+    const typeEl = this.contextChipEl.createSpan({ cls: "llm-context-chip-type" });
+    const typeIconEl = typeEl.createSpan({ cls: "llm-context-chip-type-icon" });
+    (0, import_obsidian4.setIcon)(typeIconEl, contextIcons[context]);
+    typeEl.createSpan({ text: contextLabels[context] });
+  }
+  /**
+   * Get a context-specific system prompt addition for quick actions.
+   */
+  getContextSystemPromptAddition(context) {
+    switch (context) {
+      case "code":
+        return "You are a senior software engineer. Be precise, practical, and show code examples where relevant.";
+      case "tasks":
+        return "You are a skilled project manager and productivity coach. Be concise, actionable, and prioritize clarity.";
+      case "questions":
+        return "You are a knowledgeable research assistant. Answer questions directly, cite reasoning, and flag uncertainty.";
+      case "concept":
+        return "You are an expert teacher. Explain concepts clearly, use analogies, and build intuition before detail.";
+      default:
+        return "You are a clear and concise writing assistant. Focus on structure, clarity, and impact.";
+    }
+  }
+  /**
+   * Show follow-up suggestion chips after the last assistant message.
+   */
+  renderFollowUpChips(lastUserPrompt) {
+    var _a3;
+    if (!this.messagesContainer) return;
+    (_a3 = this.messagesContainer.querySelector(".llm-followup-chips")) == null ? void 0 : _a3.remove();
+    const suggestions = this.getFollowUpSuggestions(lastUserPrompt);
+    if (suggestions.length === 0) return;
+    const chipsEl = this.messagesContainer.createDiv({ cls: "llm-followup-chips" });
+    for (const suggestion of suggestions) {
+      const chip = chipsEl.createEl("button", {
+        cls: "llm-followup-chip",
+        text: suggestion
+      });
+      chip.addEventListener("click", () => {
+        if (!this.inputEl || this.isLoading) return;
+        chipsEl.remove();
+        this.inputEl.value = suggestion;
+        this.sendMessage();
+      });
+    }
+    this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+  }
+  /**
+   * Generate contextual follow-up suggestions based on the last prompt.
+   */
+  getFollowUpSuggestions(prompt) {
+    const lower = prompt.toLowerCase();
+    if (lower.includes("summarize") || lower.includes("summary")) {
+      return ["Go deeper on the key points", "What's missing from this summary?", "Create action items from this"];
+    }
+    if (lower.includes("explain") || lower.includes("feynman")) {
+      return ["Give a concrete example", "What are common misconceptions about this?", "How does this connect to related concepts?"];
+    }
+    if (lower.includes("rewrite") || lower.includes("improve")) {
+      return ["Make it more concise", "Make it more formal", "Add more structure with headings"];
+    }
+    if (lower.includes("code") || lower.includes("review")) {
+      return ["How would you refactor this?", "What tests should I write?", "Are there security concerns?"];
+    }
+    if (lower.includes("task") || lower.includes("prioritize")) {
+      return ["What should I tackle first?", "What dependencies are there?", "What can I delegate?"];
+    }
+    return ["Go deeper", "Give an example", "What's missing?"];
   }
   /**
    * Get the content of the currently active note (the one visible in the editor)
@@ -22497,6 +22834,7 @@ ${content}`
    * Generate a default system prompt with Obsidian context
    */
   buildDefaultSystemPrompt() {
+    var _a3, _b, _c;
     const parts = [];
     parts.push(
       "You are an AI assistant inside Obsidian, a knowledge management app. The user is working with markdown notes in their vault."
@@ -22505,9 +22843,15 @@ ${content}`
     if (vaultName) {
       parts.push(`The vault is called "${vaultName}".`);
     }
-    const noteTitle = this.getActiveNoteTitle();
+    const activeView = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
+    const noteTitle = (_b = (_a3 = activeView == null ? void 0 : activeView.file) == null ? void 0 : _a3.basename) != null ? _b : null;
     if (noteTitle) {
       parts.push(`The user currently has the note "${noteTitle}" open.`);
+      const content = (_c = activeView == null ? void 0 : activeView.editor.getValue()) != null ? _c : "";
+      if (content) {
+        const context = this.detectNoteContext(content);
+        parts.push(this.getContextSystemPromptAddition(context));
+      }
     }
     parts.push(
       "Guidelines:\n- Use [[Note Name]] wiki-link syntax when referencing notes (renders as clickable links)\n- Use standard markdown formatting (headings, lists, bold, code blocks)\n- Use - [ ] for task items\n- Keep responses concise and well-structured\n- When asked about note content, focus on what's relevant"
@@ -22718,9 +23062,17 @@ ${content}`
           role: "assistant",
           content: response.content,
           timestamp: Date.now(),
-          provider: this.currentProvider
+          provider: this.currentProvider,
+          durationMs: response.durationMs,
+          tokensUsed: response.tokensUsed
         };
         this.messages.push(assistantMessage);
+        const activeTab = this.chatTabs.find((t) => t.id === this.activeChatId);
+        if (activeTab && /^Chat \d+$/.test(activeTab.name) && this.messages.length === 2) {
+          const firstUser = this.messages[0].content;
+          activeTab.name = firstUser.slice(0, 30).replace(/\n/g, " ").trim() + (firstUser.length > 30 ? "\u2026" : "");
+          this.renderTabs();
+        }
         await this.renderMessagesContent();
         await this.persistSessions();
         if (this.pendingActionCallback) {
@@ -22732,6 +23084,7 @@ ${content}`
             new import_obsidian4.Notice(`Action failed: ${err instanceof Error ? err.message : String(err)}`);
           }
         }
+        this.renderFollowUpChips(prompt);
       }
     } catch (error48) {
       if (this.inputEl) this.inputEl.value = savedInput;
@@ -23166,6 +23519,9 @@ ${content}`);
         component
       );
       component.unload();
+      const cursor = contentEl.createSpan({ cls: "llm-streaming-cursor", text: "\u258B" });
+      const lastP = contentEl.lastElementChild;
+      if (lastP && lastP !== cursor) lastP.appendChild(cursor);
     }
     this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
   }
