@@ -204,6 +204,8 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
 export interface ConversationMessage {
   role: "user" | "assistant";
   content: string;
+  /** Short label shown in chat instead of full content (e.g. "Key Points · My Note") */
+  displayLabel?: string;
   timestamp: number;
   provider: LLMProvider;
   durationMs?: number;

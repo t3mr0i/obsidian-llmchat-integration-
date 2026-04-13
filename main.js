@@ -1161,6 +1161,12 @@ var init_LLMExecutor = __esm({
           }
           return null;
         }
+        if (type === "error") {
+          const errObj = obj.error;
+          const errData = errObj == null ? void 0 : errObj.data;
+          const message = (errData == null ? void 0 : errData.message) || (errObj == null ? void 0 : errObj.message) || (errObj == null ? void 0 : errObj.name) || "OpenCode error";
+          return { type: "error", message };
+        }
         if (type === "content_block_start" || type === "content_block_delta") {
           const contentType = (_b = obj.content_block) == null ? void 0 : _b.type;
           if (contentType === "tool_use") {
@@ -21687,6 +21693,7 @@ var ChatView = class extends import_obsidian4.ItemView {
     this.isLoading = false;
     this.messagesContainer = null;
     this.pendingActionCallback = null;
+    this.pendingDisplayLabel = null;
     this.inputEl = null;
     this.sendBtn = null;
     this.cancelBtn = null;
@@ -22207,7 +22214,21 @@ var ChatView = class extends import_obsidian4.ItemView {
         }
       }
     } else {
-      contentEl.setText(msg.content);
+      if (msg.displayLabel) {
+        const pill = contentEl.createDiv({ cls: "llm-action-pill" });
+        const pillLabel = pill.createSpan({ cls: "llm-action-pill-label", text: msg.displayLabel });
+        const toggle = pill.createSpan({ cls: "llm-action-pill-toggle", text: "\u203A" });
+        const fullText = contentEl.createDiv({ cls: "llm-action-pill-full" });
+        fullText.setText(msg.content);
+        fullText.style.display = "none";
+        pill.addEventListener("click", () => {
+          const expanded = fullText.style.display !== "none";
+          fullText.style.display = expanded ? "none" : "block";
+          toggle.textContent = expanded ? "\u203A" : "\u2039";
+        });
+      } else {
+        contentEl.setText(msg.content);
+      }
     }
     this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
   }
@@ -22653,6 +22674,7 @@ ${content}`,
         } else {
           this.pendingActionCallback = null;
         }
+        this.pendingDisplayLabel = `${action.label} \xB7 ${noteTitle}`;
         this.inputEl.value = prompt;
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
@@ -23039,7 +23061,7 @@ Assistant answered: ${assistantResponse.slice(0, 500)}`;
     }
   }
   async sendMessage() {
-    var _a3;
+    var _a3, _b;
     if (!this.inputEl || this.isLoading) return;
     const prompt = this.inputEl.value.trim();
     if (!prompt) return;
@@ -23048,9 +23070,11 @@ Assistant answered: ${assistantResponse.slice(0, 500)}`;
     const userMessage = {
       role: "user",
       content: prompt,
+      displayLabel: (_a3 = this.pendingDisplayLabel) != null ? _a3 : void 0,
       timestamp: Date.now(),
       provider: this.currentProvider
     };
+    this.pendingDisplayLabel = null;
     this.messages.push(userMessage);
     await this.renderMessagesContent();
     this.setLoading(true);
@@ -23133,7 +23157,7 @@ Assistant answered: ${assistantResponse.slice(0, 500)}`;
         if (this.inputEl) this.inputEl.value = savedInput;
         this.messages.pop();
         await this.renderMessagesContent(true);
-        this.showError((_a3 = response.error) != null ? _a3 : "Unknown error");
+        this.showError((_b = response.error) != null ? _b : "Unknown error");
       } else {
         this.removeStreamingMessage();
         this.clearProgress();
@@ -23588,11 +23612,12 @@ ${content}`);
       contentEl.empty();
       const activeFile = this.app.workspace.getActiveFile();
       const sourcePath = (_a3 = activeFile == null ? void 0 : activeFile.path) != null ? _a3 : "";
+      const cleanContent = content.replace(/▋/g, "");
       const component = new import_obsidian4.Component();
       component.load();
       await import_obsidian4.MarkdownRenderer.render(
         this.app,
-        content,
+        cleanContent,
         contentEl,
         sourcePath,
         component

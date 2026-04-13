@@ -32,6 +32,7 @@ export class ChatView extends ItemView {
   private isLoading = false;
   private messagesContainer: HTMLElement | null = null;
   private pendingActionCallback: ((response: string) => Promise<void>) | null = null;
+  private pendingDisplayLabel: string | null = null;
   private inputEl: HTMLTextAreaElement | null = null;
   private sendBtn: HTMLButtonElement | null = null;
   private cancelBtn: HTMLButtonElement | null = null;
@@ -664,7 +665,22 @@ export class ChatView extends ItemView {
         }
       }
     } else {
-      contentEl.setText(msg.content);
+      if (msg.displayLabel) {
+        // Collapsed pill with expandable full prompt
+        const pill = contentEl.createDiv({ cls: "llm-action-pill" });
+        const pillLabel = pill.createSpan({ cls: "llm-action-pill-label", text: msg.displayLabel });
+        const toggle = pill.createSpan({ cls: "llm-action-pill-toggle", text: "›" });
+        const fullText = contentEl.createDiv({ cls: "llm-action-pill-full" });
+        fullText.setText(msg.content);
+        fullText.style.display = "none";
+        pill.addEventListener("click", () => {
+          const expanded = fullText.style.display !== "none";
+          fullText.style.display = expanded ? "none" : "block";
+          toggle.textContent = expanded ? "›" : "‹";
+        });
+      } else {
+        contentEl.setText(msg.content);
+      }
     }
 
     // Scroll to bottom
@@ -1133,6 +1149,9 @@ export class ChatView extends ItemView {
         } else {
           this.pendingActionCallback = null;
         }
+
+        // Short display label instead of full prompt in chat
+        this.pendingDisplayLabel = `${action.label} · ${noteTitle}`;
 
         this.inputEl.value = prompt;
 
@@ -1627,9 +1646,11 @@ export class ChatView extends ItemView {
     const userMessage: ConversationMessage = {
       role: "user",
       content: prompt,
+      displayLabel: this.pendingDisplayLabel ?? undefined,
       timestamp: Date.now(),
       provider: this.currentProvider,
     };
+    this.pendingDisplayLabel = null;
     this.messages.push(userMessage);
     await this.renderMessagesContent();
 
@@ -2352,17 +2373,18 @@ export class ChatView extends ItemView {
 
     const contentEl = streamingEl.querySelector(".llm-message-content") as HTMLElement;
     if (contentEl) {
-      // Clear and render markdown (append cursor placeholder so ▋ renders inline)
+      // Clear and render markdown — strip any leftover cursor char first
       contentEl.empty();
       const activeFile = this.app.workspace.getActiveFile();
       const sourcePath = activeFile?.path ?? "";
+      const cleanContent = content.replace(/▋/g, "");
 
       // Use a temporary component for streaming renders
       const component = new Component();
       component.load();
       await MarkdownRenderer.render(
         this.app,
-        content,
+        cleanContent,
         contentEl,
         sourcePath,
         component
