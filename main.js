@@ -21765,7 +21765,7 @@ var ChatView = class extends import_obsidian4.ItemView {
     this.connectAcpIfEnabled();
     this.registerEvent(
       this.app.workspace.on("active-leaf-change", () => {
-        this.updateDynamicQuickActions();
+        if (!this.isLoading) this.updateDynamicQuickActions();
       })
     );
   }
@@ -22787,11 +22787,7 @@ ${content}`,
         this.pendingDisplayLabel = `${action.label} \xB7 ${noteTitle}`;
         this.pendingSkipRag = true;
         this.inputEl.value = prompt;
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            this.sendMessage().finally(() => resetBtn());
-          });
-        });
+        this.sendMessage().finally(() => resetBtn());
       });
     }
   }

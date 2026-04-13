@@ -113,9 +113,10 @@ export class ChatView extends ItemView {
     this.connectAcpIfEnabled();
 
     // Re-render dynamic quick-action buttons when the active note changes
+    // Skip re-render while a request is in flight to avoid destroying click handlers
     this.registerEvent(
       this.app.workspace.on("active-leaf-change", () => {
-        this.updateDynamicQuickActions();
+        if (!this.isLoading) this.updateDynamicQuickActions();
       })
     );
   }
@@ -1285,13 +1286,7 @@ export class ChatView extends ItemView {
         this.pendingSkipRag = true;
 
         this.inputEl.value = prompt;
-
-        // Yield to browser to paint the feedback state, then start the request
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            this.sendMessage().finally(() => resetBtn());
-          });
-        });
+        this.sendMessage().finally(() => resetBtn());
       });
     }
   }
