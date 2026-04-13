@@ -22620,7 +22620,7 @@ ${content}`,
       (0, import_obsidian4.setIcon)(btn, action.icon);
       btn.createSpan({ text: action.label });
       btn.addEventListener("click", () => {
-        var _a4, _b, _c, _d, _e, _f;
+        var _a4, _b, _c, _d, _e, _f, _g;
         if (this.isLoading || !this.inputEl) return;
         const activeView2 = this.getEditorView();
         const selection = (_a4 = activeView2 == null ? void 0 : activeView2.editor.getSelection()) != null ? _a4 : "";
@@ -22631,8 +22631,18 @@ ${content}`,
           new import_obsidian4.Notice("Open a note first");
           return;
         }
+        btn.addClass("llm-quick-action-active");
+        btn.setAttribute("disabled", "true");
+        const spanEl = btn.querySelector("span");
+        const originalLabel = (_f = spanEl == null ? void 0 : spanEl.textContent) != null ? _f : action.label;
+        if (spanEl) spanEl.textContent = originalLabel + "\u2026";
+        setTimeout(() => {
+          btn.removeClass("llm-quick-action-active");
+          btn.removeAttribute("disabled");
+          if (spanEl) spanEl.textContent = originalLabel;
+        }, 2e3);
         const countKey = `${context}:${action.label}`;
-        this.actionClickCounts[countKey] = ((_f = this.actionClickCounts[countKey]) != null ? _f : 0) + 1;
+        this.actionClickCounts[countKey] = ((_g = this.actionClickCounts[countKey]) != null ? _g : 0) + 1;
         const isSelection = selection.trim().length > 0;
         const contextNote = isSelection ? `Selected text from "${noteTitle}"` : `Note: ${noteTitle}`;
         const prompt = action.prompt(contextNote, noteContent2);

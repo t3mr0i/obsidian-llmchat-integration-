@@ -360,6 +360,20 @@
   color: var(--text-normal);
 }
 
+.llm-quick-action-btn:active,
+.llm-quick-action-btn.llm-quick-action-active {
+  background-color: var(--llm-accent);
+  border-color: var(--llm-accent);
+  color: var(--text-on-accent);
+  transform: scale(0.96);
+  opacity: 0.9;
+}
+
+.llm-quick-action-btn[disabled] {
+  cursor: default;
+  pointer-events: none;
+}
+
 .llm-quick-action-btn svg {
   width: 12px;
   height: 12px;
