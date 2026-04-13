@@ -1,7 +1,7 @@
 {
   "id": "obsidian-llm",
   "name": "AI Chat Integration",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "minAppVersion": "1.0.0",
   "description": "Chat with AI models directly inside Obsidian — supports Claude, GPT, Gemini, and local models via Ollama",
   "author": "Kai Detmers",
