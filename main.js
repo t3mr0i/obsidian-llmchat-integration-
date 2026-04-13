@@ -1740,6 +1740,32 @@ var LLMSettingTab = class extends import_obsidian.PluginSettingTab {
   // ════════════════════════════════════════════
   //  General Settings
   // ════════════════════════════════════════════
+  /**
+   * Renders a pure-div toggle (no native checkbox) to avoid Obsidian's global checkbox styles.
+   * Returns the track element so callers can update its state if needed.
+   */
+  createProviderToggle(container, initialValue, onChange) {
+    const track = container.createDiv({
+      cls: `llm-toggle-track ${initialValue ? "llm-toggle-on" : ""}`,
+      attr: { role: "switch", "aria-checked": String(initialValue), tabindex: "0" }
+    });
+    track.createDiv({ cls: "llm-toggle-thumb" });
+    const toggle = (e) => {
+      e.stopPropagation();
+      const on = !track.hasClass("llm-toggle-on");
+      track.toggleClass("llm-toggle-on", on);
+      track.setAttribute("aria-checked", String(on));
+      onChange(on);
+    };
+    track.addEventListener("click", toggle);
+    track.addEventListener("keydown", (e) => {
+      if (e.key === " " || e.key === "Enter") {
+        e.preventDefault();
+        toggle(e);
+      }
+    });
+    return track;
+  }
   addGeneralSettings(containerEl) {
     containerEl.createEl("h3", { text: "General" });
     new import_obsidian.Setting(containerEl).setName("Default AI provider").setDesc("Which AI to use when you open a new chat (only enabled providers shown)").addDropdown((dropdown) => {
@@ -2014,12 +2040,9 @@ var LLMSettingTab = class extends import_obsidian.PluginSettingTab {
     const cardInfo = cardHeader.createDiv({ cls: "llm-provider-card-info" });
     cardInfo.createDiv({ text: displayName, cls: "llm-provider-card-name" });
     cardInfo.createDiv({ text: PROVIDER_DESCRIPTIONS[provider], cls: "llm-provider-card-desc" });
-    const toggleWrapper = cardHeader.createDiv({ cls: "llm-provider-card-toggle" });
-    const toggleEl = toggleWrapper.createEl("input", { type: "checkbox", cls: "llm-provider-toggle-input" });
-    toggleEl.checked = providerConfig.enabled;
-    toggleEl.addEventListener("change", async () => {
-      this.plugin.settings.providers[provider].enabled = toggleEl.checked;
-      card.toggleClass("llm-provider-card-enabled", toggleEl.checked);
+    this.createProviderToggle(cardHeader, providerConfig.enabled, async (val) => {
+      this.plugin.settings.providers[provider].enabled = val;
+      card.toggleClass("llm-provider-card-enabled", val);
       await this.plugin.saveSettings();
     });
     const detailsEl = card.createEl("details", { cls: "llm-provider-details" });
@@ -2101,12 +2124,9 @@ var LLMSettingTab = class extends import_obsidian.PluginSettingTab {
     const cardInfo = cardHeader.createDiv({ cls: "llm-provider-card-info" });
     cardInfo.createDiv({ text: "Local LLM", cls: "llm-provider-card-name" });
     cardInfo.createDiv({ text: PROVIDER_DESCRIPTIONS.local, cls: "llm-provider-card-desc" });
-    const toggleWrapper = cardHeader.createDiv({ cls: "llm-provider-card-toggle" });
-    const toggleEl = toggleWrapper.createEl("input", { type: "checkbox", cls: "llm-provider-toggle-input" });
-    toggleEl.checked = providerConfig.enabled;
-    toggleEl.addEventListener("change", async () => {
-      this.plugin.settings.providers.local.enabled = toggleEl.checked;
-      card.toggleClass("llm-provider-card-enabled", toggleEl.checked);
+    this.createProviderToggle(cardHeader, providerConfig.enabled, async (val) => {
+      this.plugin.settings.providers.local.enabled = val;
+      card.toggleClass("llm-provider-card-enabled", val);
       await this.plugin.saveSettings();
     });
     const detailsEl = card.createEl("details", { cls: "llm-provider-details" });
