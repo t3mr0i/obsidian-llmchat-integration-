@@ -95,6 +95,35 @@ export class LLMSettingTab extends PluginSettingTab {
   // ════════════════════════════════════════════
   //  General Settings
   // ════════════════════════════════════════════
+  /**
+   * Renders a pure-div toggle (no native checkbox) to avoid Obsidian's global checkbox styles.
+   * Returns the track element so callers can update its state if needed.
+   */
+  private createProviderToggle(
+    container: HTMLElement,
+    initialValue: boolean,
+    onChange: (value: boolean) => Promise<void>
+  ): HTMLElement {
+    const track = container.createDiv({
+      cls: `llm-toggle-track ${initialValue ? "llm-toggle-on" : ""}`,
+      attr: { role: "switch", "aria-checked": String(initialValue), tabindex: "0" },
+    });
+    track.createDiv({ cls: "llm-toggle-thumb" });
+
+    const toggle = (e: Event) => {
+      e.stopPropagation();
+      const on = !track.hasClass("llm-toggle-on");
+      track.toggleClass("llm-toggle-on", on);
+      track.setAttribute("aria-checked", String(on));
+      onChange(on);
+    };
+    track.addEventListener("click", toggle);
+    track.addEventListener("keydown", (e) => {
+      if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggle(e); }
+    });
+    return track;
+  }
+
   private addGeneralSettings(containerEl: HTMLElement): void {
     containerEl.createEl("h3", { text: "General" });
 
@@ -445,12 +474,9 @@ export class LLMSettingTab extends PluginSettingTab {
     cardInfo.createDiv({ text: PROVIDER_DESCRIPTIONS[provider], cls: "llm-provider-card-desc" });
 
     // Enable toggle — right side of header
-    const toggleWrapper = cardHeader.createDiv({ cls: "llm-provider-card-toggle" });
-    const toggleEl = toggleWrapper.createEl("input", { type: "checkbox", cls: "llm-provider-toggle-input" });
-    toggleEl.checked = providerConfig.enabled;
-    toggleEl.addEventListener("change", async () => {
-      this.plugin.settings.providers[provider].enabled = toggleEl.checked;
-      card.toggleClass("llm-provider-card-enabled", toggleEl.checked);
+    this.createProviderToggle(cardHeader, providerConfig.enabled, async (val) => {
+      this.plugin.settings.providers[provider].enabled = val;
+      card.toggleClass("llm-provider-card-enabled", val);
       await this.plugin.saveSettings();
     });
 
@@ -564,12 +590,9 @@ export class LLMSettingTab extends PluginSettingTab {
     cardInfo.createDiv({ text: "Local LLM", cls: "llm-provider-card-name" });
     cardInfo.createDiv({ text: PROVIDER_DESCRIPTIONS.local, cls: "llm-provider-card-desc" });
 
-    const toggleWrapper = cardHeader.createDiv({ cls: "llm-provider-card-toggle" });
-    const toggleEl = toggleWrapper.createEl("input", { type: "checkbox", cls: "llm-provider-toggle-input" });
-    toggleEl.checked = providerConfig.enabled;
-    toggleEl.addEventListener("change", async () => {
-      this.plugin.settings.providers.local.enabled = toggleEl.checked;
-      card.toggleClass("llm-provider-card-enabled", toggleEl.checked);
+    this.createProviderToggle(cardHeader, providerConfig.enabled, async (val) => {
+      this.plugin.settings.providers.local.enabled = val;
+      card.toggleClass("llm-provider-card-enabled", val);
       await this.plugin.saveSettings();
     });
 

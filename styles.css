@@ -748,41 +748,41 @@ pre:hover .llm-code-copy-btn {
   line-height: 1.4;
 }
 
-/* Native checkbox styled as a toggle */
-.llm-provider-card-toggle {
+/* Pure-div toggle — no native input, no Obsidian checkbox interference */
+.llm-toggle-track {
   flex-shrink: 0;
-}
-
-.llm-provider-toggle-input {
   width: 36px;
   height: 20px;
-  appearance: none;
-  -webkit-appearance: none;
-  background: var(--background-modifier-border);
   border-radius: 10px;
+  background: var(--background-modifier-border);
   position: relative;
   cursor: pointer;
   transition: background 0.2s;
   outline: none;
 }
 
-.llm-provider-toggle-input::after {
-  content: "";
+.llm-toggle-track:focus-visible {
+  box-shadow: 0 0 0 2px var(--llm-accent);
+}
+
+.llm-toggle-track.llm-toggle-on {
+  background: var(--llm-accent);
+}
+
+.llm-toggle-thumb {
   position: absolute;
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: var(--background-primary);
+  background: white;
   top: 2px;
   left: 2px;
   transition: transform 0.2s;
+  pointer-events: none;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
 
-.llm-provider-toggle-input:checked {
-  background: var(--llm-accent);
-}
-
-.llm-provider-toggle-input:checked::after {
+.llm-toggle-on .llm-toggle-thumb {
   transform: translateX(16px);
 }
 
