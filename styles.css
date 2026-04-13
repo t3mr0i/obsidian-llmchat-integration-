@@ -407,6 +407,26 @@
   border-style: solid;
 }
 
+.llm-followup-skeleton {
+  cursor: default;
+  pointer-events: none;
+  color: transparent;
+  background: linear-gradient(
+    90deg,
+    var(--background-secondary) 25%,
+    var(--background-modifier-border) 50%,
+    var(--background-secondary) 75%
+  );
+  background-size: 200% 100%;
+  animation: llm-skeleton-shimmer 1.2s infinite;
+  min-width: 80px;
+}
+
+@keyframes llm-skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 /* Token + duration badge below assistant messages */
 .llm-message-badge {
   display: flex;

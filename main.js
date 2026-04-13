@@ -22723,38 +22723,73 @@ ${content}`,
   }
   /**
    * Show follow-up suggestion chips after the last assistant message.
+   * Renders skeleton chips immediately, then replaces with AI-generated suggestions.
    */
-  renderFollowUpChips(lastUserPrompt) {
+  renderFollowUpChips(userPrompt, assistantResponse) {
     var _a3;
     if (!this.messagesContainer) return;
     (_a3 = this.messagesContainer.querySelector(".llm-followup-chips")) == null ? void 0 : _a3.remove();
-    const suggestions = this.getFollowUpSuggestions(lastUserPrompt);
-    if (suggestions.length === 0) return;
     const chipsEl = this.messagesContainer.createDiv({ cls: "llm-followup-chips" });
-    for (const suggestion of suggestions) {
-      const chip = chipsEl.createEl("button", {
-        cls: "llm-followup-chip",
-        text: suggestion
-      });
+    const attachChip = (text) => {
+      const chip = chipsEl.createEl("button", { cls: "llm-followup-chip", text });
       chip.addEventListener("click", () => {
         if (!this.inputEl || this.isLoading) return;
         chipsEl.remove();
-        this.inputEl.value = suggestion;
+        this.inputEl.value = text;
         this.sendMessage();
       });
-    }
+      return chip;
+    };
+    const skeletons = [1, 2, 3].map(() => {
+      const s = chipsEl.createEl("button", { cls: "llm-followup-chip llm-followup-skeleton" });
+      s.setText("\xB7\xB7\xB7");
+      return s;
+    });
     this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+    this.generateFollowUpSuggestions(userPrompt, assistantResponse).then((suggestions) => {
+      if (!chipsEl.isConnected) return;
+      skeletons.forEach((s) => s.remove());
+      suggestions.forEach((s) => attachChip(s));
+      this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+    }).catch(() => {
+      if (!chipsEl.isConnected) return;
+      skeletons.forEach((s) => s.remove());
+      this.getStaticFollowUpSuggestions(userPrompt).forEach((s) => attachChip(s));
+    });
   }
   /**
-   * Generate contextual follow-up suggestions based on the last prompt.
+   * Ask the current provider for 3 short follow-up question suggestions.
    */
-  getFollowUpSuggestions(prompt) {
+  async generateFollowUpSuggestions(userPrompt, assistantResponse) {
+    const fullPrompt = `Based on this conversation, suggest exactly 3 short follow-up questions the user might want to ask next.
+Reply with only the 3 questions, one per line, no numbering or bullets, max 8 words each.
+
+User asked: ${userPrompt.slice(0, 300)}
+
+Assistant answered: ${assistantResponse.slice(0, 500)}`;
+    let raw = "";
+    await this.executor.execute(
+      fullPrompt,
+      this.currentProvider,
+      (chunk) => {
+        raw += chunk;
+      },
+      () => {
+      }
+    );
+    const lines = raw.split("\n").map((l) => l.replace(/^[-*\d.)\s]+/, "").trim()).filter((l) => l.length > 3 && l.length < 80);
+    return lines.slice(0, 3).length === 3 ? lines.slice(0, 3) : this.getStaticFollowUpSuggestions(userPrompt);
+  }
+  /**
+   * Static fallback suggestions when AI generation fails.
+   */
+  getStaticFollowUpSuggestions(prompt) {
     const lower = prompt.toLowerCase();
     if (lower.includes("summarize") || lower.includes("summary")) {
       return ["Go deeper on the key points", "What's missing from this summary?", "Create action items from this"];
     }
     if (lower.includes("explain") || lower.includes("feynman")) {
-      return ["Give a concrete example", "What are common misconceptions about this?", "How does this connect to related concepts?"];
+      return ["Give a concrete example", "What are common misconceptions?", "How does this connect to related concepts?"];
     }
     if (lower.includes("rewrite") || lower.includes("improve")) {
       return ["Make it more concise", "Make it more formal", "Add more structure with headings"];
@@ -23118,7 +23153,7 @@ ${content}`,
             new import_obsidian4.Notice(`Action failed: ${err instanceof Error ? err.message : String(err)}`);
           }
         }
-        this.renderFollowUpChips(prompt);
+        this.renderFollowUpChips(prompt, response.content);
       }
     } catch (error48) {
       if (this.inputEl) this.inputEl.value = savedInput;
