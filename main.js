@@ -22762,7 +22762,7 @@ ${content}`,
    * chat sidebar (where getActiveViewOfType returns null because the active leaf is us).
    */
   getEditorView() {
-    const active = this.getEditorView();
+    const active = this.app.workspace.getActiveViewOfType(import_obsidian4.MarkdownView);
     if (active) return active;
     const leaves = this.app.workspace.getLeavesOfType("markdown");
     if (leaves.length === 0) return null;

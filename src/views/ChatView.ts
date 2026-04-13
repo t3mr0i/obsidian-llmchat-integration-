@@ -1258,7 +1258,7 @@ export class ChatView extends ItemView {
    */
   private getEditorView(): MarkdownView | null {
     // Try the standard path first (works when editor is focused)
-    const active = this.getEditorView();
+    const active = this.app.workspace.getActiveViewOfType(MarkdownView);
     if (active) return active;
 
     // Fallback: find the most recently used markdown leaf in the main editor area
