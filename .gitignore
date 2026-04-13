@@ -1,5 +1,5 @@
-# Build output
-main.js
+# Build output — main.js is committed so BRAT can install directly from repo
+# main.js
 
 # Node
 node_modules/
