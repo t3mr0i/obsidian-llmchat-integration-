@@ -21721,6 +21721,8 @@ var ChatView = class extends import_obsidian4.ItemView {
     this.lastNoteContext = "prose";
     // Track how often each action label was clicked (persisted in memory only, resets on reload)
     this.actionClickCounts = {};
+    // When a quick-action sets the prompt, the note content is already included — skip RAG
+    this.pendingSkipRag = false;
     // Pinned note context — file explicitly attached by user for this conversation
     this.pinnedNote = null;
     this.pinnedNoteBtn = null;
@@ -22318,7 +22320,13 @@ var ChatView = class extends import_obsidian4.ItemView {
     } else {
       if (msg.displayLabel) {
         const pill = contentEl.createDiv({ cls: "llm-action-pill" });
-        const pillLabel = pill.createSpan({ cls: "llm-action-pill-label", text: msg.displayLabel });
+        const sepIdx = msg.displayLabel.indexOf(" \xB7 ");
+        if (sepIdx > -1) {
+          pill.createSpan({ cls: "llm-action-pill-label", text: msg.displayLabel.slice(0, sepIdx) });
+          pill.createSpan({ cls: "llm-action-pill-note", text: msg.displayLabel.slice(sepIdx) });
+        } else {
+          pill.createSpan({ cls: "llm-action-pill-label", text: msg.displayLabel });
+        }
         const toggle = pill.createSpan({ cls: "llm-action-pill-toggle", text: "\u203A" });
         const fullText = contentEl.createDiv({ cls: "llm-action-pill-full" });
         fullText.setText(msg.content);
@@ -22777,6 +22785,7 @@ ${content}`,
           this.pendingActionCallback = null;
         }
         this.pendingDisplayLabel = `${action.label} \xB7 ${noteTitle}`;
+        this.pendingSkipRag = true;
         this.inputEl.value = prompt;
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
@@ -22874,13 +22883,7 @@ ${content}`,
       return s;
     });
     this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
-    const waitThenGenerate = async () => {
-      while (this.isLoading) {
-        await new Promise((r) => setTimeout(r, 150));
-      }
-      return this.generateFollowUpSuggestions(userPrompt, assistantResponse);
-    };
-    waitThenGenerate().then((suggestions) => {
+    this.generateFollowUpSuggestions(userPrompt, assistantResponse).then((suggestions) => {
       if (!chipsEl.isConnected) return;
       skeletons.forEach((s) => s.remove());
       suggestions.forEach((s) => attachChip(s));
@@ -23646,10 +23649,12 @@ ${content}`);
    * Gather system context: system prompt, pinned note, referenced notes, vault RAG.
    */
   async buildSystemContext(prompt) {
+    const skipRag = this.pendingSkipRag;
+    this.pendingSkipRag = false;
     const [systemPrompt, referencedNotes, vaultContext] = await Promise.all([
       this.getSystemPrompt(),
       this.resolveNoteReferences(prompt),
-      this.vaultSearch.buildContext(prompt, this.getContextBudget())
+      skipRag ? Promise.resolve("") : this.vaultSearch.buildContext(prompt, this.getContextBudget())
     ]);
     const parts = [];
     if (systemPrompt) parts.push(systemPrompt);

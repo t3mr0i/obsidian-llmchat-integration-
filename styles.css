@@ -55,7 +55,9 @@
 }
 
 .llm-tab {
-  padding: 4px 10px;
+  display: flex;
+  align-items: center;
+  padding: 4px 6px 4px 10px;
   border-radius: 4px;
   font-size: 12px;
   color: var(--text-muted);
@@ -200,10 +202,11 @@
 
 .llm-message-user {
   align-self: flex-end;
-  background-color: var(--llm-accent);
-  color: var(--text-on-accent);
+  background-color: var(--background-primary);
+  color: var(--text-normal);
   border-bottom-right-radius: 2px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  border: 1.5px solid var(--llm-accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .llm-message-assistant {
@@ -220,11 +223,11 @@
   justify-content: space-between;
   font-size: 10px;
   margin-bottom: 4px;
-  opacity: 0.7;
+  color: var(--text-muted);
 }
 
 .llm-message-user .llm-message-header {
-  color: var(--text-on-accent);
+  color: var(--llm-accent);
 }
 
 /* Message Actions (Copy/Note) */
@@ -283,8 +286,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
-  border-radius: 12px;
+  padding: 5px 12px;
+  border-radius: 14px;
   background-color: var(--llm-accent-subtle);
   border: 1px solid var(--llm-accent);
   color: var(--text-normal);
@@ -292,20 +295,33 @@
   cursor: pointer;
   user-select: none;
   transition: background-color 0.15s;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .llm-action-pill:hover {
-  background-color: rgba(var(--interactive-accent-rgb), 0.2);
+  background-color: rgba(var(--interactive-accent-rgb), 0.18);
 }
 
 .llm-action-pill-label {
-  font-weight: 500;
+  font-weight: 600;
+  color: var(--llm-accent);
+  flex-shrink: 0;
+}
+
+.llm-action-pill-note {
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .llm-action-pill-toggle {
-  color: var(--text-muted);
+  color: var(--llm-accent);
   font-size: 14px;
   line-height: 1;
+  flex-shrink: 0;
+  opacity: 0.7;
 }
 
 .llm-action-pill-full {
@@ -1024,4 +1040,295 @@ pre:hover .llm-code-copy-btn {
 .llm-tab-clear svg {
   width: 12px;
   height: 12px;
+}
+
+/* ============================================
+   Tab Label & Rename Input
+   ============================================ */
+.llm-tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+.llm-tab-rename {
+  font-size: 12px;
+  width: 80px;
+  padding: 0 4px;
+  border-radius: 3px;
+  border: 1px solid var(--llm-accent);
+  background: var(--background-primary);
+  color: var(--text-normal);
+}
+
+/* ============================================
+   Message Role & Time in Header
+   ============================================ */
+.llm-message-role {
+  font-weight: 600;
+  font-size: 10px;
+}
+
+.llm-message-time {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+/* ============================================
+   Loading & Streaming
+   ============================================ */
+.llm-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.llm-message-streaming {
+  opacity: 0.95;
+}
+
+/* ============================================
+   File Link (clickable path in tool history)
+   ============================================ */
+.llm-file-link {
+  color: var(--llm-accent);
+  text-decoration: none;
+  font-size: 11px;
+  border-bottom: 1px dashed var(--llm-accent);
+  cursor: pointer;
+}
+
+.llm-file-link:hover {
+  border-bottom-style: solid;
+}
+
+/* ============================================
+   Note Suggest Path (sub-text in [[]] dropdown)
+   ============================================ */
+.llm-suggest-path {
+  color: var(--text-faint);
+  font-size: 10px;
+}
+
+/* ============================================
+   Tool History in Progress Area
+   ============================================ */
+.llm-progress-history {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 4px;
+  font-size: 11px;
+}
+
+.llm-tool-history-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.llm-tool-complete {
+  color: var(--text-success, #4caf50);
+  flex-shrink: 0;
+}
+
+.llm-tool-active {
+  color: var(--llm-accent);
+  flex-shrink: 0;
+}
+
+.llm-tool-name {
+  font-weight: 500;
+  color: var(--text-normal);
+}
+
+.llm-tool-detail {
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+.llm-tool-count {
+  color: var(--text-faint);
+  font-size: 10px;
+}
+
+/* ============================================
+   Tool Block Status Badge
+   ============================================ */
+.llm-tool-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.llm-tool-icon svg {
+  width: 12px;
+  height: 12px;
+}
+
+.llm-tool-summary {
+  color: var(--text-muted);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.llm-tool-status {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.llm-tool-status-started {
+  background: rgba(var(--interactive-accent-rgb), 0.12);
+  color: var(--llm-accent);
+}
+
+.llm-tool-status-completed {
+  background: rgba(var(--color-green-rgb, 80, 180, 80), 0.12);
+  color: var(--text-success, #4caf50);
+}
+
+/* ============================================
+   Thinking Block — Icon & Label
+   ============================================ */
+.llm-thinking-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.llm-thinking-icon svg {
+  width: 12px;
+  height: 12px;
+}
+
+.llm-thinking-label {
+  font-weight: 500;
+  flex: 1;
+}
+
+/* ============================================
+   Setup / Welcome Banner
+   ============================================ */
+.llm-setup-banner {
+  padding: 20px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--llm-border);
+  background: var(--background-secondary);
+  margin: 16px 0;
+}
+
+.llm-setup-banner h3 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.llm-setup-banner p {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.llm-setup-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.llm-setup-scan-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  background: var(--llm-accent);
+  color: var(--text-on-accent);
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.llm-setup-scan-btn:hover {
+  background: var(--llm-accent-hover);
+}
+
+.llm-setup-scan-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.llm-setup-scan-icon {
+  display: inline-flex;
+  align-items: center;
+}
+
+.llm-setup-scan-icon svg {
+  width: 13px;
+  height: 13px;
+}
+
+.llm-setup-settings-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  background: var(--background-modifier-border);
+  color: var(--text-normal);
+  border: 1px solid var(--llm-border);
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.llm-setup-settings-btn:hover {
+  background: var(--background-modifier-hover);
+}
+
+.llm-setup-status {
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.llm-setup-success {
+  color: var(--text-success, #4caf50);
+  font-weight: 500;
+  margin: 0 0 4px;
+}
+
+.llm-setup-hint {
+  color: var(--text-muted);
+  margin: 0 0 4px;
+}
+
+.llm-setup-hints {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--llm-border);
+}
+
+.llm-setup-hints-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin: 0 0 6px;
+}
+
+.llm-setup-hints ul {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.8;
 }

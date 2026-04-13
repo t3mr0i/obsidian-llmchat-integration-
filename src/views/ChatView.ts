@@ -60,6 +60,8 @@ export class ChatView extends ItemView {
   private lastNoteContext: "code" | "tasks" | "questions" | "concept" | "prose" = "prose";
   // Track how often each action label was clicked (persisted in memory only, resets on reload)
   private actionClickCounts: Record<string, number> = {};
+  // When a quick-action sets the prompt, the note content is already included — skip RAG
+  private pendingSkipRag = false;
   // Pinned note context — file explicitly attached by user for this conversation
   private pinnedNote: TFile | null = null;
   private pinnedNoteBtn: HTMLButtonElement | null = null;
@@ -788,7 +790,14 @@ export class ChatView extends ItemView {
       if (msg.displayLabel) {
         // Collapsed pill with expandable full prompt
         const pill = contentEl.createDiv({ cls: "llm-action-pill" });
-        const pillLabel = pill.createSpan({ cls: "llm-action-pill-label", text: msg.displayLabel });
+        // Split "Action · Note title" into styled parts
+        const sepIdx = msg.displayLabel.indexOf(" · ");
+        if (sepIdx > -1) {
+          pill.createSpan({ cls: "llm-action-pill-label", text: msg.displayLabel.slice(0, sepIdx) });
+          pill.createSpan({ cls: "llm-action-pill-note", text: msg.displayLabel.slice(sepIdx) });
+        } else {
+          pill.createSpan({ cls: "llm-action-pill-label", text: msg.displayLabel });
+        }
         const toggle = pill.createSpan({ cls: "llm-action-pill-toggle", text: "›" });
         const fullText = contentEl.createDiv({ cls: "llm-action-pill-full" });
         fullText.setText(msg.content);
@@ -1272,6 +1281,8 @@ export class ChatView extends ItemView {
 
         // Short display label instead of full prompt in chat
         this.pendingDisplayLabel = `${action.label} · ${noteTitle}`;
+        // Note content is already in the prompt — skip vault RAG to avoid index-wait delay
+        this.pendingSkipRag = true;
 
         this.inputEl.value = prompt;
 
@@ -1388,16 +1399,8 @@ export class ChatView extends ItemView {
 
     this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
 
-    // Wait for main request to finish, then ask AI for suggestions
-    const waitThenGenerate = async () => {
-      // Poll until isLoading is false (main response done)
-      while (this.isLoading) {
-        await new Promise((r) => setTimeout(r, 150));
-      }
-      return this.generateFollowUpSuggestions(userPrompt, assistantResponse);
-    };
-
-    waitThenGenerate()
+    // Generate suggestions — caller already awaits the main request, so we fire immediately
+    this.generateFollowUpSuggestions(userPrompt, assistantResponse)
       .then((suggestions) => {
         if (!chipsEl.isConnected) return;
         skeletons.forEach((s) => s.remove());
@@ -2401,10 +2404,14 @@ export class ChatView extends ItemView {
    * Gather system context: system prompt, pinned note, referenced notes, vault RAG.
    */
   private async buildSystemContext(prompt: string): Promise<string> {
+    // Skip vault RAG when note content is already embedded (quick-actions) — avoids index-wait delay
+    const skipRag = this.pendingSkipRag;
+    this.pendingSkipRag = false;
+
     const [systemPrompt, referencedNotes, vaultContext] = await Promise.all([
       this.getSystemPrompt(),
       this.resolveNoteReferences(prompt),
-      this.vaultSearch.buildContext(prompt, this.getContextBudget()),
+      skipRag ? Promise.resolve("") : this.vaultSearch.buildContext(prompt, this.getContextBudget()),
     ]);
     const parts: string[] = [];
     if (systemPrompt) parts.push(systemPrompt);

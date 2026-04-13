@@ -1079,6 +1079,14 @@ export class LLMExecutor {
       return null;
     }
 
+    // Error event — emit as error StreamChunk so ChatView can surface it
+    if (type === "error") {
+      const errObj = obj.error as Record<string, unknown> | undefined;
+      const errData = errObj?.data as Record<string, unknown> | undefined;
+      const message = (errData?.message || errObj?.message || errObj?.name || "OpenCode error") as string;
+      return { type: "error", message };
+    }
+
     // Content block events (some LLMs use this pattern)
     if (type === "content_block_start" || type === "content_block_delta") {
       const contentType = (obj.content_block as Record<string, unknown>)?.type as string | undefined;
