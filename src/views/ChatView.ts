@@ -1105,21 +1105,18 @@ export class ChatView extends ItemView {
           return;
         }
 
-        // Immediate visual feedback — stays active until response arrives
-        btn.addClass("llm-quick-action-active");
-        btn.setAttribute("disabled", "true");
+        // Apply visual feedback immediately so browser paints before any JS work
         const spanEl = btn.querySelector("span");
         const originalLabel = spanEl?.textContent ?? action.label;
+        btn.addClass("llm-quick-action-active");
+        btn.setAttribute("disabled", "true");
         if (spanEl) spanEl.textContent = originalLabel + "…";
+
         const resetBtn = () => {
           btn.removeClass("llm-quick-action-active");
           btn.removeAttribute("disabled");
           if (spanEl) spanEl.textContent = originalLabel;
         };
-        // Listen for loading state to end
-        const loadingObserver = setInterval(() => {
-          if (!this.isLoading) { clearInterval(loadingObserver); resetBtn(); }
-        }, 100);
 
         // Track click for future ordering
         const countKey = `${context}:${action.label}`;
@@ -1138,7 +1135,13 @@ export class ChatView extends ItemView {
         }
 
         this.inputEl.value = prompt;
-        this.sendMessage();
+
+        // Yield to browser to paint the feedback state, then start the request
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            this.sendMessage().finally(() => resetBtn());
+          });
+        });
       });
     }
   }

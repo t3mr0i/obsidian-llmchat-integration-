@@ -22631,22 +22631,16 @@ ${content}`,
           new import_obsidian4.Notice("Open a note first");
           return;
         }
-        btn.addClass("llm-quick-action-active");
-        btn.setAttribute("disabled", "true");
         const spanEl = btn.querySelector("span");
         const originalLabel = (_f = spanEl == null ? void 0 : spanEl.textContent) != null ? _f : action.label;
+        btn.addClass("llm-quick-action-active");
+        btn.setAttribute("disabled", "true");
         if (spanEl) spanEl.textContent = originalLabel + "\u2026";
         const resetBtn = () => {
           btn.removeClass("llm-quick-action-active");
           btn.removeAttribute("disabled");
           if (spanEl) spanEl.textContent = originalLabel;
         };
-        const loadingObserver = setInterval(() => {
-          if (!this.isLoading) {
-            clearInterval(loadingObserver);
-            resetBtn();
-          }
-        }, 100);
         const countKey = `${context}:${action.label}`;
         this.actionClickCounts[countKey] = ((_g = this.actionClickCounts[countKey]) != null ? _g : 0) + 1;
         const isSelection = selection.trim().length > 0;
@@ -22660,7 +22654,11 @@ ${content}`,
           this.pendingActionCallback = null;
         }
         this.inputEl.value = prompt;
-        this.sendMessage();
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            this.sendMessage().finally(() => resetBtn());
+          });
+        });
       });
     }
   }
