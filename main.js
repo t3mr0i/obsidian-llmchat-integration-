@@ -22636,11 +22636,17 @@ ${content}`,
         const spanEl = btn.querySelector("span");
         const originalLabel = (_f = spanEl == null ? void 0 : spanEl.textContent) != null ? _f : action.label;
         if (spanEl) spanEl.textContent = originalLabel + "\u2026";
-        setTimeout(() => {
+        const resetBtn = () => {
           btn.removeClass("llm-quick-action-active");
           btn.removeAttribute("disabled");
           if (spanEl) spanEl.textContent = originalLabel;
-        }, 2e3);
+        };
+        const loadingObserver = setInterval(() => {
+          if (!this.isLoading) {
+            clearInterval(loadingObserver);
+            resetBtn();
+          }
+        }, 100);
         const countKey = `${context}:${action.label}`;
         this.actionClickCounts[countKey] = ((_g = this.actionClickCounts[countKey]) != null ? _g : 0) + 1;
         const isSelection = selection.trim().length > 0;

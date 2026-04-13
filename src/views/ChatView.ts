@@ -1105,17 +1105,21 @@ export class ChatView extends ItemView {
           return;
         }
 
-        // Immediate visual feedback
+        // Immediate visual feedback — stays active until response arrives
         btn.addClass("llm-quick-action-active");
         btn.setAttribute("disabled", "true");
         const spanEl = btn.querySelector("span");
         const originalLabel = spanEl?.textContent ?? action.label;
         if (spanEl) spanEl.textContent = originalLabel + "…";
-        setTimeout(() => {
+        const resetBtn = () => {
           btn.removeClass("llm-quick-action-active");
           btn.removeAttribute("disabled");
           if (spanEl) spanEl.textContent = originalLabel;
-        }, 2000);
+        };
+        // Listen for loading state to end
+        const loadingObserver = setInterval(() => {
+          if (!this.isLoading) { clearInterval(loadingObserver); resetBtn(); }
+        }, 100);
 
         // Track click for future ordering
         const countKey = `${context}:${action.label}`;

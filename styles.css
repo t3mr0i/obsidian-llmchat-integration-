@@ -348,10 +348,12 @@
   color: var(--text-muted);
   white-space: nowrap;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background-color 0.1s, border-color 0.1s, color 0.1s, transform 0.1s, box-shadow 0.1s;
   display: flex;
   align-items: center;
   gap: 4px;
+  position: relative;
+  overflow: hidden;
 }
 
 .llm-quick-action-btn:hover {
@@ -360,13 +362,25 @@
   color: var(--text-normal);
 }
 
-.llm-quick-action-btn:active,
+.llm-quick-action-btn:active {
+  transform: scale(0.93);
+  background-color: var(--llm-accent);
+  border-color: var(--llm-accent);
+  color: #fff;
+  box-shadow: 0 0 0 3px rgba(var(--interactive-accent-rgb), 0.3);
+}
+
 .llm-quick-action-btn.llm-quick-action-active {
   background-color: var(--llm-accent);
   border-color: var(--llm-accent);
-  color: var(--text-on-accent);
-  transform: scale(0.96);
-  opacity: 0.9;
+  color: #fff;
+  box-shadow: 0 0 0 3px rgba(var(--interactive-accent-rgb), 0.25);
+  animation: llm-pulse 0.8s ease-out infinite;
+}
+
+@keyframes llm-pulse {
+  0%   { box-shadow: 0 0 0 0px rgba(var(--interactive-accent-rgb), 0.4); }
+  100% { box-shadow: 0 0 0 6px rgba(var(--interactive-accent-rgb), 0); }
 }
 
 .llm-quick-action-btn[disabled] {
