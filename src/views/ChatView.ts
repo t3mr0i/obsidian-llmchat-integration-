@@ -1249,8 +1249,16 @@ export class ChatView extends ItemView {
 
     this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
 
-    // Ask AI for suggestions in the background (fire-and-forget)
-    this.generateFollowUpSuggestions(userPrompt, assistantResponse)
+    // Wait for main request to finish, then ask AI for suggestions
+    const waitThenGenerate = async () => {
+      // Poll until isLoading is false (main response done)
+      while (this.isLoading) {
+        await new Promise((r) => setTimeout(r, 150));
+      }
+      return this.generateFollowUpSuggestions(userPrompt, assistantResponse);
+    };
+
+    waitThenGenerate()
       .then((suggestions) => {
         if (!chipsEl.isConnected) return;
         skeletons.forEach((s) => s.remove());
@@ -1258,7 +1266,6 @@ export class ChatView extends ItemView {
         this.messagesContainer!.scrollTop = this.messagesContainer!.scrollHeight;
       })
       .catch(() => {
-        // Fallback to static suggestions on error
         if (!chipsEl.isConnected) return;
         skeletons.forEach((s) => s.remove());
         this.getStaticFollowUpSuggestions(userPrompt).forEach((s) => attachChip(s));

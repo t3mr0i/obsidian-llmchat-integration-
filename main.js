@@ -22750,7 +22750,13 @@ ${content}`,
       return s;
     });
     this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
-    this.generateFollowUpSuggestions(userPrompt, assistantResponse).then((suggestions) => {
+    const waitThenGenerate = async () => {
+      while (this.isLoading) {
+        await new Promise((r) => setTimeout(r, 150));
+      }
+      return this.generateFollowUpSuggestions(userPrompt, assistantResponse);
+    };
+    waitThenGenerate().then((suggestions) => {
       if (!chipsEl.isConnected) return;
       skeletons.forEach((s) => s.remove());
       suggestions.forEach((s) => attachChip(s));
