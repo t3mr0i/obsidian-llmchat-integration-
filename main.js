@@ -20062,9 +20062,9 @@ var MiniSearch = class _MiniSearch {
    *
    * @param document  The document to be indexed
    */
-  add(document) {
+  add(document2) {
     const { extractField, stringifyField, tokenize, processTerm, fields, idField } = this._options;
-    const id = extractField(document, idField);
+    const id = extractField(document2, idField);
     if (id == null) {
       throw new Error(`MiniSearch: document does not have ID field "${idField}"`);
     }
@@ -20072,9 +20072,9 @@ var MiniSearch = class _MiniSearch {
       throw new Error(`MiniSearch: duplicate ID ${id}`);
     }
     const shortDocumentId = this.addDocumentId(id);
-    this.saveStoredFields(shortDocumentId, document);
+    this.saveStoredFields(shortDocumentId, document2);
     for (const field of fields) {
-      const fieldValue = extractField(document, field);
+      const fieldValue = extractField(document2, field);
       if (fieldValue == null)
         continue;
       const tokens = tokenize(stringifyField(fieldValue, field), field);
@@ -20099,8 +20099,8 @@ var MiniSearch = class _MiniSearch {
    * @param documents  An array of documents to be indexed
    */
   addAll(documents) {
-    for (const document of documents)
-      this.add(document);
+    for (const document2 of documents)
+      this.add(document2);
   }
   /**
    * Adds all the given documents to the index asynchronously.
@@ -20116,8 +20116,8 @@ var MiniSearch = class _MiniSearch {
   addAllAsync(documents, options = {}) {
     const { chunkSize = 10 } = options;
     const acc = { chunk: [], promise: Promise.resolve() };
-    const { chunk, promise: promise2 } = documents.reduce(({ chunk: chunk2, promise: promise3 }, document, i) => {
-      chunk2.push(document);
+    const { chunk, promise: promise2 } = documents.reduce(({ chunk: chunk2, promise: promise3 }, document2, i) => {
+      chunk2.push(document2);
       if ((i + 1) % chunkSize === 0) {
         return {
           chunk: [],
@@ -20143,9 +20143,9 @@ var MiniSearch = class _MiniSearch {
    *
    * @param document  The document to be removed
    */
-  remove(document) {
+  remove(document2) {
     const { tokenize, processTerm, extractField, stringifyField, fields, idField } = this._options;
-    const id = extractField(document, idField);
+    const id = extractField(document2, idField);
     if (id == null) {
       throw new Error(`MiniSearch: document does not have ID field "${idField}"`);
     }
@@ -20154,7 +20154,7 @@ var MiniSearch = class _MiniSearch {
       throw new Error(`MiniSearch: cannot remove document with ID ${id}: it is not in the index`);
     }
     for (const field of fields) {
-      const fieldValue = extractField(document, field);
+      const fieldValue = extractField(document2, field);
       if (fieldValue == null)
         continue;
       const tokens = tokenize(stringifyField(fieldValue, field), field);
@@ -20189,8 +20189,8 @@ var MiniSearch = class _MiniSearch {
    */
   removeAll(documents) {
     if (documents) {
-      for (const document of documents)
-        this.remove(document);
+      for (const document2 of documents)
+        this.remove(document2);
     } else if (arguments.length > 0) {
       throw new Error("Expected documents to be present. Omit the argument to remove all documents.");
     } else {
@@ -21239,7 +21239,7 @@ var termToQuerySpec = (options) => (term, i, terms) => {
 };
 var defaultOptions = {
   idField: "id",
-  extractField: (document, fieldName) => document[fieldName],
+  extractField: (document2, fieldName) => document2[fieldName],
   stringifyField: (fieldValue, fieldName) => fieldValue.toString(),
   tokenize: (text) => text.split(SPACE_OR_PUNCTUATION),
   processTerm: (term) => term.toLowerCase(),
@@ -21721,6 +21721,12 @@ var ChatView = class extends import_obsidian4.ItemView {
     this.lastNoteContext = "prose";
     // Track how often each action label was clicked (persisted in memory only, resets on reload)
     this.actionClickCounts = {};
+    // Pinned note context — file explicitly attached by user for this conversation
+    this.pinnedNote = null;
+    this.pinnedNoteBtn = null;
+    // Per-session system prompt override (null = use settings value)
+    this.sessionSystemPromptFile = null;
+    this.systemPromptSelectEl = null;
     this.providerSelectEl = null;
     this.modelSelectEl = null;
     /** Number of messages already rendered in the DOM */
@@ -21836,6 +21842,17 @@ var ChatView = class extends import_obsidian4.ItemView {
       this.plugin.updateStatusBar(this.currentProvider);
     });
     this.refreshModelSelect();
+    this.systemPromptSelectEl = selectorRow.createEl("select", {
+      cls: "llm-system-prompt-select",
+      attr: { "aria-label": "System prompt" }
+    });
+    this.refreshSystemPromptSelect();
+    this.pinnedNoteBtn = selectorRow.createEl("button", {
+      cls: "llm-pin-note-btn clickable-icon",
+      attr: { "aria-label": "Pin active note as context" }
+    });
+    (0, import_obsidian4.setIcon)(this.pinnedNoteBtn, "pin");
+    this.pinnedNoteBtn.addEventListener("click", () => this.togglePinnedNote());
     const exportBtn = selectorRow.createEl("button", {
       cls: "llm-export-btn clickable-icon",
       attr: { "aria-label": "Save conversation as note" }
@@ -21919,6 +21936,66 @@ var ChatView = class extends import_obsidian4.ItemView {
       new import_obsidian4.Notice(`Failed to export: ${error48}`);
     }
   }
+  /**
+   * Toggle pinned note: pins the active note, or unpins if already pinned.
+   */
+  togglePinnedNote() {
+    var _a3;
+    const activeView = this.getEditorView();
+    const activeFile = (_a3 = activeView == null ? void 0 : activeView.file) != null ? _a3 : null;
+    if (this.pinnedNote && activeFile && this.pinnedNote.path === activeFile.path) {
+      this.pinnedNote = null;
+      this.updatePinnedNoteUI();
+      new import_obsidian4.Notice("Note unpinned from chat");
+    } else if (activeFile) {
+      this.pinnedNote = activeFile;
+      this.updatePinnedNoteUI();
+      new import_obsidian4.Notice(`Pinned: ${activeFile.basename}`);
+    } else {
+      new import_obsidian4.Notice("No active note to pin");
+    }
+  }
+  updatePinnedNoteUI() {
+    if (!this.pinnedNoteBtn) return;
+    if (this.pinnedNote) {
+      this.pinnedNoteBtn.addClass("llm-pin-active");
+      this.pinnedNoteBtn.setAttribute("aria-label", `Unpin: ${this.pinnedNote.basename}`);
+    } else {
+      this.pinnedNoteBtn.removeClass("llm-pin-active");
+      this.pinnedNoteBtn.setAttribute("aria-label", "Pin active note as context");
+    }
+  }
+  /**
+   * Populate the system prompt dropdown with available .md files from the vault root
+   * plus the "Auto" (default) option and the currently configured file.
+   */
+  async refreshSystemPromptSelect() {
+    var _a3, _b;
+    if (!this.systemPromptSelectEl) return;
+    this.systemPromptSelectEl.empty();
+    this.systemPromptSelectEl.createEl("option", { value: "", text: "System: Auto" });
+    const allFiles = this.app.vault.getMarkdownFiles();
+    const promptFiles = allFiles.filter((f) => {
+      const lower = f.path.toLowerCase();
+      return lower.startsWith("prompts/") || lower.startsWith("system/") || lower.includes("system-prompt");
+    });
+    const configuredPath = this.plugin.settings.systemPromptFile;
+    if (configuredPath && !promptFiles.find((f) => f.path === configuredPath)) {
+      const configFile = this.app.vault.getAbstractFileByPath(configuredPath);
+      if (configFile instanceof import_obsidian4.TFile) promptFiles.unshift(configFile);
+    }
+    for (const f of promptFiles) {
+      const opt = this.systemPromptSelectEl.createEl("option", {
+        value: f.path,
+        text: f.basename
+      });
+      const active = (_b = (_a3 = this.sessionSystemPromptFile) != null ? _a3 : configuredPath) != null ? _b : "";
+      if (f.path === active) opt.selected = true;
+    }
+    this.systemPromptSelectEl.addEventListener("change", () => {
+      this.sessionSystemPromptFile = this.systemPromptSelectEl.value || null;
+    });
+  }
   createNewChat() {
     const id = `chat-${Date.now()}`;
     const num = this.chatTabs.length + 1;
@@ -22000,6 +22077,27 @@ var ChatView = class extends import_obsidian4.ItemView {
       this.renderMessagesContent(true);
       this.persistSessions();
       (_a3 = this.inputEl) == null ? void 0 : _a3.focus();
+    });
+    const clearBtn = this.tabBar.createEl("button", {
+      cls: "llm-tab-clear",
+      attr: { "aria-label": "Clear chat" }
+    });
+    (0, import_obsidian4.setIcon)(clearBtn, "trash-2");
+    clearBtn.addEventListener("click", () => {
+      if (this.messages.length === 0) return;
+      new import_obsidian4.Notice("Chat cleared \u2014 click again to undo", 4e3);
+      const backup = [...this.messages];
+      this.messages = [];
+      this.renderMessagesContent(true);
+      this.persistSessions();
+      const undoNotice = document.querySelector(".notice");
+      if (undoNotice) {
+        undoNotice.addEventListener("click", () => {
+          this.messages = backup;
+          this.renderMessagesContent(true);
+          this.persistSessions();
+        }, { once: true });
+      }
     });
   }
   renderMessages(container) {
@@ -22200,7 +22298,11 @@ var ChatView = class extends import_obsidian4.ItemView {
         copyCodeBtn.addEventListener("click", () => {
           navigator.clipboard.writeText(codeEl.innerText);
           (0, import_obsidian4.setIcon)(copyCodeBtn, "check");
-          setTimeout(() => (0, import_obsidian4.setIcon)(copyCodeBtn, "copy"), 1500);
+          copyCodeBtn.addClass("llm-copied");
+          setTimeout(() => {
+            (0, import_obsidian4.setIcon)(copyCodeBtn, "copy");
+            copyCodeBtn.removeClass("llm-copied");
+          }, 1500);
         });
       });
       if (msg.durationMs || msg.tokensUsed) {
@@ -22896,7 +22998,8 @@ Assistant answered: ${assistantResponse.slice(0, 500)}`;
    * Read the system prompt from the configured file
    */
   async getSystemPrompt() {
-    const filePath = this.plugin.settings.systemPromptFile;
+    var _a3;
+    const filePath = (_a3 = this.sessionSystemPromptFile) != null ? _a3 : this.plugin.settings.systemPromptFile;
     if (filePath) {
       const file2 = this.app.vault.getAbstractFileByPath(filePath);
       if (!(file2 instanceof import_obsidian4.TFile)) {
@@ -23540,7 +23643,7 @@ ${content}`);
     return parts.join("\n\n");
   }
   /**
-   * Gather system context: system prompt, referenced notes, vault RAG.
+   * Gather system context: system prompt, pinned note, referenced notes, vault RAG.
    */
   async buildSystemContext(prompt) {
     const [systemPrompt, referencedNotes, vaultContext] = await Promise.all([
@@ -23550,6 +23653,16 @@ ${content}`);
     ]);
     const parts = [];
     if (systemPrompt) parts.push(systemPrompt);
+    if (this.pinnedNote) {
+      try {
+        const content = await this.app.vault.cachedRead(this.pinnedNote);
+        if (content.trim()) {
+          parts.push(`=== Pinned note: ${this.pinnedNote.basename} (${this.pinnedNote.path}) ===
+${content}`);
+        }
+      } catch (e) {
+      }
+    }
     if (referencedNotes) parts.push(referencedNotes);
     if (vaultContext) parts.push(vaultContext);
     return parts.join("\n\n");

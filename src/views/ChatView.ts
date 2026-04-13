@@ -60,6 +60,12 @@ export class ChatView extends ItemView {
   private lastNoteContext: "code" | "tasks" | "questions" | "concept" | "prose" = "prose";
   // Track how often each action label was clicked (persisted in memory only, resets on reload)
   private actionClickCounts: Record<string, number> = {};
+  // Pinned note context — file explicitly attached by user for this conversation
+  private pinnedNote: TFile | null = null;
+  private pinnedNoteBtn: HTMLButtonElement | null = null;
+  // Per-session system prompt override (null = use settings value)
+  private sessionSystemPromptFile: string | null = null;
+  private systemPromptSelectEl: HTMLSelectElement | null = null;
 
   constructor(leaf: WorkspaceLeaf, plugin: LLMPlugin) {
     super(leaf);
@@ -210,6 +216,21 @@ export class ChatView extends ItemView {
     });
     this.refreshModelSelect();
 
+    // System prompt quick-switcher
+    this.systemPromptSelectEl = selectorRow.createEl("select", {
+      cls: "llm-system-prompt-select",
+      attr: { "aria-label": "System prompt" },
+    });
+    this.refreshSystemPromptSelect();
+
+    // Pin active note button
+    this.pinnedNoteBtn = selectorRow.createEl("button", {
+      cls: "llm-pin-note-btn clickable-icon",
+      attr: { "aria-label": "Pin active note as context" },
+    });
+    setIcon(this.pinnedNoteBtn, "pin");
+    this.pinnedNoteBtn.addEventListener("click", () => this.togglePinnedNote());
+
     // Export conversation button
     const exportBtn = selectorRow.createEl("button", {
       cls: "llm-export-btn clickable-icon",
@@ -310,6 +331,78 @@ export class ChatView extends ItemView {
     }
   }
 
+  /**
+   * Toggle pinned note: pins the active note, or unpins if already pinned.
+   */
+  private togglePinnedNote() {
+    const activeView = this.getEditorView();
+    const activeFile = activeView?.file ?? null;
+
+    if (this.pinnedNote && activeFile && this.pinnedNote.path === activeFile.path) {
+      // Unpin
+      this.pinnedNote = null;
+      this.updatePinnedNoteUI();
+      new Notice("Note unpinned from chat");
+    } else if (activeFile) {
+      // Pin new note
+      this.pinnedNote = activeFile;
+      this.updatePinnedNoteUI();
+      new Notice(`Pinned: ${activeFile.basename}`);
+    } else {
+      new Notice("No active note to pin");
+    }
+  }
+
+  private updatePinnedNoteUI() {
+    if (!this.pinnedNoteBtn) return;
+    if (this.pinnedNote) {
+      this.pinnedNoteBtn.addClass("llm-pin-active");
+      this.pinnedNoteBtn.setAttribute("aria-label", `Unpin: ${this.pinnedNote.basename}`);
+    } else {
+      this.pinnedNoteBtn.removeClass("llm-pin-active");
+      this.pinnedNoteBtn.setAttribute("aria-label", "Pin active note as context");
+    }
+  }
+
+  /**
+   * Populate the system prompt dropdown with available .md files from the vault root
+   * plus the "Auto" (default) option and the currently configured file.
+   */
+  private async refreshSystemPromptSelect() {
+    if (!this.systemPromptSelectEl) return;
+    this.systemPromptSelectEl.empty();
+
+    // "Auto" = use default smart prompt
+    this.systemPromptSelectEl.createEl("option", { value: "", text: "System: Auto" });
+
+    // Find markdown files that look like system prompts (in vault root or a /prompts/ folder)
+    const allFiles = this.app.vault.getMarkdownFiles();
+    const promptFiles = allFiles.filter((f) => {
+      const lower = f.path.toLowerCase();
+      return lower.startsWith("prompts/") || lower.startsWith("system/") || lower.includes("system-prompt");
+    });
+
+    // Also include the currently configured file if not already in list
+    const configuredPath = this.plugin.settings.systemPromptFile;
+    if (configuredPath && !promptFiles.find((f) => f.path === configuredPath)) {
+      const configFile = this.app.vault.getAbstractFileByPath(configuredPath);
+      if (configFile instanceof TFile) promptFiles.unshift(configFile);
+    }
+
+    for (const f of promptFiles) {
+      const opt = this.systemPromptSelectEl.createEl("option", {
+        value: f.path,
+        text: f.basename,
+      });
+      const active = this.sessionSystemPromptFile ?? configuredPath ?? "";
+      if (f.path === active) opt.selected = true;
+    }
+
+    this.systemPromptSelectEl.addEventListener("change", () => {
+      this.sessionSystemPromptFile = this.systemPromptSelectEl!.value || null;
+    });
+  }
+
   private createNewChat(): string {
     const id = `chat-${Date.now()}`;
     const num = this.chatTabs.length + 1;
@@ -398,7 +491,6 @@ export class ChatView extends ItemView {
     });
     setIcon(newBtn, "plus");
     newBtn.addEventListener("click", () => {
-      // Save current
       const current = this.chatTabs.find((t) => t.id === this.activeChatId);
       if (current) current.messages = this.messages;
       this.createNewChat();
@@ -406,6 +498,30 @@ export class ChatView extends ItemView {
       this.renderMessagesContent(true);
       this.persistSessions();
       this.inputEl?.focus();
+    });
+
+    // Clear current chat button
+    const clearBtn = this.tabBar.createEl("button", {
+      cls: "llm-tab-clear",
+      attr: { "aria-label": "Clear chat" },
+    });
+    setIcon(clearBtn, "trash-2");
+    clearBtn.addEventListener("click", () => {
+      if (this.messages.length === 0) return;
+      new Notice("Chat cleared — click again to undo", 4000);
+      const backup = [...this.messages];
+      this.messages = [];
+      this.renderMessagesContent(true);
+      this.persistSessions();
+      // One-time undo via the notice (just store backup in case)
+      const undoNotice = document.querySelector(".notice");
+      if (undoNotice) {
+        undoNotice.addEventListener("click", () => {
+          this.messages = backup;
+          this.renderMessagesContent(true);
+          this.persistSessions();
+        }, { once: true });
+      }
     });
   }
 
@@ -649,7 +765,11 @@ export class ChatView extends ItemView {
         copyCodeBtn.addEventListener("click", () => {
           navigator.clipboard.writeText((codeEl as HTMLElement).innerText);
           setIcon(copyCodeBtn, "check");
-          setTimeout(() => setIcon(copyCodeBtn, "copy"), 1500);
+          copyCodeBtn.addClass("llm-copied");
+          setTimeout(() => {
+            setIcon(copyCodeBtn, "copy");
+            copyCodeBtn.removeClass("llm-copied");
+          }, 1500);
         });
       });
 
@@ -1410,9 +1530,9 @@ export class ChatView extends ItemView {
    * Read the system prompt from the configured file
    */
   private async getSystemPrompt(): Promise<string> {
-    const filePath = this.plugin.settings.systemPromptFile;
+    // Session override takes precedence over settings value
+    const filePath = this.sessionSystemPromptFile ?? this.plugin.settings.systemPromptFile;
 
-    // If a custom system prompt file is set, use it
     if (filePath) {
       const file = this.app.vault.getAbstractFileByPath(filePath);
       if (!(file instanceof TFile)) {
@@ -2278,7 +2398,7 @@ export class ChatView extends ItemView {
   }
 
   /**
-   * Gather system context: system prompt, referenced notes, vault RAG.
+   * Gather system context: system prompt, pinned note, referenced notes, vault RAG.
    */
   private async buildSystemContext(prompt: string): Promise<string> {
     const [systemPrompt, referencedNotes, vaultContext] = await Promise.all([
@@ -2288,6 +2408,19 @@ export class ChatView extends ItemView {
     ]);
     const parts: string[] = [];
     if (systemPrompt) parts.push(systemPrompt);
+
+    // Pinned note — always included verbatim, not via RAG
+    if (this.pinnedNote) {
+      try {
+        const content = await this.app.vault.cachedRead(this.pinnedNote);
+        if (content.trim()) {
+          parts.push(`=== Pinned note: ${this.pinnedNote.basename} (${this.pinnedNote.path}) ===\n${content}`);
+        }
+      } catch {
+        // File disappeared — silently skip
+      }
+    }
+
     if (referencedNotes) parts.push(referencedNotes);
     if (vaultContext) parts.push(vaultContext);
     return parts.join("\n\n");
