@@ -791,11 +791,11 @@ export class ChatView extends ItemView {
       if (msg.displayLabel) {
         // Collapsed pill with expandable full prompt
         const pill = contentEl.createDiv({ cls: "llm-action-pill" });
-        // Split "Action · Note title" into styled parts
+        // Split "Action · Note title" into two lines
         const sepIdx = msg.displayLabel.indexOf(" · ");
         if (sepIdx > -1) {
           pill.createSpan({ cls: "llm-action-pill-label", text: msg.displayLabel.slice(0, sepIdx) });
-          pill.createSpan({ cls: "llm-action-pill-note", text: msg.displayLabel.slice(sepIdx) });
+          pill.createSpan({ cls: "llm-action-pill-note", text: msg.displayLabel.slice(sepIdx + 3) });
         } else {
           pill.createSpan({ cls: "llm-action-pill-label", text: msg.displayLabel });
         }

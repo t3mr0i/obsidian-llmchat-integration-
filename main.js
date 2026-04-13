@@ -22323,7 +22323,7 @@ var ChatView = class extends import_obsidian4.ItemView {
         const sepIdx = msg.displayLabel.indexOf(" \xB7 ");
         if (sepIdx > -1) {
           pill.createSpan({ cls: "llm-action-pill-label", text: msg.displayLabel.slice(0, sepIdx) });
-          pill.createSpan({ cls: "llm-action-pill-note", text: msg.displayLabel.slice(sepIdx) });
+          pill.createSpan({ cls: "llm-action-pill-note", text: msg.displayLabel.slice(sepIdx + 3) });
         } else {
           pill.createSpan({ cls: "llm-action-pill-label", text: msg.displayLabel });
         }
