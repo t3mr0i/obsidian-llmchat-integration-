@@ -21718,6 +21718,8 @@ var ChatView = class extends import_obsidian4.ItemView {
     this.thinkingDebounceTimer = null;
     this.quickActionsEl = null;
     this.contextChipEl = null;
+    this.contextDismissed = false;
+    // true = user dismissed note context, show "Whole Vault"
     this.lastNoteContext = "prose";
     // Track how often each action label was clicked (persisted in memory only, resets on reload)
     this.actionClickCounts = {};
@@ -21765,7 +21767,10 @@ var ChatView = class extends import_obsidian4.ItemView {
     this.connectAcpIfEnabled();
     this.registerEvent(
       this.app.workspace.on("active-leaf-change", () => {
-        if (!this.isLoading) this.updateDynamicQuickActions();
+        if (!this.isLoading) {
+          if (!this.pinnedNote) this.contextDismissed = false;
+          this.updateDynamicQuickActions();
+        }
       })
     );
   }
@@ -22811,6 +22816,24 @@ ${content}`,
       return;
     }
     this.contextChipEl.style.display = "flex";
+    if (this.contextDismissed) {
+      const iconEl2 = this.contextChipEl.createSpan({ cls: "llm-context-chip-icon" });
+      (0, import_obsidian4.setIcon)(iconEl2, "library");
+      this.contextChipEl.createSpan({
+        cls: "llm-context-chip-note llm-context-chip-vault",
+        text: "Whole Vault"
+      });
+      const restoreBtn = this.contextChipEl.createEl("button", {
+        cls: "llm-context-chip-restore",
+        attr: { "aria-label": "Use active note as context" }
+      });
+      (0, import_obsidian4.setIcon)(restoreBtn, "rotate-ccw");
+      restoreBtn.addEventListener("click", () => {
+        this.contextDismissed = false;
+        this.updateContextChip();
+      });
+      return;
+    }
     const content = activeView.editor.getValue();
     const context = this.detectNoteContext(content);
     const contextIcons = {
@@ -22837,6 +22860,15 @@ ${content}`,
     const typeIconEl = typeEl.createSpan({ cls: "llm-context-chip-type-icon" });
     (0, import_obsidian4.setIcon)(typeIconEl, contextIcons[context]);
     typeEl.createSpan({ text: contextLabels[context] });
+    const dismissBtn = this.contextChipEl.createEl("button", {
+      cls: "llm-context-chip-dismiss",
+      attr: { "aria-label": "Dismiss \u2014 chat with Whole Vault" }
+    });
+    (0, import_obsidian4.setIcon)(dismissBtn, "x");
+    dismissBtn.addEventListener("click", () => {
+      this.contextDismissed = true;
+      this.updateContextChip();
+    });
   }
   /**
    * Get a context-specific system prompt addition for quick actions.
@@ -23047,14 +23079,16 @@ Assistant answered: ${assistantResponse.slice(0, 500)}`;
     if (vaultName) {
       parts.push(`The vault is called "${vaultName}".`);
     }
-    const activeView = this.getEditorView();
-    const noteTitle = (_b = (_a3 = activeView == null ? void 0 : activeView.file) == null ? void 0 : _a3.basename) != null ? _b : null;
-    if (noteTitle) {
-      parts.push(`The user currently has the note "${noteTitle}" open.`);
-      const content = (_c = activeView == null ? void 0 : activeView.editor.getValue()) != null ? _c : "";
-      if (content) {
-        const context = this.detectNoteContext(content);
-        parts.push(this.getContextSystemPromptAddition(context));
+    if (!this.contextDismissed) {
+      const activeView = this.getEditorView();
+      const noteTitle = (_b = (_a3 = activeView == null ? void 0 : activeView.file) == null ? void 0 : _a3.basename) != null ? _b : null;
+      if (noteTitle) {
+        parts.push(`The user currently has the note "${noteTitle}" open.`);
+        const content = (_c = activeView == null ? void 0 : activeView.editor.getValue()) != null ? _c : "";
+        if (content) {
+          const context = this.detectNoteContext(content);
+          parts.push(this.getContextSystemPromptAddition(context));
+        }
       }
     }
     parts.push(
@@ -23655,7 +23689,7 @@ ${content}`);
     ]);
     const parts = [];
     if (systemPrompt) parts.push(systemPrompt);
-    if (this.pinnedNote) {
+    if (this.pinnedNote && !this.contextDismissed) {
       try {
         const content = await this.app.vault.cachedRead(this.pinnedNote);
         if (content.trim()) {

@@ -57,6 +57,7 @@ export class ChatView extends ItemView {
   private vaultSearch: VaultSearch;
   private quickActionsEl: HTMLElement | null = null;
   private contextChipEl: HTMLElement | null = null;
+  private contextDismissed = false; // true = user dismissed note context, show "Whole Vault"
   private lastNoteContext: "code" | "tasks" | "questions" | "concept" | "prose" = "prose";
   // Track how often each action label was clicked (persisted in memory only, resets on reload)
   private actionClickCounts: Record<string, number> = {};
@@ -116,7 +117,11 @@ export class ChatView extends ItemView {
     // Skip re-render while a request is in flight to avoid destroying click handlers
     this.registerEvent(
       this.app.workspace.on("active-leaf-change", () => {
-        if (!this.isLoading) this.updateDynamicQuickActions();
+        if (!this.isLoading) {
+          // Reset "Whole Vault" mode when switching notes (but not when a note is pinned)
+          if (!this.pinnedNote) this.contextDismissed = false;
+          this.updateDynamicQuickActions();
+        }
       })
     );
   }
@@ -1308,12 +1313,36 @@ export class ChatView extends ItemView {
     this.contextChipEl.empty();
 
     const activeView = this.getEditorView();
+
+    // No active note at all — hide chip
     if (!activeView?.file) {
       this.contextChipEl.style.display = "none";
       return;
     }
 
     this.contextChipEl.style.display = "flex";
+
+    // User dismissed the note context → show "Whole Vault" pill
+    if (this.contextDismissed) {
+      const iconEl = this.contextChipEl.createSpan({ cls: "llm-context-chip-icon" });
+      setIcon(iconEl, "library");
+      this.contextChipEl.createSpan({
+        cls: "llm-context-chip-note llm-context-chip-vault",
+        text: "Whole Vault",
+      });
+      // Restore button
+      const restoreBtn = this.contextChipEl.createEl("button", {
+        cls: "llm-context-chip-restore",
+        attr: { "aria-label": "Use active note as context" },
+      });
+      setIcon(restoreBtn, "rotate-ccw");
+      restoreBtn.addEventListener("click", () => {
+        this.contextDismissed = false;
+        this.updateContextChip();
+      });
+      return;
+    }
+
     const content = activeView.editor.getValue();
     const context = this.detectNoteContext(content);
 
@@ -1344,6 +1373,17 @@ export class ChatView extends ItemView {
     const typeIconEl = typeEl.createSpan({ cls: "llm-context-chip-type-icon" });
     setIcon(typeIconEl, contextIcons[context]);
     typeEl.createSpan({ text: contextLabels[context] });
+
+    // X button — dismiss note context, switch to Whole Vault mode
+    const dismissBtn = this.contextChipEl.createEl("button", {
+      cls: "llm-context-chip-dismiss",
+      attr: { "aria-label": "Dismiss — chat with Whole Vault" },
+    });
+    setIcon(dismissBtn, "x");
+    dismissBtn.addEventListener("click", () => {
+      this.contextDismissed = true;
+      this.updateContextChip();
+    });
   }
 
   /**
@@ -1580,15 +1620,17 @@ export class ChatView extends ItemView {
       parts.push(`The vault is called "${vaultName}".`);
     }
 
-    // Active note context + context-specific persona
-    const activeView = this.getEditorView();
-    const noteTitle = activeView?.file?.basename ?? null;
-    if (noteTitle) {
-      parts.push(`The user currently has the note "${noteTitle}" open.`);
-      const content = activeView?.editor.getValue() ?? "";
-      if (content) {
-        const context = this.detectNoteContext(content);
-        parts.push(this.getContextSystemPromptAddition(context));
+    // Active note context — skip when user chose "Whole Vault" mode
+    if (!this.contextDismissed) {
+      const activeView = this.getEditorView();
+      const noteTitle = activeView?.file?.basename ?? null;
+      if (noteTitle) {
+        parts.push(`The user currently has the note "${noteTitle}" open.`);
+        const content = activeView?.editor.getValue() ?? "";
+        if (content) {
+          const context = this.detectNoteContext(content);
+          parts.push(this.getContextSystemPromptAddition(context));
+        }
       }
     }
 
@@ -2412,8 +2454,8 @@ export class ChatView extends ItemView {
     const parts: string[] = [];
     if (systemPrompt) parts.push(systemPrompt);
 
-    // Pinned note — always included verbatim, not via RAG
-    if (this.pinnedNote) {
+    // Pinned note — always included verbatim, not via RAG (unless user chose Whole Vault)
+    if (this.pinnedNote && !this.contextDismissed) {
       try {
         const content = await this.app.vault.cachedRead(this.pinnedNote);
         if (content.trim()) {
