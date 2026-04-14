@@ -712,7 +712,18 @@ export class ChatView extends ItemView {
       attr: { "data-msg-id": String(msg.timestamp) },
     });
 
-    const headerEl = msgEl.createDiv({ cls: "llm-message-header" });
+    // Avatar
+    const avatarEl = msgEl.createDiv({ cls: "llm-message-avatar" });
+    if (msg.role === "user") {
+      avatarEl.setText("U");
+    } else {
+      setIcon(avatarEl, "bot");
+    }
+
+    // Body wrapper (header + bubble + badge)
+    const bodyEl = msgEl.createDiv({ cls: "llm-message-body" });
+
+    const headerEl = bodyEl.createDiv({ cls: "llm-message-header" });
     headerEl.createSpan({
       text: msg.role === "user" ? "You" : PROVIDER_DISPLAY_NAMES[msg.provider],
       cls: "llm-message-role",
@@ -743,7 +754,9 @@ export class ChatView extends ItemView {
       createNoteBtn.addEventListener("click", () => this.createNoteFromMessage(msg));
     }
 
-    const contentEl = msgEl.createDiv({ cls: "llm-message-content" });
+    // Bubble
+    const bubbleEl = bodyEl.createDiv({ cls: "llm-message-bubble" });
+    const contentEl = bubbleEl.createDiv({ cls: "llm-message-content" });
 
     if (msg.role === "assistant") {
       const component = new Component();
@@ -792,7 +805,7 @@ export class ChatView extends ItemView {
 
       // Token + duration badge
       if (msg.durationMs || msg.tokensUsed) {
-        const badgeEl = msgEl.createDiv({ cls: "llm-message-badge" });
+        const badgeEl = bodyEl.createDiv({ cls: "llm-message-badge" });
         if (msg.tokensUsed) {
           const total = msg.tokensUsed.input + msg.tokensUsed.output;
           badgeEl.createSpan({ text: `↗ ${total.toLocaleString()} tokens` });
@@ -2546,14 +2559,19 @@ export class ChatView extends ItemView {
         cls: "llm-message llm-message-assistant llm-message-streaming",
       });
 
-      const headerEl = streamingEl.createDiv({ cls: "llm-message-header" });
+      const avatarEl = streamingEl.createDiv({ cls: "llm-message-avatar" });
+      setIcon(avatarEl, "bot");
+
+      const bodyEl = streamingEl.createDiv({ cls: "llm-message-body" });
+      const headerEl = bodyEl.createDiv({ cls: "llm-message-header" });
       headerEl.createSpan({
         text: PROVIDER_DISPLAY_NAMES[this.currentProvider],
         cls: "llm-message-role",
       });
       headerEl.createSpan({ text: "...", cls: "llm-message-time" });
 
-      streamingEl.createDiv({ cls: "llm-message-content" });
+      const bubbleEl = bodyEl.createDiv({ cls: "llm-message-bubble" });
+      bubbleEl.createDiv({ cls: "llm-message-content" });
     }
 
     const contentEl = streamingEl.querySelector(".llm-message-content") as HTMLElement;
@@ -2804,14 +2822,15 @@ export class ChatView extends ItemView {
       }
       const file = await this.app.vault.create(fileName, frontmatter + msg.content);
 
-      // Inline badge on the message bubble — shows where it was saved
+      // Inline badge on the message body — shows where it was saved
       const msgEl = this.messagesContainer?.querySelector(
         `[data-msg-id="${msg.timestamp}"]`
       ) as HTMLElement | null;
-      if (msgEl) {
-        const existing = msgEl.querySelector(".llm-saved-badge");
+      const badgeTarget = (msgEl?.querySelector(".llm-message-body") ?? msgEl) as HTMLElement | null;
+      if (badgeTarget) {
+        const existing = badgeTarget.querySelector(".llm-saved-badge");
         if (!existing) {
-          const badge = msgEl.createDiv({ cls: "llm-saved-badge" });
+          const badge = badgeTarget.createDiv({ cls: "llm-saved-badge" });
           setIcon(badge.createSpan({ cls: "llm-saved-badge-icon" }), "file-check");
           badge.createSpan({ cls: "llm-saved-badge-path", text: file.path });
           badge.addEventListener("click", async () => {

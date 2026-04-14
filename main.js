@@ -22250,7 +22250,14 @@ var ChatView = class extends import_obsidian4.ItemView {
       cls: `llm-message llm-message-${msg.role}`,
       attr: { "data-msg-id": String(msg.timestamp) }
     });
-    const headerEl = msgEl.createDiv({ cls: "llm-message-header" });
+    const avatarEl = msgEl.createDiv({ cls: "llm-message-avatar" });
+    if (msg.role === "user") {
+      avatarEl.setText("U");
+    } else {
+      (0, import_obsidian4.setIcon)(avatarEl, "bot");
+    }
+    const bodyEl = msgEl.createDiv({ cls: "llm-message-body" });
+    const headerEl = bodyEl.createDiv({ cls: "llm-message-header" });
     headerEl.createSpan({
       text: msg.role === "user" ? "You" : PROVIDER_DISPLAY_NAMES[msg.provider],
       cls: "llm-message-role"
@@ -22277,7 +22284,8 @@ var ChatView = class extends import_obsidian4.ItemView {
       (0, import_obsidian4.setIcon)(createNoteBtn, "file-plus");
       createNoteBtn.addEventListener("click", () => this.createNoteFromMessage(msg));
     }
-    const contentEl = msgEl.createDiv({ cls: "llm-message-content" });
+    const bubbleEl = bodyEl.createDiv({ cls: "llm-message-bubble" });
+    const contentEl = bubbleEl.createDiv({ cls: "llm-message-content" });
     if (msg.role === "assistant") {
       const component = new import_obsidian4.Component();
       component.load();
@@ -22319,7 +22327,7 @@ var ChatView = class extends import_obsidian4.ItemView {
         });
       });
       if (msg.durationMs || msg.tokensUsed) {
-        const badgeEl = msgEl.createDiv({ cls: "llm-message-badge" });
+        const badgeEl = bodyEl.createDiv({ cls: "llm-message-badge" });
         if (msg.tokensUsed) {
           const total = msg.tokensUsed.input + msg.tokensUsed.output;
           badgeEl.createSpan({ text: `\u2197 ${total.toLocaleString()} tokens` });
@@ -23750,13 +23758,17 @@ ${content}`);
       streamingEl = this.messagesContainer.createDiv({
         cls: "llm-message llm-message-assistant llm-message-streaming"
       });
-      const headerEl = streamingEl.createDiv({ cls: "llm-message-header" });
+      const avatarEl = streamingEl.createDiv({ cls: "llm-message-avatar" });
+      (0, import_obsidian4.setIcon)(avatarEl, "bot");
+      const bodyEl = streamingEl.createDiv({ cls: "llm-message-body" });
+      const headerEl = bodyEl.createDiv({ cls: "llm-message-header" });
       headerEl.createSpan({
         text: PROVIDER_DISPLAY_NAMES[this.currentProvider],
         cls: "llm-message-role"
       });
       headerEl.createSpan({ text: "...", cls: "llm-message-time" });
-      streamingEl.createDiv({ cls: "llm-message-content" });
+      const bubbleEl = bodyEl.createDiv({ cls: "llm-message-bubble" });
+      bubbleEl.createDiv({ cls: "llm-message-content" });
     }
     const contentEl = streamingEl.querySelector(".llm-message-content");
     if (contentEl) {
@@ -23901,7 +23913,7 @@ ${content}`);
    * - Shows a transparent notice with the full path after creation.
    */
   async createNoteFromMessage(msg) {
-    var _a3, _b, _c, _d, _e;
+    var _a3, _b, _c, _d, _e, _f;
     const msgIndex = this.messages.indexOf(msg);
     const precedingUser = msgIndex > 0 ? this.messages[msgIndex - 1] : null;
     const titleSource = (precedingUser == null ? void 0 : precedingUser.role) === "user" ? precedingUser.content.split("\n")[0] : msg.content.split("\n")[0];
@@ -23937,10 +23949,11 @@ ${content}`);
       const msgEl = (_e = this.messagesContainer) == null ? void 0 : _e.querySelector(
         `[data-msg-id="${msg.timestamp}"]`
       );
-      if (msgEl) {
-        const existing = msgEl.querySelector(".llm-saved-badge");
+      const badgeTarget = (_f = msgEl == null ? void 0 : msgEl.querySelector(".llm-message-body")) != null ? _f : msgEl;
+      if (badgeTarget) {
+        const existing = badgeTarget.querySelector(".llm-saved-badge");
         if (!existing) {
-          const badge = msgEl.createDiv({ cls: "llm-saved-badge" });
+          const badge = badgeTarget.createDiv({ cls: "llm-saved-badge" });
           (0, import_obsidian4.setIcon)(badge.createSpan({ cls: "llm-saved-badge-icon" }), "file-check");
           badge.createSpan({ cls: "llm-saved-badge-path", text: file2.path });
           badge.addEventListener("click", async () => {
