@@ -1195,6 +1195,13 @@ export class ChatView extends ItemView {
     if (!this.quickActionsEl) return;
     this.quickActionsEl.empty();
 
+    // Quick actions operate on the active note — hide them in Whole Vault mode
+    if (this.contextDismissed) {
+      this.quickActionsEl.style.display = "none";
+      return;
+    }
+    this.quickActionsEl.style.display = "";
+
     const activeView = this.getEditorView();
     const noteContent = activeView?.editor.getValue() ?? null;
     const context = noteContent ? this.detectNoteContext(noteContent) : "prose";
@@ -1360,6 +1367,7 @@ export class ChatView extends ItemView {
       restoreBtn.addEventListener("click", () => {
         this.contextDismissed = false;
         this.updateContextChip();
+        this.renderQuickActionButtons();
       });
       return;
     }
@@ -1404,6 +1412,7 @@ export class ChatView extends ItemView {
     dismissBtn.addEventListener("click", () => {
       this.contextDismissed = true;
       this.updateContextChip();
+      this.renderQuickActionButtons();
     });
   }
 

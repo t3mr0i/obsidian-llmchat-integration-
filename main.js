@@ -22703,6 +22703,11 @@ ${content}`
     var _a3;
     if (!this.quickActionsEl) return;
     this.quickActionsEl.empty();
+    if (this.contextDismissed) {
+      this.quickActionsEl.style.display = "none";
+      return;
+    }
+    this.quickActionsEl.style.display = "";
     const activeView = this.getEditorView();
     const noteContent = (_a3 = activeView == null ? void 0 : activeView.editor.getValue()) != null ? _a3 : null;
     const context = noteContent ? this.detectNoteContext(noteContent) : "prose";
@@ -22844,6 +22849,7 @@ ${content}`,
       restoreBtn.addEventListener("click", () => {
         this.contextDismissed = false;
         this.updateContextChip();
+        this.renderQuickActionButtons();
       });
       return;
     }
@@ -22881,6 +22887,7 @@ ${content}`,
     dismissBtn.addEventListener("click", () => {
       this.contextDismissed = true;
       this.updateContextChip();
+      this.renderQuickActionButtons();
     });
   }
   /**
