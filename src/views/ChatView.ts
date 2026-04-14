@@ -57,7 +57,7 @@ export class ChatView extends ItemView {
   private vaultSearch: VaultSearch;
   private quickActionsEl: HTMLElement | null = null;
   private contextChipEl: HTMLElement | null = null;
-  private contextDismissed = false; // true = user dismissed note context, show "Whole Vault"
+  private contextDismissed = true; // true = Whole Vault mode (default); false = active note as context
   private lastNoteContext: "code" | "tasks" | "questions" | "concept" | "prose" = "prose";
   // Track how often each action label was clicked (persisted in memory only, resets on reload)
   private actionClickCounts: Record<string, number> = {};
@@ -118,8 +118,8 @@ export class ChatView extends ItemView {
     this.registerEvent(
       this.app.workspace.on("active-leaf-change", () => {
         if (!this.isLoading) {
-          // Reset "Whole Vault" mode when switching notes (but not when a note is pinned)
-          if (!this.pinnedNote) this.contextDismissed = false;
+          // When switching notes, go back to Whole Vault unless user explicitly chose note-context
+          if (!this.pinnedNote) this.contextDismissed = true;
           this.updateDynamicQuickActions();
         }
       })

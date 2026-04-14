@@ -21718,8 +21718,8 @@ var ChatView = class extends import_obsidian4.ItemView {
     this.thinkingDebounceTimer = null;
     this.quickActionsEl = null;
     this.contextChipEl = null;
-    this.contextDismissed = false;
-    // true = user dismissed note context, show "Whole Vault"
+    this.contextDismissed = true;
+    // true = Whole Vault mode (default); false = active note as context
     this.lastNoteContext = "prose";
     // Track how often each action label was clicked (persisted in memory only, resets on reload)
     this.actionClickCounts = {};
@@ -21768,7 +21768,7 @@ var ChatView = class extends import_obsidian4.ItemView {
     this.registerEvent(
       this.app.workspace.on("active-leaf-change", () => {
         if (!this.isLoading) {
-          if (!this.pinnedNote) this.contextDismissed = false;
+          if (!this.pinnedNote) this.contextDismissed = true;
           this.updateDynamicQuickActions();
         }
       })
