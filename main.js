@@ -20062,9 +20062,9 @@ var MiniSearch = class _MiniSearch {
    *
    * @param document  The document to be indexed
    */
-  add(document2) {
+  add(document) {
     const { extractField, stringifyField, tokenize, processTerm, fields, idField } = this._options;
-    const id = extractField(document2, idField);
+    const id = extractField(document, idField);
     if (id == null) {
       throw new Error(`MiniSearch: document does not have ID field "${idField}"`);
     }
@@ -20072,9 +20072,9 @@ var MiniSearch = class _MiniSearch {
       throw new Error(`MiniSearch: duplicate ID ${id}`);
     }
     const shortDocumentId = this.addDocumentId(id);
-    this.saveStoredFields(shortDocumentId, document2);
+    this.saveStoredFields(shortDocumentId, document);
     for (const field of fields) {
-      const fieldValue = extractField(document2, field);
+      const fieldValue = extractField(document, field);
       if (fieldValue == null)
         continue;
       const tokens = tokenize(stringifyField(fieldValue, field), field);
@@ -20099,8 +20099,8 @@ var MiniSearch = class _MiniSearch {
    * @param documents  An array of documents to be indexed
    */
   addAll(documents) {
-    for (const document2 of documents)
-      this.add(document2);
+    for (const document of documents)
+      this.add(document);
   }
   /**
    * Adds all the given documents to the index asynchronously.
@@ -20116,8 +20116,8 @@ var MiniSearch = class _MiniSearch {
   addAllAsync(documents, options = {}) {
     const { chunkSize = 10 } = options;
     const acc = { chunk: [], promise: Promise.resolve() };
-    const { chunk, promise: promise2 } = documents.reduce(({ chunk: chunk2, promise: promise3 }, document2, i) => {
-      chunk2.push(document2);
+    const { chunk, promise: promise2 } = documents.reduce(({ chunk: chunk2, promise: promise3 }, document, i) => {
+      chunk2.push(document);
       if ((i + 1) % chunkSize === 0) {
         return {
           chunk: [],
@@ -20143,9 +20143,9 @@ var MiniSearch = class _MiniSearch {
    *
    * @param document  The document to be removed
    */
-  remove(document2) {
+  remove(document) {
     const { tokenize, processTerm, extractField, stringifyField, fields, idField } = this._options;
-    const id = extractField(document2, idField);
+    const id = extractField(document, idField);
     if (id == null) {
       throw new Error(`MiniSearch: document does not have ID field "${idField}"`);
     }
@@ -20154,7 +20154,7 @@ var MiniSearch = class _MiniSearch {
       throw new Error(`MiniSearch: cannot remove document with ID ${id}: it is not in the index`);
     }
     for (const field of fields) {
-      const fieldValue = extractField(document2, field);
+      const fieldValue = extractField(document, field);
       if (fieldValue == null)
         continue;
       const tokens = tokenize(stringifyField(fieldValue, field), field);
@@ -20189,8 +20189,8 @@ var MiniSearch = class _MiniSearch {
    */
   removeAll(documents) {
     if (documents) {
-      for (const document2 of documents)
-        this.remove(document2);
+      for (const document of documents)
+        this.remove(document);
     } else if (arguments.length > 0) {
       throw new Error("Expected documents to be present. Omit the argument to remove all documents.");
     } else {
@@ -21239,7 +21239,7 @@ var termToQuerySpec = (options) => (term, i, terms) => {
 };
 var defaultOptions = {
   idField: "id",
-  extractField: (document2, fieldName) => document2[fieldName],
+  extractField: (document, fieldName) => document[fieldName],
   stringifyField: (fieldValue, fieldName) => fieldValue.toString(),
   tokenize: (text) => text.split(SPACE_OR_PUNCTUATION),
   processTerm: (term) => term.toLowerCase(),
@@ -21999,9 +21999,9 @@ var ChatView = class extends import_obsidian4.ItemView {
       const active = (_b = (_a3 = this.sessionSystemPromptFile) != null ? _a3 : configuredPath) != null ? _b : "";
       if (f.path === active) opt.selected = true;
     }
-    this.systemPromptSelectEl.addEventListener("change", () => {
+    this.systemPromptSelectEl.onchange = () => {
       this.sessionSystemPromptFile = this.systemPromptSelectEl.value || null;
-    });
+    };
   }
   createNewChat() {
     const id = `chat-${Date.now()}`;
@@ -22092,17 +22092,22 @@ var ChatView = class extends import_obsidian4.ItemView {
     (0, import_obsidian4.setIcon)(clearBtn, "trash-2");
     clearBtn.addEventListener("click", () => {
       if (this.messages.length === 0) return;
-      new import_obsidian4.Notice("Chat cleared \u2014 click again to undo", 4e3);
       const backup = [...this.messages];
       this.messages = [];
       this.renderMessagesContent(true);
       this.persistSessions();
-      const undoNotice = document.querySelector(".notice");
-      if (undoNotice) {
-        undoNotice.addEventListener("click", () => {
+      const notice = new import_obsidian4.Notice("Chat cleared.", 5e3);
+      const noticeEl = notice.noticeEl;
+      if (noticeEl) {
+        noticeEl.createSpan({ text: " " });
+        const undoLink = noticeEl.createEl("a", { text: "Undo", href: "#" });
+        undoLink.style.cursor = "pointer";
+        undoLink.addEventListener("click", (e) => {
+          e.preventDefault();
           this.messages = backup;
           this.renderMessagesContent(true);
           this.persistSessions();
+          notice.hide();
         }, { once: true });
       }
     });
@@ -23227,10 +23232,7 @@ Assistant answered: ${assistantResponse.slice(0, 500)}`;
       };
       const vaultPath = this.getVaultPath();
       const providerConfig = this.plugin.settings.providers[this.currentProvider];
-      if (this.currentProvider === "opencode" && providerConfig.useAcp) {
-        providerConfig.useAcp = false;
-      }
-      const useAcp = providerConfig.useAcp && ACP_SUPPORTED_PROVIDERS.includes(this.currentProvider);
+      const useAcp = providerConfig.useAcp && ACP_SUPPORTED_PROVIDERS.includes(this.currentProvider) && this.currentProvider !== "opencode";
       let response;
       if (this.currentProvider === "local") {
         this.localExecutor.updateSettings(this.plugin.settings);

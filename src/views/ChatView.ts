@@ -406,9 +406,11 @@ export class ChatView extends ItemView {
       if (f.path === active) opt.selected = true;
     }
 
-    this.systemPromptSelectEl.addEventListener("change", () => {
+    // Use onchange (property) instead of addEventListener to avoid accumulating
+    // listeners on each refresh call
+    this.systemPromptSelectEl.onchange = () => {
       this.sessionSystemPromptFile = this.systemPromptSelectEl!.value || null;
-    });
+    };
   }
 
   private createNewChat(): string {
@@ -516,18 +518,24 @@ export class ChatView extends ItemView {
     setIcon(clearBtn, "trash-2");
     clearBtn.addEventListener("click", () => {
       if (this.messages.length === 0) return;
-      new Notice("Chat cleared — click again to undo", 4000);
       const backup = [...this.messages];
       this.messages = [];
       this.renderMessagesContent(true);
       this.persistSessions();
-      // One-time undo via the notice (just store backup in case)
-      const undoNotice = document.querySelector(".notice");
-      if (undoNotice) {
-        undoNotice.addEventListener("click", () => {
+      // Undo via a link rendered inside the notice element
+      const notice = new Notice("Chat cleared.", 5000);
+      // Append undo link into the notice element
+      const noticeEl = (notice as any).noticeEl as HTMLElement | undefined;
+      if (noticeEl) {
+        noticeEl.createSpan({ text: " " });
+        const undoLink = noticeEl.createEl("a", { text: "Undo", href: "#" });
+        undoLink.style.cursor = "pointer";
+        undoLink.addEventListener("click", (e) => {
+          e.preventDefault();
           this.messages = backup;
           this.renderMessagesContent(true);
           this.persistSessions();
+          notice.hide();
         }, { once: true });
       }
     });
@@ -1838,11 +1846,10 @@ export class ChatView extends ItemView {
 
       // Check if ACP mode is enabled for this provider
       const providerConfig = this.plugin.settings.providers[this.currentProvider];
-      // OpenCode ACP uses HTTP transport, not stdio — force CLI mode regardless of stored setting
-      if (this.currentProvider === "opencode" && providerConfig.useAcp) {
-        providerConfig.useAcp = false;
-      }
-      const useAcp = providerConfig.useAcp && ACP_SUPPORTED_PROVIDERS.includes(this.currentProvider);
+      // OpenCode ACP uses HTTP transport, not stdio — read-only check, never mutate settings here
+      const useAcp = providerConfig.useAcp
+        && ACP_SUPPORTED_PROVIDERS.includes(this.currentProvider)
+        && this.currentProvider !== "opencode";
 
       let response: { content: string; provider: LLMProvider; durationMs: number; error?: string; tokensUsed?: { input: number; output: number } };
 
