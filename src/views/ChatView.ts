@@ -696,6 +696,7 @@ export class ChatView extends ItemView {
 
     const msgEl = this.messagesContainer.createDiv({
       cls: `llm-message llm-message-${msg.role}`,
+      attr: { "data-msg-id": String(msg.timestamp) },
     });
 
     const headerEl = msgEl.createDiv({ cls: "llm-message-header" });
@@ -2689,40 +2690,95 @@ export class ChatView extends ItemView {
   }
 
   /**
-   * Create a new note from an LLM response
+   * Create a new note from an LLM response.
+   * - Places the note in the same folder as the source note (pinned or active), or vault root.
+   * - Adds frontmatter linking back to the source note and recording the provider.
+   * - Shows a transparent notice with the full path after creation.
    */
   private async createNoteFromMessage(msg: ConversationMessage) {
-    // Generate a title from the first line or first few words
-    const firstLine = msg.content.split("\n")[0];
-    let title = firstLine
-      .replace(/^#+\s*/, "") // Remove markdown headers
-      .replace(/[\\/*?"<>|:]/g, "") // Remove invalid filename chars
+    // Determine title: prefer the user's preceding prompt, fall back to first content line
+    const msgIndex = this.messages.indexOf(msg);
+    const precedingUser = msgIndex > 0 ? this.messages[msgIndex - 1] : null;
+    const titleSource =
+      precedingUser?.role === "user"
+        ? precedingUser.content.split("\n")[0]
+        : msg.content.split("\n")[0];
+
+    let title = titleSource
+      .replace(/^#+\s*/, "")           // strip markdown headers
+      .replace(/\*\*(.+?)\*\*/g, "$1") // strip bold
+      .replace(/\*(.+?)\*/g, "$1")     // strip italic
+      .replace(/_(.+?)_/g, "$1")       // strip underscore italic
+      .replace(/`(.+?)`/g, "$1")       // strip inline code
+      .replace(/[\\/*?"<>|:]/g, "")    // strip invalid filename chars
       .trim();
+    if (title.length > 60) title = title.slice(0, 57) + "...";
+    if (!title) title = `AI Note ${new Date(msg.timestamp).toLocaleDateString()}`;
 
-    if (title.length > 50) {
-      title = title.slice(0, 47) + "...";
-    }
-    if (!title) {
-      title = `LLM Response ${new Date(msg.timestamp).toLocaleDateString()}`;
-    }
+    // Determine target folder from pinned note, then active editor note
+    const sourceFile = this.pinnedNote ?? this.getEditorView()?.file ?? null;
+    const folder = sourceFile
+      ? sourceFile.path.includes("/")
+        ? sourceFile.path.substring(0, sourceFile.path.lastIndexOf("/"))
+        : ""
+      : "";
 
-    // Find a unique filename
-    let fileName = `${title}.md`;
+    // Build frontmatter — escape basename so colons/quotes don't break YAML
+    const dateStr = new Date(msg.timestamp).toISOString().slice(0, 10);
+    const providerName = PROVIDER_DISPLAY_NAMES[msg.provider] ?? msg.provider;
+    const safeBasename = sourceFile
+      ? sourceFile.basename.replace(/"/g, '\\"')
+      : null;
+    const sourceLink = safeBasename ? `"[[${safeBasename}]]"` : "~";
+    const frontmatter = [
+      "---",
+      `source: ${sourceLink}`,
+      `created-by: "${providerName.replace(/"/g, '\\"')}"`,
+      `date: ${dateStr}`,
+      "---",
+      "",
+    ].join("\n");
+
+    // Find unique filename in target folder
+    const baseName = folder ? `${folder}/${title}` : title;
+    let fileName = `${baseName}.md`;
     let counter = 1;
     while (this.app.vault.getAbstractFileByPath(fileName)) {
-      fileName = `${title} ${counter}.md`;
+      fileName = `${baseName} ${counter}.md`;
       counter++;
     }
 
     try {
-      const file = await this.app.vault.create(fileName, msg.content);
-      new Notice(`Created note: ${file.path}`);
+      // Ensure the target folder exists before creating the file
+      if (folder && !this.app.vault.getAbstractFileByPath(folder)) {
+        await this.app.vault.createFolder(folder);
+      }
+      const file = await this.app.vault.create(fileName, frontmatter + msg.content);
 
-      // Open the new file
+      // Inline badge on the message bubble — shows where it was saved
+      const msgEl = this.messagesContainer?.querySelector(
+        `[data-msg-id="${msg.timestamp}"]`
+      ) as HTMLElement | null;
+      if (msgEl) {
+        const existing = msgEl.querySelector(".llm-saved-badge");
+        if (!existing) {
+          const badge = msgEl.createDiv({ cls: "llm-saved-badge" });
+          setIcon(badge.createSpan({ cls: "llm-saved-badge-icon" }), "file-check");
+          badge.createSpan({ cls: "llm-saved-badge-path", text: file.path });
+          badge.addEventListener("click", async () => {
+            const f = this.app.vault.getAbstractFileByPath(file.path);
+            if (f instanceof TFile) {
+              await this.app.workspace.getLeaf(false).openFile(f);
+            }
+          });
+        }
+      }
+
+      new Notice(`Gespeichert: ${file.path}`, 4000);
       const leaf = this.app.workspace.getLeaf(false);
       await leaf.openFile(file);
     } catch (error) {
-      new Notice(`Failed to create note: ${error}`);
+      new Notice(`Fehler beim Erstellen der Notiz: ${error}`);
     }
   }
 

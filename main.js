@@ -22237,7 +22237,8 @@ var ChatView = class extends import_obsidian4.ItemView {
     const activeFile = this.app.workspace.getActiveFile();
     const sourcePath = (_a3 = activeFile == null ? void 0 : activeFile.path) != null ? _a3 : "";
     const msgEl = this.messagesContainer.createDiv({
-      cls: `llm-message llm-message-${msg.role}`
+      cls: `llm-message llm-message-${msg.role}`,
+      attr: { "data-msg-id": String(msg.timestamp) }
     });
     const headerEl = msgEl.createDiv({ cls: "llm-message-header" });
     headerEl.createSpan({
@@ -23858,30 +23859,67 @@ ${content}`);
     }
   }
   /**
-   * Create a new note from an LLM response
+   * Create a new note from an LLM response.
+   * - Places the note in the same folder as the source note (pinned or active), or vault root.
+   * - Adds frontmatter linking back to the source note and recording the provider.
+   * - Shows a transparent notice with the full path after creation.
    */
   async createNoteFromMessage(msg) {
-    const firstLine = msg.content.split("\n")[0];
-    let title = firstLine.replace(/^#+\s*/, "").replace(/[\\/*?"<>|:]/g, "").trim();
-    if (title.length > 50) {
-      title = title.slice(0, 47) + "...";
-    }
-    if (!title) {
-      title = `LLM Response ${new Date(msg.timestamp).toLocaleDateString()}`;
-    }
-    let fileName = `${title}.md`;
+    var _a3, _b, _c, _d, _e;
+    const msgIndex = this.messages.indexOf(msg);
+    const precedingUser = msgIndex > 0 ? this.messages[msgIndex - 1] : null;
+    const titleSource = (precedingUser == null ? void 0 : precedingUser.role) === "user" ? precedingUser.content.split("\n")[0] : msg.content.split("\n")[0];
+    let title = titleSource.replace(/^#+\s*/, "").replace(/\*\*(.+?)\*\*/g, "$1").replace(/\*(.+?)\*/g, "$1").replace(/_(.+?)_/g, "$1").replace(/`(.+?)`/g, "$1").replace(/[\\/*?"<>|:]/g, "").trim();
+    if (title.length > 60) title = title.slice(0, 57) + "...";
+    if (!title) title = `AI Note ${new Date(msg.timestamp).toLocaleDateString()}`;
+    const sourceFile = (_c = (_b = this.pinnedNote) != null ? _b : (_a3 = this.getEditorView()) == null ? void 0 : _a3.file) != null ? _c : null;
+    const folder = sourceFile ? sourceFile.path.includes("/") ? sourceFile.path.substring(0, sourceFile.path.lastIndexOf("/")) : "" : "";
+    const dateStr = new Date(msg.timestamp).toISOString().slice(0, 10);
+    const providerName = (_d = PROVIDER_DISPLAY_NAMES[msg.provider]) != null ? _d : msg.provider;
+    const safeBasename = sourceFile ? sourceFile.basename.replace(/"/g, '\\"') : null;
+    const sourceLink = safeBasename ? `"[[${safeBasename}]]"` : "~";
+    const frontmatter = [
+      "---",
+      `source: ${sourceLink}`,
+      `created-by: "${providerName.replace(/"/g, '\\"')}"`,
+      `date: ${dateStr}`,
+      "---",
+      ""
+    ].join("\n");
+    const baseName = folder ? `${folder}/${title}` : title;
+    let fileName = `${baseName}.md`;
     let counter = 1;
     while (this.app.vault.getAbstractFileByPath(fileName)) {
-      fileName = `${title} ${counter}.md`;
+      fileName = `${baseName} ${counter}.md`;
       counter++;
     }
     try {
-      const file2 = await this.app.vault.create(fileName, msg.content);
-      new import_obsidian4.Notice(`Created note: ${file2.path}`);
+      if (folder && !this.app.vault.getAbstractFileByPath(folder)) {
+        await this.app.vault.createFolder(folder);
+      }
+      const file2 = await this.app.vault.create(fileName, frontmatter + msg.content);
+      const msgEl = (_e = this.messagesContainer) == null ? void 0 : _e.querySelector(
+        `[data-msg-id="${msg.timestamp}"]`
+      );
+      if (msgEl) {
+        const existing = msgEl.querySelector(".llm-saved-badge");
+        if (!existing) {
+          const badge = msgEl.createDiv({ cls: "llm-saved-badge" });
+          (0, import_obsidian4.setIcon)(badge.createSpan({ cls: "llm-saved-badge-icon" }), "file-check");
+          badge.createSpan({ cls: "llm-saved-badge-path", text: file2.path });
+          badge.addEventListener("click", async () => {
+            const f = this.app.vault.getAbstractFileByPath(file2.path);
+            if (f instanceof import_obsidian4.TFile) {
+              await this.app.workspace.getLeaf(false).openFile(f);
+            }
+          });
+        }
+      }
+      new import_obsidian4.Notice(`Gespeichert: ${file2.path}`, 4e3);
       const leaf = this.app.workspace.getLeaf(false);
       await leaf.openFile(file2);
     } catch (error48) {
-      new import_obsidian4.Notice(`Failed to create note: ${error48}`);
+      new import_obsidian4.Notice(`Fehler beim Erstellen der Notiz: ${error48}`);
     }
   }
   /**

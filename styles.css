@@ -190,6 +190,24 @@
   flex-direction: column;
   gap: 16px;
   background-color: var(--llm-bg-alt);
+  scrollbar-width: thin;
+  scrollbar-color: var(--background-modifier-border) transparent;
+}
+
+.llm-chat-messages::-webkit-scrollbar {
+  width: 4px;
+}
+.llm-chat-messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+.llm-chat-messages::-webkit-scrollbar-thumb {
+  background: var(--background-modifier-border);
+  border-radius: 2px;
+}
+
+@keyframes llm-message-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .llm-message {
@@ -198,6 +216,7 @@
   border-radius: 12px;
   position: relative;
   transition: transform 0.1s ease;
+  animation: llm-message-in 0.18s ease-out;
 }
 
 .llm-message-user {
@@ -239,6 +258,15 @@
 }
 
 .llm-message:hover .llm-message-actions {
+  opacity: 1;
+}
+
+/* Assistant messages: subtly always-visible so users discover the actions */
+.llm-message-assistant .llm-message-actions {
+  opacity: 0.25;
+}
+
+.llm-message-assistant:hover .llm-message-actions {
   opacity: 1;
 }
 
@@ -1337,4 +1365,52 @@ pre:hover .llm-code-copy-btn {
   font-size: 11px;
   color: var(--text-muted);
   line-height: 1.8;
+}
+
+/* ============================================
+   Saved-Badge — inline confirmation after note creation
+   ============================================ */
+@keyframes llm-badge-in {
+  from { opacity: 0; transform: translateY(-3px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.llm-saved-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  padding: 3px 8px 3px 6px;
+  border-radius: 4px;
+  background-color: rgba(var(--color-green-rgb, 76, 175, 80), 0.1);
+  border: 1px solid rgba(var(--color-green-rgb, 76, 175, 80), 0.25);
+  font-size: 10px;
+  color: var(--text-success, #4caf50);
+  cursor: pointer;
+  width: fit-content;
+  max-width: 100%;
+  animation: llm-badge-in 0.18s ease-out;
+  transition: background-color 0.1s;
+}
+
+.llm-saved-badge:hover {
+  background-color: rgba(var(--color-green-rgb, 76, 175, 80), 0.18);
+}
+
+.llm-saved-badge-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.llm-saved-badge-icon svg {
+  width: 11px;
+  height: 11px;
+}
+
+.llm-saved-badge-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
 }
