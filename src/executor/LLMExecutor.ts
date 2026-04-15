@@ -545,7 +545,10 @@ export class LLMExecutor {
           this.debug("Stdout so far:", stdout.slice(-500));
           this.debug("Stderr so far:", stderr);
           child.kill("SIGTERM");
-          reject(new Error(`Timeout after ${timeoutSeconds} seconds. Enable debug mode and check console for details.`));
+          const timeoutHint = provider === "opencode"
+            ? ` If using GitHub Copilot, run "opencode auth" in a terminal first.`
+            : "";
+          reject(new Error(`Timeout after ${timeoutSeconds} seconds.${timeoutHint} Enable debug mode and check console for details.`));
         }
       }, timeoutMs);
 
@@ -652,9 +655,15 @@ export class LLMExecutor {
         stderrLower.includes("unauthorized") ||
         stderrLower.includes("401") ||
         stderrLower.includes("api key") ||
+        stderrLower.includes("x-api-key") ||
         stderrLower.includes("not authenticated") ||
         stderrLower.includes("invalid key") ||
         stderrLower.includes("permission denied")) {
+      // OpenCode with GitHub Copilot: "invalid x-api-key" means the Copilot token
+      // is missing or expired — the user needs to run `opencode auth` in a terminal.
+      if (provider === "opencode") {
+        return `OpenCode is not authenticated. Open a terminal and run: opencode auth`;
+      }
       return `Authentication failed for ${provider}. Please check your API key or credentials are configured correctly.`;
     }
 
@@ -1083,7 +1092,11 @@ export class LLMExecutor {
     if (type === "error") {
       const errObj = obj.error as Record<string, unknown> | undefined;
       const errData = errObj?.data as Record<string, unknown> | undefined;
-      const message = (errData?.message || errObj?.message || errObj?.name || "OpenCode error") as string;
+      let message = (errData?.message || errObj?.message || errObj?.name || "OpenCode error") as string;
+      // Give actionable help for GitHub Copilot auth errors
+      if (message.toLowerCase().includes("x-api-key") || message.toLowerCase().includes("invalid key")) {
+        message = `OpenCode auth error: "${message}". If using GitHub Copilot, select a Copilot model like "github-copilot/gpt-4o" or "github-copilot/claude-sonnet-4-5" in plugin settings. Models prefixed "anthropic/" or "openai/" require separate API keys. Run "opencode auth" in a terminal to re-authenticate.`;
+      }
       return { type: "error", message };
     }
 

@@ -79,6 +79,8 @@ export interface DetectedProvider {
   serverUrl?: string;
   serverType?: LocalServerType;
   models?: string[];
+  /** undefined = not checked; true = auth ok; false = binary found but not authenticated */
+  authOk?: boolean;
 }
 
 export interface LocalSoftwareStatus {
@@ -115,15 +117,21 @@ export async function autoDetectProviders(): Promise<DetectionResult> {
     detectLocalSoftware(),
   ]);
 
-  // CLI providers
+  // CLI providers — probe auth for OpenCode separately
   const cliNames: Record<string, string> = {
     claude: "Claude CLI",
     opencode: "OpenCode CLI",
     codex: "Codex CLI",
     gemini: "Gemini CLI",
   };
+  const openCodeAuthResult = cliProviders.includes("opencode")
+    ? await probeOpenCodeAuth()
+    : undefined;
+
   for (const provider of cliProviders) {
-    detected.push({ provider, name: cliNames[provider] || provider });
+    const entry: DetectedProvider = { provider, name: cliNames[provider] || provider };
+    if (provider === "opencode") entry.authOk = openCodeAuthResult;
+    detected.push(entry);
   }
 
   // Local servers (running + have models)
@@ -472,6 +480,47 @@ export function applyDetectionResults(
   }
 
   return changed;
+}
+
+// ────────────────────────────────────────────
+//  OpenCode auth probe
+// ────────────────────────────────────────────
+
+/**
+ * Run `opencode models` with a short timeout to check if OpenCode is authenticated.
+ * Returns true if it exits cleanly, false if it exits with an auth error.
+ * Returns undefined on timeout (inconclusive).
+ */
+export function probeOpenCodeAuth(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const child = spawn("opencode", ["models"], {
+      stdio: ["ignore", "pipe", "pipe"],
+      env: getShellEnv(),
+      shell: false,
+    });
+
+    let stderr = "";
+    child.stderr?.on("data", (d: Buffer) => { stderr += d.toString(); });
+
+    child.on("error", () => resolve(false));
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve(true);
+        return;
+      }
+      // Treat any auth-related stderr as unauthenticated
+      const lower = stderr.toLowerCase();
+      const isAuthError = lower.includes("x-api-key") ||
+        lower.includes("unauthorized") ||
+        lower.includes("not authenticated") ||
+        lower.includes("401") ||
+        lower.includes("auth");
+      resolve(!isAuthError); // non-auth failure = inconclusive, treat as ok
+    });
+
+    // 8s timeout — inconclusive, assume ok so we don't block startup
+    setTimeout(() => { child.kill(); resolve(true); }, 8000);
+  });
 }
 
 // ────────────────────────────────────────────

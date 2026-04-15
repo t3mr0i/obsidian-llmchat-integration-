@@ -9,6 +9,7 @@ import {
   applyDetectionResults,
   startLocalServer,
   pullModel,
+  probeOpenCodeAuth,
   type LocalSoftwareStatus,
 } from "../utils/autoDetect";
 
@@ -479,6 +480,26 @@ export class LLMSettingTab extends PluginSettingTab {
       card.toggleClass("llm-provider-card-enabled", val);
       await this.plugin.saveSettings();
     });
+
+    // ── OpenCode auth status banner ──
+    if (provider === "opencode" && providerConfig.enabled) {
+      const authBanner = card.createDiv({ cls: "llm-auth-banner llm-auth-banner-checking" });
+      authBanner.createSpan({ text: "Checking authentication…" });
+
+      probeOpenCodeAuth().then((ok) => {
+        authBanner.empty();
+        if (ok) {
+          authBanner.addClass("llm-auth-banner-ok");
+          authBanner.removeClass("llm-auth-banner-checking");
+          authBanner.createSpan({ text: "Authenticated" });
+        } else {
+          authBanner.addClass("llm-auth-banner-error");
+          authBanner.removeClass("llm-auth-banner-checking");
+          authBanner.createSpan({ text: "Not authenticated — open a terminal and run: " });
+          authBanner.createEl("code", { text: "opencode auth" });
+        }
+      });
+    }
 
     // ── Expandable settings (only in expert mode, or when enabled) ──
     const detailsEl = card.createEl("details", { cls: "llm-provider-details" });

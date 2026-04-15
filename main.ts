@@ -217,6 +217,15 @@ export default class LLMPlugin extends Plugin {
         }
       }
 
+      // Warn if OpenCode is installed but not authenticated
+      const openCodeEntry = result.detected.find((d) => d.provider === "opencode");
+      if (openCodeEntry && openCodeEntry.authOk === false) {
+        new Notice(
+          "OpenCode found but not authenticated. Open a terminal and run: opencode auth",
+          10000
+        );
+      }
+
       if (result.detected.length > 0) {
         const changed = applyDetectionResults(this.settings, result);
         if (changed) {

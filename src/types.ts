@@ -105,9 +105,10 @@ export const PROVIDER_MODELS: Record<LLMProvider, { value: string; label: string
     { value: "openai/gpt-5.4-nano", label: "GPT-5.4 Nano (budget)" },
     { value: "openai/o3", label: "o3 (reasoning)" },
     { value: "openai/o4-mini", label: "o4-mini (reasoning, fast)" },
-    // Copilot
-    { value: "github-copilot/gpt-5", label: "GPT-5 (Copilot)" },
-    { value: "github-copilot/gpt-5-mini", label: "GPT-5 Mini (Copilot)" },
+    // Copilot (requires GitHub Copilot subscription, run "opencode auth" first)
+    { value: "github-copilot/claude-sonnet-4-5", label: "Claude Sonnet 4.5 (Copilot)" },
+    { value: "github-copilot/gpt-4o", label: "GPT-4o (Copilot)" },
+    { value: "github-copilot/o3-mini", label: "o3-mini (Copilot)" },
   ],
   codex: [
     { value: "", label: "Default (CLI default)" },
@@ -189,7 +190,7 @@ export const DEFAULT_SETTINGS: LLMPluginSettings = {
   insertPosition: "cursor",
   streamOutput: true,
   systemPromptFile: "",
-  defaultTimeout: 120,
+  defaultTimeout: 300,
   conversationHistory: {
     enabled: true,
     maxMessages: 10,

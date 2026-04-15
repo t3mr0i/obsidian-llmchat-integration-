@@ -2076,7 +2076,7 @@ export class ChatView extends ItemView {
         break;
 
       case "error":
-        this.updateProgressDisplay(event.message, "status");
+        this.updateProgressDisplay(`⚠ ${event.message}`, "status");
         break;
 
       case "done":

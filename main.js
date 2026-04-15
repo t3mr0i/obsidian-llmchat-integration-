@@ -784,7 +784,8 @@ var init_LLMExecutor = __esm({
               this.debug("Stdout so far:", stdout.slice(-500));
               this.debug("Stderr so far:", stderr);
               child.kill("SIGTERM");
-              reject(new Error(`Timeout after ${timeoutSeconds} seconds. Enable debug mode and check console for details.`));
+              const timeoutHint = provider === "opencode" ? ` If using GitHub Copilot, run "opencode auth" in a terminal first.` : "";
+              reject(new Error(`Timeout after ${timeoutSeconds} seconds.${timeoutHint} Enable debug mode and check console for details.`));
             }
           }, timeoutMs);
           child.on("close", () => clearTimeout(timeout));
@@ -857,7 +858,10 @@ var init_LLMExecutor = __esm({
           const modelName = modelMatch ? modelMatch[1] : "specified model";
           return `Model not found: "${modelName}". Check your ${provider} settings and verify the model name is correct. Available models may have changed - check the provider's documentation.`;
         }
-        if (stderrLower.includes("authentication") || stderrLower.includes("unauthorized") || stderrLower.includes("401") || stderrLower.includes("api key") || stderrLower.includes("not authenticated") || stderrLower.includes("invalid key") || stderrLower.includes("permission denied")) {
+        if (stderrLower.includes("authentication") || stderrLower.includes("unauthorized") || stderrLower.includes("401") || stderrLower.includes("api key") || stderrLower.includes("x-api-key") || stderrLower.includes("not authenticated") || stderrLower.includes("invalid key") || stderrLower.includes("permission denied")) {
+          if (provider === "opencode") {
+            return `OpenCode is not authenticated. Open a terminal and run: opencode auth`;
+          }
           return `Authentication failed for ${provider}. Please check your API key or credentials are configured correctly.`;
         }
         if (stderrLower.includes("rate limit") || stderrLower.includes("quota exceeded") || stderrLower.includes("too many requests") || stderrLower.includes("429")) {
@@ -1164,7 +1168,10 @@ var init_LLMExecutor = __esm({
         if (type === "error") {
           const errObj = obj.error;
           const errData = errObj == null ? void 0 : errObj.data;
-          const message = (errData == null ? void 0 : errData.message) || (errObj == null ? void 0 : errObj.message) || (errObj == null ? void 0 : errObj.name) || "OpenCode error";
+          let message = (errData == null ? void 0 : errData.message) || (errObj == null ? void 0 : errObj.message) || (errObj == null ? void 0 : errObj.name) || "OpenCode error";
+          if (message.toLowerCase().includes("x-api-key") || message.toLowerCase().includes("invalid key")) {
+            message = `OpenCode auth error: "${message}". If using GitHub Copilot, select a Copilot model like "github-copilot/gpt-4o" or "github-copilot/claude-sonnet-4-5" in plugin settings. Models prefixed "anthropic/" or "openai/" require separate API keys. Run "opencode auth" in a terminal to re-authenticate.`;
+          }
           return { type: "error", message };
         }
         if (type === "content_block_start" || type === "content_block_delta") {
@@ -1189,6 +1196,7 @@ __export(autoDetect_exports, {
   applyDetectionResults: () => applyDetectionResults,
   autoDetectProviders: () => autoDetectProviders,
   detectLocalSoftwareStatuses: () => detectLocalSoftwareStatuses,
+  probeOpenCodeAuth: () => probeOpenCodeAuth,
   pullModel: () => pullModel,
   startLocalServer: () => startLocalServer
 });
@@ -1204,8 +1212,11 @@ async function autoDetectProviders() {
     codex: "Codex CLI",
     gemini: "Gemini CLI"
   };
+  const openCodeAuthResult = cliProviders.includes("opencode") ? await probeOpenCodeAuth() : void 0;
   for (const provider of cliProviders) {
-    detected.push({ provider, name: cliNames[provider] || provider });
+    const entry = { provider, name: cliNames[provider] || provider };
+    if (provider === "opencode") entry.authOk = openCodeAuthResult;
+    detected.push(entry);
   }
   for (const status of localStatuses) {
     if (status.serverRunning && status.hasModels) {
@@ -1441,6 +1452,34 @@ function applyDetectionResults(settings, result) {
   }
   return changed;
 }
+function probeOpenCodeAuth() {
+  return new Promise((resolve) => {
+    var _a3;
+    const child = (0, import_child_process4.spawn)("opencode", ["models"], {
+      stdio: ["ignore", "pipe", "pipe"],
+      env: getShellEnv(),
+      shell: false
+    });
+    let stderr = "";
+    (_a3 = child.stderr) == null ? void 0 : _a3.on("data", (d) => {
+      stderr += d.toString();
+    });
+    child.on("error", () => resolve(false));
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve(true);
+        return;
+      }
+      const lower = stderr.toLowerCase();
+      const isAuthError = lower.includes("x-api-key") || lower.includes("unauthorized") || lower.includes("not authenticated") || lower.includes("401") || lower.includes("auth");
+      resolve(!isAuthError);
+    });
+    setTimeout(() => {
+      child.kill();
+      resolve(true);
+    }, 8e3);
+  });
+}
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -1540,9 +1579,10 @@ var PROVIDER_MODELS = {
     { value: "openai/gpt-5.4-nano", label: "GPT-5.4 Nano (budget)" },
     { value: "openai/o3", label: "o3 (reasoning)" },
     { value: "openai/o4-mini", label: "o4-mini (reasoning, fast)" },
-    // Copilot
-    { value: "github-copilot/gpt-5", label: "GPT-5 (Copilot)" },
-    { value: "github-copilot/gpt-5-mini", label: "GPT-5 Mini (Copilot)" }
+    // Copilot (requires GitHub Copilot subscription, run "opencode auth" first)
+    { value: "github-copilot/claude-sonnet-4-5", label: "Claude Sonnet 4.5 (Copilot)" },
+    { value: "github-copilot/gpt-4o", label: "GPT-4o (Copilot)" },
+    { value: "github-copilot/o3-mini", label: "o3-mini (Copilot)" }
   ],
   codex: [
     { value: "", label: "Default (CLI default)" },
@@ -1590,7 +1630,7 @@ var DEFAULT_SETTINGS = {
   insertPosition: "cursor",
   streamOutput: true,
   systemPromptFile: "",
-  defaultTimeout: 120,
+  defaultTimeout: 300,
   conversationHistory: {
     enabled: true,
     maxMessages: 10
@@ -2051,6 +2091,23 @@ var LLMSettingTab = class extends import_obsidian.PluginSettingTab {
       card.toggleClass("llm-provider-card-enabled", val);
       await this.plugin.saveSettings();
     });
+    if (provider === "opencode" && providerConfig.enabled) {
+      const authBanner = card.createDiv({ cls: "llm-auth-banner llm-auth-banner-checking" });
+      authBanner.createSpan({ text: "Checking authentication\u2026" });
+      probeOpenCodeAuth().then((ok) => {
+        authBanner.empty();
+        if (ok) {
+          authBanner.addClass("llm-auth-banner-ok");
+          authBanner.removeClass("llm-auth-banner-checking");
+          authBanner.createSpan({ text: "Authenticated" });
+        } else {
+          authBanner.addClass("llm-auth-banner-error");
+          authBanner.removeClass("llm-auth-banner-checking");
+          authBanner.createSpan({ text: "Not authenticated \u2014 open a terminal and run: " });
+          authBanner.createEl("code", { text: "opencode auth" });
+        }
+      });
+    }
     const detailsEl = card.createEl("details", { cls: "llm-provider-details" });
     const summaryEl = detailsEl.createEl("summary", { cls: "llm-provider-details-summary" });
     summaryEl.setText(this.expertMode ? "Settings" : "Configure");
@@ -23393,7 +23450,7 @@ Assistant answered: ${assistantResponse.slice(0, 500)}`;
         }
         break;
       case "error":
-        this.updateProgressDisplay(event.message, "status");
+        this.updateProgressDisplay(`\u26A0 ${event.message}`, "status");
         break;
       case "done":
         this.finalizeThinkingBlock();
@@ -24174,6 +24231,13 @@ Your request:`,
             }
           }
         }
+      }
+      const openCodeEntry = result.detected.find((d) => d.provider === "opencode");
+      if (openCodeEntry && openCodeEntry.authOk === false) {
+        new import_obsidian5.Notice(
+          "OpenCode found but not authenticated. Open a terminal and run: opencode auth",
+          1e4
+        );
       }
       if (result.detected.length > 0) {
         const changed = applyDetectionResults(this.settings, result);

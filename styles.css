@@ -1514,3 +1514,32 @@ pre:hover .llm-code-copy-btn {
   white-space: nowrap;
   max-width: 220px;
 }
+
+/* ── OpenCode auth status banner ── */
+.llm-auth-banner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  margin: 6px 0 2px;
+}
+.llm-auth-banner-checking {
+  color: var(--text-muted);
+  background: var(--background-secondary);
+}
+.llm-auth-banner-ok {
+  color: var(--text-success, #4caf50);
+  background: rgba(76, 175, 80, 0.1);
+}
+.llm-auth-banner-error {
+  color: var(--text-error, #e53935);
+  background: rgba(229, 57, 53, 0.1);
+}
+.llm-auth-banner-error code {
+  background: rgba(229, 57, 53, 0.15);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 11px;
+}
