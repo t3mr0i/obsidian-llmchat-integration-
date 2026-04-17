@@ -193,9 +193,10 @@ export class ChatView extends ItemView {
 
     // Provider & model selector row
     const selectorRow = header.createDiv({ cls: "llm-selector-row" });
+    const selectorPill = selectorRow.createDiv({ cls: "llm-selector-pill" });
 
     // Provider dropdown
-    this.providerSelectEl = selectorRow.createEl("select", { cls: "llm-provider-select" });
+    this.providerSelectEl = selectorPill.createEl("select", { cls: "llm-provider-select" });
     const allProviders: LLMProvider[] = ["claude", "opencode", "codex", "gemini", "local"];
     const enabledProviders = allProviders.filter((p) => this.plugin.settings.providers[p]?.enabled);
 
@@ -220,7 +221,7 @@ export class ChatView extends ItemView {
     });
 
     // Model dropdown
-    this.modelSelectEl = selectorRow.createEl("select", { cls: "llm-model-select" });
+    this.modelSelectEl = selectorPill.createEl("select", { cls: "llm-model-select" });
     this.modelSelectEl.addEventListener("change", async () => {
       const newModel = this.modelSelectEl!.value;
       this.plugin.settings.providers[this.currentProvider].model = newModel || undefined;
@@ -230,7 +231,7 @@ export class ChatView extends ItemView {
     this.refreshModelSelect();
 
     // System prompt quick-switcher
-    this.systemPromptSelectEl = selectorRow.createEl("select", {
+    this.systemPromptSelectEl = selectorPill.createEl("select", {
       cls: "llm-system-prompt-select",
       attr: { "aria-label": "System prompt" },
     });

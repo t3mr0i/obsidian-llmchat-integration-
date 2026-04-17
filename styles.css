@@ -140,42 +140,106 @@
 /* Selector Row */
 .llm-selector-row {
   display: flex;
-  gap: 6px;
   align-items: center;
+  gap: 6px;
+  padding: 6px 4px 8px;
 }
 
-.llm-provider-select,
-.llm-model-select,
-.llm-system-prompt-select {
-  flex: 1;
-  font-size: 11px;
-  height: 24px;
-  padding: 0 4px;
-  border-radius: 4px;
-  background-color: var(--background-secondary);
+/* One calm pill holds the three selects; buttons live next to it as
+   dedicated icon actions. Single outer border + thin inner dividers
+   replaces three competing boxes. */
+.llm-selector-pill {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 30px;
+  background: var(--background-secondary);
   border: 1px solid var(--llm-border);
-  color: var(--text-normal);
+  border-radius: 8px;
+  overflow: hidden;
+  transition: border-color 120ms ease, background-color 120ms ease,
+              box-shadow 120ms ease;
 }
 
-.llm-system-prompt-select {
+.llm-selector-pill:hover {
+  border-color: var(--background-modifier-border-hover, var(--llm-border));
+}
+
+.llm-selector-pill:focus-within {
+  border-color: var(--llm-accent);
+  background: var(--background-primary);
+  box-shadow: 0 0 0 3px var(--llm-accent-subtle);
+}
+
+.llm-selector-pill > select {
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-family: var(--llm-font-ui);
+  font-size: 12px;
+  height: 100%;
+  padding: 0 22px 0 10px;
+  color: var(--text-normal);
+  cursor: pointer;
+  border-radius: 0;
+  text-overflow: ellipsis;
+  /* Custom chevron — smaller and tonal */
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
+                    linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+  background-position: right 10px center, right 6px center;
+  background-size: 4px 4px, 4px 4px;
+  background-repeat: no-repeat;
+}
+
+.llm-selector-pill > select + select {
+  border-left: 1px solid var(--llm-border);
+}
+
+.llm-selector-pill .llm-provider-select {
+  color: var(--llm-accent);
+  font-weight: 600;
   flex: 0 1 auto;
-  max-width: 100px;
+  max-width: 140px;
+}
+
+.llm-selector-pill .llm-model-select {
+  color: var(--text-normal);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.llm-selector-pill .llm-system-prompt-select {
+  color: var(--text-muted);
+  font-size: 11px;
+  flex: 0 1 auto;
+  max-width: 120px;
+}
+
+.llm-selector-pill > select:hover {
+  background-color: var(--llm-accent-subtle);
 }
 
 .llm-export-btn,
 .llm-pin-note-btn {
-  padding: 4px !important;
+  padding: 5px !important;
   color: var(--text-muted);
   flex-shrink: 0;
+  border-radius: 6px;
+  transition: color 120ms ease, background-color 120ms ease;
 }
 
 .llm-export-btn:hover,
 .llm-pin-note-btn:hover {
   color: var(--text-normal);
+  background-color: var(--llm-accent-subtle);
 }
 
 .llm-pin-note-btn.llm-pin-active {
   color: var(--llm-accent);
+  background-color: var(--llm-accent-subtle);
 }
 
 /* ============================================

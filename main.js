@@ -22047,7 +22047,8 @@ var ChatView = class extends import_obsidian4.ItemView {
     }
     this.renderTabs();
     const selectorRow = header.createDiv({ cls: "llm-selector-row" });
-    this.providerSelectEl = selectorRow.createEl("select", { cls: "llm-provider-select" });
+    const selectorPill = selectorRow.createDiv({ cls: "llm-selector-pill" });
+    this.providerSelectEl = selectorPill.createEl("select", { cls: "llm-provider-select" });
     const allProviders = ["claude", "opencode", "codex", "gemini", "local"];
     const enabledProviders = allProviders.filter((p) => {
       var _a3;
@@ -22070,7 +22071,7 @@ var ChatView = class extends import_obsidian4.ItemView {
       this.refreshModelSelect();
       this.connectAcpIfEnabled();
     });
-    this.modelSelectEl = selectorRow.createEl("select", { cls: "llm-model-select" });
+    this.modelSelectEl = selectorPill.createEl("select", { cls: "llm-model-select" });
     this.modelSelectEl.addEventListener("change", async () => {
       const newModel = this.modelSelectEl.value;
       this.plugin.settings.providers[this.currentProvider].model = newModel || void 0;
@@ -22078,7 +22079,7 @@ var ChatView = class extends import_obsidian4.ItemView {
       this.plugin.updateStatusBar(this.currentProvider);
     });
     this.refreshModelSelect();
-    this.systemPromptSelectEl = selectorRow.createEl("select", {
+    this.systemPromptSelectEl = selectorPill.createEl("select", {
       cls: "llm-system-prompt-select",
       attr: { "aria-label": "System prompt" }
     });
