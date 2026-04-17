@@ -49,6 +49,7 @@ export class VaultSearch {
 
   private static readonly MAX_CHUNK_CHARS = 2000;
   private static readonly MODIFY_DEBOUNCE_MS = 1000;
+  static debugEnabled = false;
 
   constructor(app: App) {
     this.app = app;
@@ -58,8 +59,13 @@ export class VaultSearch {
       storeFields: ["path", "title", "heading"],
       searchOptions: {
         boost: { title: 3, heading: 2, tags: 2, content: 1 },
-        fuzzy: 0.2,
-        prefix: true,
+        // Fuzzy/prefix expansion is off by default for RAG queries. Applying
+        // them to every word of a long chat prompt explodes candidate count on
+        // large vaults (multiple hundreds of ms on 10k+ chunks) while adding
+        // little value — RAG wants semantic/keyword hits, not typo recovery.
+        // Long terms (≥6 chars) still get a tiny fuzzy budget for robustness.
+        fuzzy: (term) => (term.length >= 6 ? 0.1 : 0),
+        prefix: (term) => term.length >= 5,
       },
     });
   }
@@ -339,6 +345,42 @@ export class VaultSearch {
     };
   }
 
+  private static readonly STOPWORDS = new Set([
+    "a", "an", "and", "or", "but", "the", "is", "are", "was", "were", "be",
+    "been", "being", "to", "of", "in", "on", "at", "for", "with", "as", "by",
+    "from", "this", "that", "these", "those", "it", "its", "i", "you", "we",
+    "they", "he", "she", "my", "your", "our", "their", "can", "could", "should",
+    "would", "will", "do", "does", "did", "have", "has", "had", "not", "no",
+    "yes", "if", "then", "so", "than", "there", "here", "what", "how", "why",
+    "when", "which", "who", "whom", "please", "help", "me",
+    // German
+    "der", "die", "das", "und", "oder", "aber", "ist", "sind", "war", "waren",
+    "ich", "du", "er", "sie", "es", "wir", "ihr", "mein", "dein", "sein",
+    "nicht", "kein", "eine", "einen", "einem", "einer", "ein", "im", "am",
+    "auf", "mit", "von", "zu", "bei", "für", "als", "wie", "was", "wer",
+    "wo", "warum", "wenn", "dann", "auch", "nur", "bitte", "mal",
+  ]);
+
+  // Shrinks MiniSearch candidate expansion by dropping stopwords / short tokens
+  // and capping term count — RAG quality stays, runtime drops on large vaults.
+  private normalizeQuery(query: string): string {
+    const tokens = query
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]/gu, " ")
+      .split(/\s+/)
+      .filter((t) => t.length >= 3 && !VaultSearch.STOPWORDS.has(t));
+
+    const seen = new Set<string>();
+    const unique: string[] = [];
+    for (const t of tokens) {
+      if (seen.has(t)) continue;
+      seen.add(t);
+      unique.push(t);
+      if (unique.length >= 12) break;
+    }
+    return unique.join(" ");
+  }
+
   /**
    * Search the vault for chunks relevant to a query.
    * Active note chunks are always boosted to the top.
@@ -352,7 +394,20 @@ export class VaultSearch {
   }[]> {
     await this.ensureIndex();
 
-    const results = this.index.search(query).slice(0, maxResults + 10);
+    const normalizedQuery = this.normalizeQuery(query);
+    if (!normalizedQuery) return [];
+
+    const debug = VaultSearch.debugEnabled;
+    const t0 = debug ? performance.now() : 0;
+    const rawResults = this.index.search(normalizedQuery);
+    if (debug) {
+      console.log(
+        `[VaultSearch] index.search: ${(performance.now() - t0).toFixed(1)}ms` +
+        ` | terms=${normalizedQuery.split(" ").length} hits=${rawResults.length}` +
+        ` | docs=${this.index.documentCount}`
+      );
+    }
+    const results = rawResults.slice(0, maxResults + 10);
 
     const activeNote = this.getActiveNoteContext();
     const activePath = activeNote?.path;
@@ -450,5 +505,15 @@ export class VaultSearch {
 
   get documentCount(): number {
     return this.index.documentCount;
+  }
+
+  /**
+   * True once the initial batch index has completed. Callers that are
+   * latency-sensitive (e.g., time-to-first-token in chat) can use this to
+   * skip RAG when the index is still warming up instead of blocking on
+   * `ensureIndex()`.
+   */
+  get isReady(): boolean {
+    return this.indexed;
   }
 }
