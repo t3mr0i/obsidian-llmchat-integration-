@@ -351,11 +351,27 @@ function getShellEnv(extra) {
     ...extra
   };
 }
-var import_child_process2, cachedPath;
+function prewarmShellPath() {
+  if (cachedPath) return Promise.resolve();
+  if (prewarmPromise) return prewarmPromise;
+  prewarmPromise = new Promise((resolve) => {
+    const shell = process.env.SHELL || "/bin/zsh";
+    (0, import_child_process2.exec)(`${shell} -ilc 'echo $PATH'`, { timeout: 5e3, encoding: "utf-8" }, (err, stdout) => {
+      if (!err && stdout) {
+        const trimmed = stdout.trim();
+        if (trimmed) cachedPath = trimmed;
+      }
+      resolve();
+    });
+  });
+  return prewarmPromise;
+}
+var import_child_process2, cachedPath, prewarmPromise;
 var init_shellPath = __esm({
   "src/utils/shellPath.ts"() {
     import_child_process2 = require("child_process");
     cachedPath = null;
+    prewarmPromise = null;
   }
 });
 
@@ -19461,6 +19477,33 @@ var AcpExecutor = class {
     return this.getThinkingOptions() !== null;
   }
   /**
+   * Start a fresh session on the *existing* connection.
+   * Used when the user switches chat tabs / clears the chat — avoids killing
+   * and respawning the agent child process just to get a clean context.
+   * Falls back to a full disconnect if the agent rejects `newSession`.
+   */
+  async resetSession(cwd) {
+    var _a3, _b;
+    if (!this.connection || !this.currentProvider) return;
+    try {
+      const sessionResponse = await this.connection.newSession({
+        cwd,
+        mcpServers: []
+      });
+      this.sessionId = sessionResponse.sessionId;
+      this.configOptions = (_a3 = sessionResponse.configOptions) != null ? _a3 : [];
+      this.modelState = (_b = sessionResponse.models) != null ? _b : null;
+      this.progressCallback = null;
+      if (this.modelState) {
+        setAcpModels(this.currentProvider, this.modelState.availableModels);
+      }
+      this.debug("Session reset on existing connection:", this.sessionId);
+    } catch (err) {
+      this.debug("resetSession failed, falling back to full disconnect:", err);
+      await this.disconnect();
+    }
+  }
+  /**
    * Disconnect from the agent
    */
   async disconnect() {
@@ -21381,8 +21424,13 @@ var _VaultSearch = class _VaultSearch {
       storeFields: ["path", "title", "heading"],
       searchOptions: {
         boost: { title: 3, heading: 2, tags: 2, content: 1 },
-        fuzzy: 0.2,
-        prefix: true
+        // Fuzzy/prefix expansion is off by default for RAG queries. Applying
+        // them to every word of a long chat prompt explodes candidate count on
+        // large vaults (multiple hundreds of ms on 10k+ chunks) while adding
+        // little value — RAG wants semantic/keyword hits, not typo recovery.
+        // Long terms (≥6 chars) still get a tiny fuzzy budget for robustness.
+        fuzzy: (term) => term.length >= 6 ? 0.1 : 0,
+        prefix: (term) => term.length >= 5
       }
     });
   }
@@ -21619,13 +21667,37 @@ var _VaultSearch = class _VaultSearch {
       content: view.editor.getValue()
     };
   }
+  // Shrinks MiniSearch candidate expansion by dropping stopwords / short tokens
+  // and capping term count — RAG quality stays, runtime drops on large vaults.
+  normalizeQuery(query) {
+    const tokens = query.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter((t) => t.length >= 3 && !_VaultSearch.STOPWORDS.has(t));
+    const seen = /* @__PURE__ */ new Set();
+    const unique = [];
+    for (const t of tokens) {
+      if (seen.has(t)) continue;
+      seen.add(t);
+      unique.push(t);
+      if (unique.length >= 12) break;
+    }
+    return unique.join(" ");
+  }
   /**
    * Search the vault for chunks relevant to a query.
    * Active note chunks are always boosted to the top.
    */
   async search(query, maxResults = 15) {
     await this.ensureIndex();
-    const results = this.index.search(query).slice(0, maxResults + 10);
+    const normalizedQuery = this.normalizeQuery(query);
+    if (!normalizedQuery) return [];
+    const debug = _VaultSearch.debugEnabled;
+    const t0 = debug ? performance.now() : 0;
+    const rawResults = this.index.search(normalizedQuery);
+    if (debug) {
+      console.log(
+        `[VaultSearch] index.search: ${(performance.now() - t0).toFixed(1)}ms | terms=${normalizedQuery.split(" ").length} hits=${rawResults.length} | docs=${this.index.documentCount}`
+      );
+    }
+    const results = rawResults.slice(0, maxResults + 10);
     const activeNote = this.getActiveNoteContext();
     const activePath = activeNote == null ? void 0 : activeNote.path;
     const activeResults = results.filter((r) => r.path === activePath);
@@ -21698,9 +21770,138 @@ ${activeContent}
   get documentCount() {
     return this.index.documentCount;
   }
+  /**
+   * True once the initial batch index has completed. Callers that are
+   * latency-sensitive (e.g., time-to-first-token in chat) can use this to
+   * skip RAG when the index is still warming up instead of blocking on
+   * `ensureIndex()`.
+   */
+  get isReady() {
+    return this.indexed;
+  }
 };
 _VaultSearch.MAX_CHUNK_CHARS = 2e3;
 _VaultSearch.MODIFY_DEBOUNCE_MS = 1e3;
+_VaultSearch.debugEnabled = false;
+_VaultSearch.STOPWORDS = /* @__PURE__ */ new Set([
+  "a",
+  "an",
+  "and",
+  "or",
+  "but",
+  "the",
+  "is",
+  "are",
+  "was",
+  "were",
+  "be",
+  "been",
+  "being",
+  "to",
+  "of",
+  "in",
+  "on",
+  "at",
+  "for",
+  "with",
+  "as",
+  "by",
+  "from",
+  "this",
+  "that",
+  "these",
+  "those",
+  "it",
+  "its",
+  "i",
+  "you",
+  "we",
+  "they",
+  "he",
+  "she",
+  "my",
+  "your",
+  "our",
+  "their",
+  "can",
+  "could",
+  "should",
+  "would",
+  "will",
+  "do",
+  "does",
+  "did",
+  "have",
+  "has",
+  "had",
+  "not",
+  "no",
+  "yes",
+  "if",
+  "then",
+  "so",
+  "than",
+  "there",
+  "here",
+  "what",
+  "how",
+  "why",
+  "when",
+  "which",
+  "who",
+  "whom",
+  "please",
+  "help",
+  "me",
+  // German
+  "der",
+  "die",
+  "das",
+  "und",
+  "oder",
+  "aber",
+  "ist",
+  "sind",
+  "war",
+  "waren",
+  "ich",
+  "du",
+  "er",
+  "sie",
+  "es",
+  "wir",
+  "ihr",
+  "mein",
+  "dein",
+  "sein",
+  "nicht",
+  "kein",
+  "eine",
+  "einen",
+  "einem",
+  "einer",
+  "ein",
+  "im",
+  "am",
+  "auf",
+  "mit",
+  "von",
+  "zu",
+  "bei",
+  "f\xFCr",
+  "als",
+  "wie",
+  "was",
+  "wer",
+  "wo",
+  "warum",
+  "wenn",
+  "dann",
+  "auch",
+  "nur",
+  "bitte",
+  "mal"
+]);
 var VaultSearch = _VaultSearch;
 
 // src/views/ChatView.ts
@@ -21788,6 +21989,10 @@ var ChatView = class extends import_obsidian4.ItemView {
     // Per-session system prompt override (null = use settings value)
     this.sessionSystemPromptFile = null;
     this.systemPromptSelectEl = null;
+    // Streaming render throttle — coalesce many onStream calls into one render per frame
+    this.pendingStreamingContent = null;
+    this.streamingRafHandle = null;
+    this.streamingMarkdownPossible = false;
     this.providerSelectEl = null;
     this.modelSelectEl = null;
     /** Number of messages already rendered in the DOM */
@@ -21820,6 +22025,7 @@ var ChatView = class extends import_obsidian4.ItemView {
       var _a3;
       return (_a3 = this.inputEl) == null ? void 0 : _a3.focus();
     }, 50);
+    VaultSearch.debugEnabled = this.plugin.settings.debugMode;
     this.vaultSearch.ensureIndex();
     this.connectAcpIfEnabled();
     this.registerEvent(
@@ -22060,12 +22266,28 @@ var ChatView = class extends import_obsidian4.ItemView {
       this.sessionSystemPromptFile = this.systemPromptSelectEl.value || null;
     };
   }
+  /**
+   * Drop all per-conversation server-side session state.
+   * Must be called on tab switch / new chat / clear chat — otherwise
+   * `--resume <old-session>` or the persistent ACP session would bleed
+   * previous-conversation memory into the new one (and the history-skip
+   * optimization would hide this from the user).
+   */
+  resetTransportSessions() {
+    var _a3;
+    this.executor.clearSession();
+    if (this.acpExecutor.isConnected()) {
+      const cwd = (_a3 = this.getVaultPath()) != null ? _a3 : "";
+      void this.acpExecutor.resetSession(cwd);
+    }
+  }
   createNewChat() {
     const id = `chat-${Date.now()}`;
     const num = this.chatTabs.length + 1;
     this.chatTabs.push({ id, name: `Chat ${num}`, messages: [] });
     this.activeChatId = id;
     this.messages = this.chatTabs[this.chatTabs.length - 1].messages;
+    this.resetTransportSessions();
     return id;
   }
   switchChat(id) {
@@ -22075,6 +22297,7 @@ var ChatView = class extends import_obsidian4.ItemView {
     if (!target) return;
     this.activeChatId = id;
     this.messages = target.messages;
+    this.resetTransportSessions();
     this.renderTabs();
     this.renderMessagesContent(true);
   }
@@ -22151,6 +22374,7 @@ var ChatView = class extends import_obsidian4.ItemView {
       if (this.messages.length === 0) return;
       const backup = [...this.messages];
       this.messages = [];
+      this.resetTransportSessions();
       this.renderMessagesContent(true);
       this.persistSessions();
       const notice = new import_obsidian4.Notice("Chat cleared.", 5e3);
@@ -23130,16 +23354,11 @@ Assistant answered: ${assistantResponse.slice(0, 500)}`;
   getContextBudget() {
     var _a3;
     const budgets = {
-      claude: 5e4,
-      // 200k token context
-      opencode: 5e4,
-      // Depends on model, but most are large
-      gemini: 3e4,
-      // 1M+ context, generous budget
-      codex: 3e4,
-      // Large context models
+      claude: 15e3,
+      opencode: 15e3,
+      gemini: 15e3,
+      codex: 15e3,
       local: 4e3
-      // Often 4-8k context, be conservative
     };
     return (_a3 = budgets[this.currentProvider]) != null ? _a3 : 12e3;
   }
@@ -23292,10 +23511,16 @@ Assistant answered: ${assistantResponse.slice(0, 500)}`;
     this.messages.push(userMessage);
     await this.renderMessagesContent();
     this.setLoading(true);
-    const contextPrompt = await this.buildContextPrompt(prompt);
+    const debug = this.plugin.settings.debugMode;
+    const tSend = debug ? performance.now() : 0;
+    let tFirstToken = 0;
     try {
       let streamedContent = "";
       const onStream = (chunk) => {
+        if (debug && tFirstToken === 0) {
+          tFirstToken = performance.now();
+          console.log(`[ChatView] time-to-first-token: ${(tFirstToken - tSend).toFixed(0)}ms`);
+        }
         streamedContent = chunk;
         this.updateStreamingMessage(streamedContent);
       };
@@ -23344,7 +23569,9 @@ Assistant answered: ${assistantResponse.slice(0, 500)}`;
             this.plugin.updateStatusBar(this.currentProvider, currentModel.name);
           }
         }
-        const acpResponse = await this.acpExecutor.prompt(contextPrompt, { onProgress });
+        const acpSessionActive = this.messages.length >= 3;
+        const acpPrompt = await this.buildContextPrompt(prompt, acpSessionActive);
+        const acpResponse = await this.acpExecutor.prompt(acpPrompt, { onProgress });
         const content = acpResponse.content;
         if (!content && !acpResponse.error) {
           if (this.plugin.settings.debugMode) console.warn("[ChatView] ACP response has no content - this may indicate a problem");
@@ -23356,8 +23583,10 @@ Assistant answered: ${assistantResponse.slice(0, 500)}`;
           error: acpResponse.error || (!content ? "No response received from agent" : void 0)
         };
       } else {
+        const cliSessionActive = this.executor.hasSession(this.currentProvider);
+        const cliPrompt = await this.buildContextPrompt(prompt, cliSessionActive);
         response = await this.executor.execute(
-          contextPrompt,
+          cliPrompt,
           this.currentProvider,
           this.plugin.settings.streamOutput ? onStream : void 0,
           onProgress,
@@ -23756,11 +23985,20 @@ ${content}`);
   async buildSystemContext(prompt) {
     const skipRag = this.pendingSkipRag;
     this.pendingSkipRag = false;
+    const indexNotReady = !this.vaultSearch.isReady;
+    const debug = this.plugin.settings.debugMode;
+    const t0 = debug ? performance.now() : 0;
     const [systemPrompt, referencedNotes, vaultContext] = await Promise.all([
       this.getSystemPrompt(),
       this.resolveNoteReferences(prompt),
-      skipRag ? Promise.resolve("") : this.vaultSearch.buildContext(prompt, this.getContextBudget())
+      skipRag || indexNotReady ? Promise.resolve("") : this.vaultSearch.buildContext(prompt, this.getContextBudget())
     ]);
+    if (debug) {
+      const totalChars = systemPrompt.length + referencedNotes.length + vaultContext.length;
+      console.log(
+        `[ChatView] buildSystemContext: ${(performance.now() - t0).toFixed(1)}ms | system=${systemPrompt.length} refs=${referencedNotes.length} vault=${vaultContext.length} total=${totalChars} | skipRag=${skipRag} indexReady=${!indexNotReady}`
+      );
+    }
     const parts = [];
     if (systemPrompt) parts.push(systemPrompt);
     if (this.pinnedNote && !this.contextDismissed) {
@@ -23777,13 +24015,21 @@ ${content}`);
     if (vaultContext) parts.push(vaultContext);
     return parts.join("\n\n");
   }
-  async buildContextPrompt(currentPrompt) {
+  /**
+   * Build the full prompt sent to the model.
+   * @param currentPrompt User's new message
+   * @param sessionActive When true, the transport keeps its own server-side history
+   *   (CLI --resume with existing session, or persistent ACP session). We skip
+   *   re-sending conversation history to avoid doubling input tokens each turn,
+   *   which directly hurts time-to-first-token.
+   */
+  async buildContextPrompt(currentPrompt, sessionActive = false) {
     const systemContext = await this.buildSystemContext(currentPrompt);
     const contextParts = [];
     if (systemContext) {
       contextParts.push(`System: ${systemContext}`);
     }
-    if (this.plugin.settings.conversationHistory.enabled && this.messages.length > 1) {
+    if (!sessionActive && this.plugin.settings.conversationHistory.enabled && this.messages.length > 1) {
       const maxMessages = this.plugin.settings.conversationHistory.maxMessages;
       const recentMessages = this.messages.slice(-maxMessages - 1, -1);
       recentMessages.forEach((msg) => {
@@ -23810,7 +24056,23 @@ ${content}`);
       loadingEl == null ? void 0 : loadingEl.remove();
     }
   }
-  async updateStreamingMessage(content) {
+  /**
+   * Queue a streaming content update. Multiple calls in the same frame
+   * collapse to a single render via requestAnimationFrame. The expensive
+   * MarkdownRenderer.render() path only runs when markdown syntax is
+   * detected — plain-text runs use a cheap textContent update.
+   */
+  updateStreamingMessage(content) {
+    this.pendingStreamingContent = content;
+    if (this.streamingRafHandle !== null) return;
+    this.streamingRafHandle = requestAnimationFrame(() => {
+      this.streamingRafHandle = null;
+      const pending = this.pendingStreamingContent;
+      this.pendingStreamingContent = null;
+      if (pending !== null) void this.flushStreamingMessage(pending);
+    });
+  }
+  async flushStreamingMessage(content) {
     var _a3;
     if (!this.messagesContainer) return;
     let streamingEl = this.messagesContainer.querySelector(
@@ -23833,30 +24095,45 @@ ${content}`);
       headerEl.createSpan({ text: "...", cls: "llm-message-time" });
       const bubbleEl = bodyEl.createDiv({ cls: "llm-message-bubble" });
       bubbleEl.createDiv({ cls: "llm-message-content" });
+      this.streamingMarkdownPossible = false;
     }
     const contentEl = streamingEl.querySelector(".llm-message-content");
     if (contentEl) {
-      contentEl.empty();
-      const activeFile = this.app.workspace.getActiveFile();
-      const sourcePath = (_a3 = activeFile == null ? void 0 : activeFile.path) != null ? _a3 : "";
       const cleanContent = content.replace(/▋/g, "");
-      const component = new import_obsidian4.Component();
-      component.load();
-      await import_obsidian4.MarkdownRenderer.render(
-        this.app,
-        cleanContent,
-        contentEl,
-        sourcePath,
-        component
-      );
-      component.unload();
-      const cursor = contentEl.createSpan({ cls: "llm-streaming-cursor", text: "\u258B" });
-      const lastP = contentEl.lastElementChild;
-      if (lastP && lastP !== cursor) lastP.appendChild(cursor);
+      if (!this.streamingMarkdownPossible && /[`*_#>\[\]]|^\s*[-*+]\s|^\s*\d+\.\s/m.test(cleanContent)) {
+        this.streamingMarkdownPossible = true;
+      }
+      if (this.streamingMarkdownPossible) {
+        contentEl.empty();
+        const activeFile = this.app.workspace.getActiveFile();
+        const sourcePath = (_a3 = activeFile == null ? void 0 : activeFile.path) != null ? _a3 : "";
+        const component = new import_obsidian4.Component();
+        component.load();
+        await import_obsidian4.MarkdownRenderer.render(
+          this.app,
+          cleanContent,
+          contentEl,
+          sourcePath,
+          component
+        );
+        component.unload();
+        const cursor = contentEl.createSpan({ cls: "llm-streaming-cursor", text: "\u258B" });
+        const lastP = contentEl.lastElementChild;
+        if (lastP && lastP !== cursor) lastP.appendChild(cursor);
+      } else {
+        contentEl.textContent = cleanContent;
+        contentEl.createSpan({ cls: "llm-streaming-cursor", text: "\u258B" });
+      }
     }
     this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
   }
   removeStreamingMessage() {
+    if (this.streamingRafHandle !== null) {
+      cancelAnimationFrame(this.streamingRafHandle);
+      this.streamingRafHandle = null;
+    }
+    this.pendingStreamingContent = null;
+    this.streamingMarkdownPossible = false;
     if (!this.messagesContainer) return;
     const streamingEl = this.messagesContainer.querySelector(
       ".llm-message-streaming"
@@ -24060,6 +24337,7 @@ ${content}`);
 // main.ts
 init_LLMExecutor();
 init_autoDetect();
+init_shellPath();
 var LLMPlugin = class extends import_obsidian5.Plugin {
   constructor() {
     super(...arguments);
@@ -24069,6 +24347,7 @@ var LLMPlugin = class extends import_obsidian5.Plugin {
   }
   async onload() {
     await this.loadSettings();
+    void prewarmShellPath();
     this.autoDetect();
     this.executor = new LLMExecutor(this.settings);
     this.registerView(CHAT_VIEW_TYPE, (leaf) => new ChatView(leaf, this));

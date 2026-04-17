@@ -69,6 +69,10 @@ export class ChatView extends ItemView {
   // Per-session system prompt override (null = use settings value)
   private sessionSystemPromptFile: string | null = null;
   private systemPromptSelectEl: HTMLSelectElement | null = null;
+  // Streaming render throttle — coalesce many onStream calls into one render per frame
+  private pendingStreamingContent: string | null = null;
+  private streamingRafHandle: number | null = null;
+  private streamingMarkdownPossible = false;
 
   constructor(leaf: WorkspaceLeaf, plugin: LLMPlugin) {
     super(leaf);
@@ -108,6 +112,7 @@ export class ChatView extends ItemView {
     setTimeout(() => this.inputEl?.focus(), 50);
 
     // Index vault in background for RAG search
+    VaultSearch.debugEnabled = this.plugin.settings.debugMode;
     this.vaultSearch.ensureIndex();
 
     // Eagerly connect to ACP if enabled for the current provider
@@ -413,12 +418,30 @@ export class ChatView extends ItemView {
     };
   }
 
+  /**
+   * Drop all per-conversation server-side session state.
+   * Must be called on tab switch / new chat / clear chat — otherwise
+   * `--resume <old-session>` or the persistent ACP session would bleed
+   * previous-conversation memory into the new one (and the history-skip
+   * optimization would hide this from the user).
+   */
+  private resetTransportSessions(): void {
+    this.executor.clearSession();
+    if (this.acpExecutor.isConnected()) {
+      const cwd = this.getVaultPath() ?? "";
+      // Reuse the existing agent process; only start a fresh ACP session.
+      // Full disconnect would force the next send to pay reconnect cost.
+      void this.acpExecutor.resetSession(cwd);
+    }
+  }
+
   private createNewChat(): string {
     const id = `chat-${Date.now()}`;
     const num = this.chatTabs.length + 1;
     this.chatTabs.push({ id, name: `Chat ${num}`, messages: [] });
     this.activeChatId = id;
     this.messages = this.chatTabs[this.chatTabs.length - 1].messages;
+    this.resetTransportSessions();
     return id;
   }
 
@@ -432,6 +455,7 @@ export class ChatView extends ItemView {
     if (!target) return;
     this.activeChatId = id;
     this.messages = target.messages;
+    this.resetTransportSessions();
     this.renderTabs();
     this.renderMessagesContent(true);
   }
@@ -520,6 +544,7 @@ export class ChatView extends ItemView {
       if (this.messages.length === 0) return;
       const backup = [...this.messages];
       this.messages = [];
+      this.resetTransportSessions();
       this.renderMessagesContent(true);
       this.persistSessions();
       // Undo via a link rendered inside the notice element
@@ -1624,12 +1649,16 @@ export class ChatView extends ItemView {
    * Get context budget (in chars) based on the current provider's context window.
    */
   private getContextBudget(): number {
+    // Budgets are tuned for *time-to-first-token*, not context-window fit.
+    // Larger budgets → more input tokens for the model to read before streaming
+    // starts, which directly delays the first visible word. Users can raise
+    // these via "Deep Vault" mode in the future if needed.
     const budgets: Record<LLMProvider, number> = {
-      claude: 50000,     // 200k token context
-      opencode: 50000,   // Depends on model, but most are large
-      gemini: 30000,     // 1M+ context, generous budget
-      codex: 30000,      // Large context models
-      local: 4000,       // Often 4-8k context, be conservative
+      claude: 15000,
+      opencode: 15000,
+      gemini: 15000,
+      codex: 15000,
+      local: 4000,
     };
     return budgets[this.currentProvider] ?? 12000;
   }
@@ -1848,13 +1877,18 @@ export class ChatView extends ItemView {
     // Show loading state
     this.setLoading(true);
 
-    // Build conversation context
-    const contextPrompt = await this.buildContextPrompt(prompt);
+    const debug = this.plugin.settings.debugMode;
+    const tSend = debug ? performance.now() : 0;
+    let tFirstToken = 0;
 
     try {
       // Stream callback for real-time text updates
       let streamedContent = "";
       const onStream = (chunk: string) => {
+        if (debug && tFirstToken === 0) {
+          tFirstToken = performance.now();
+          console.log(`[ChatView] time-to-first-token: ${(tFirstToken - tSend).toFixed(0)}ms`);
+        }
         streamedContent = chunk; // chunk is cumulative
         this.updateStreamingMessage(streamedContent);
       };
@@ -1931,7 +1965,13 @@ export class ChatView extends ItemView {
           }
         }
 
-        const acpResponse = await this.acpExecutor.prompt(contextPrompt, { onProgress });
+        // ACP session keeps history server-side across turns — skip history replay
+        // after the first turn. (messages has user+assistant pairs; >=3 means we
+        // already had at least one exchange before this new user turn was pushed.)
+        const acpSessionActive = this.messages.length >= 3;
+        const acpPrompt = await this.buildContextPrompt(prompt, acpSessionActive);
+
+        const acpResponse = await this.acpExecutor.prompt(acpPrompt, { onProgress });
 
         // Use ACP accumulated content (streamedContent won't be set for ACP mode)
         const content = acpResponse.content;
@@ -1948,9 +1988,14 @@ export class ChatView extends ItemView {
           error: acpResponse.error || (!content ? "No response received from agent" : undefined),
         };
       } else {
-        // Use regular CLI executor
+        // CLI with --resume on claude/gemini/opencode keeps session state server-side.
+        // Skip replaying history once a session id is known — avoids doubling input
+        // tokens each turn and cuts time-to-first-token.
+        const cliSessionActive = this.executor.hasSession(this.currentProvider);
+        const cliPrompt = await this.buildContextPrompt(prompt, cliSessionActive);
+
         response = await this.executor.execute(
-          contextPrompt,
+          cliPrompt,
           this.currentProvider,
           this.plugin.settings.streamOutput ? onStream : undefined,
           onProgress,
@@ -2471,15 +2516,28 @@ export class ChatView extends ItemView {
    * Gather system context: system prompt, pinned note, referenced notes, vault RAG.
    */
   private async buildSystemContext(prompt: string): Promise<string> {
-    // Skip vault RAG when note content is already embedded (quick-actions) — avoids index-wait delay
     const skipRag = this.pendingSkipRag;
     this.pendingSkipRag = false;
+    const indexNotReady = !this.vaultSearch.isReady;
+    const debug = this.plugin.settings.debugMode;
+    const t0 = debug ? performance.now() : 0;
 
     const [systemPrompt, referencedNotes, vaultContext] = await Promise.all([
       this.getSystemPrompt(),
       this.resolveNoteReferences(prompt),
-      skipRag ? Promise.resolve("") : this.vaultSearch.buildContext(prompt, this.getContextBudget()),
+      skipRag || indexNotReady
+        ? Promise.resolve("")
+        : this.vaultSearch.buildContext(prompt, this.getContextBudget()),
     ]);
+
+    if (debug) {
+      const totalChars = systemPrompt.length + referencedNotes.length + vaultContext.length;
+      console.log(
+        `[ChatView] buildSystemContext: ${(performance.now() - t0).toFixed(1)}ms` +
+        ` | system=${systemPrompt.length} refs=${referencedNotes.length} vault=${vaultContext.length} total=${totalChars}` +
+        ` | skipRag=${skipRag} indexReady=${!indexNotReady}`
+      );
+    }
     const parts: string[] = [];
     if (systemPrompt) parts.push(systemPrompt);
 
@@ -2500,7 +2558,15 @@ export class ChatView extends ItemView {
     return parts.join("\n\n");
   }
 
-  private async buildContextPrompt(currentPrompt: string): Promise<string> {
+  /**
+   * Build the full prompt sent to the model.
+   * @param currentPrompt User's new message
+   * @param sessionActive When true, the transport keeps its own server-side history
+   *   (CLI --resume with existing session, or persistent ACP session). We skip
+   *   re-sending conversation history to avoid doubling input tokens each turn,
+   *   which directly hurts time-to-first-token.
+   */
+  private async buildContextPrompt(currentPrompt: string, sessionActive = false): Promise<string> {
     const systemContext = await this.buildSystemContext(currentPrompt);
 
     const contextParts: string[] = [];
@@ -2509,8 +2575,9 @@ export class ChatView extends ItemView {
       contextParts.push(`System: ${systemContext}`);
     }
 
-    // Add conversation history if enabled
+    // Only replay conversation history when the transport does NOT persist it itself
     if (
+      !sessionActive &&
       this.plugin.settings.conversationHistory.enabled &&
       this.messages.length > 1
     ) {
@@ -2551,7 +2618,24 @@ export class ChatView extends ItemView {
     }
   }
 
-  private async updateStreamingMessage(content: string) {
+  /**
+   * Queue a streaming content update. Multiple calls in the same frame
+   * collapse to a single render via requestAnimationFrame. The expensive
+   * MarkdownRenderer.render() path only runs when markdown syntax is
+   * detected — plain-text runs use a cheap textContent update.
+   */
+  private updateStreamingMessage(content: string) {
+    this.pendingStreamingContent = content;
+    if (this.streamingRafHandle !== null) return;
+    this.streamingRafHandle = requestAnimationFrame(() => {
+      this.streamingRafHandle = null;
+      const pending = this.pendingStreamingContent;
+      this.pendingStreamingContent = null;
+      if (pending !== null) void this.flushStreamingMessage(pending);
+    });
+  }
+
+  private async flushStreamingMessage(content: string) {
     if (!this.messagesContainer) return;
 
     let streamingEl = this.messagesContainer.querySelector(
@@ -2581,40 +2665,56 @@ export class ChatView extends ItemView {
 
       const bubbleEl = bodyEl.createDiv({ cls: "llm-message-bubble" });
       bubbleEl.createDiv({ cls: "llm-message-content" });
+      this.streamingMarkdownPossible = false;
     }
 
     const contentEl = streamingEl.querySelector(".llm-message-content") as HTMLElement;
     if (contentEl) {
-      // Clear and render markdown — strip any leftover cursor char first
-      contentEl.empty();
-      const activeFile = this.app.workspace.getActiveFile();
-      const sourcePath = activeFile?.path ?? "";
       const cleanContent = content.replace(/▋/g, "");
 
-      // Use a temporary component for streaming renders
-      const component = new Component();
-      component.load();
-      await MarkdownRenderer.render(
-        this.app,
-        cleanContent,
-        contentEl,
-        sourcePath,
-        component
-      );
-      // Don't track this component - it gets replaced on each update
-      component.unload();
+      // Sticky markdown detection: once we see markdown syntax, keep rendering as markdown.
+      // Common markers: fenced code, inline code, bold/italic, headings, lists, links, blockquotes.
+      if (!this.streamingMarkdownPossible && /[`*_#>\[\]]|^\s*[-*+]\s|^\s*\d+\.\s/m.test(cleanContent)) {
+        this.streamingMarkdownPossible = true;
+      }
 
-      // Append blinking cursor after the last text node
-      const cursor = contentEl.createSpan({ cls: "llm-streaming-cursor", text: "▋" });
-      // Move cursor to end of last paragraph/element if possible
-      const lastP = contentEl.lastElementChild;
-      if (lastP && lastP !== cursor) lastP.appendChild(cursor);
+      if (this.streamingMarkdownPossible) {
+        contentEl.empty();
+        const activeFile = this.app.workspace.getActiveFile();
+        const sourcePath = activeFile?.path ?? "";
+
+        const component = new Component();
+        component.load();
+        await MarkdownRenderer.render(
+          this.app,
+          cleanContent,
+          contentEl,
+          sourcePath,
+          component
+        );
+        component.unload();
+
+        const cursor = contentEl.createSpan({ cls: "llm-streaming-cursor", text: "▋" });
+        const lastP = contentEl.lastElementChild;
+        if (lastP && lastP !== cursor) lastP.appendChild(cursor);
+      } else {
+        // Plain-text fast path — no markdown parse, much cheaper
+        contentEl.textContent = cleanContent;
+        contentEl.createSpan({ cls: "llm-streaming-cursor", text: "▋" });
+      }
     }
 
     this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
   }
 
   private removeStreamingMessage() {
+    // Cancel any pending throttled render so it can't resurrect the element
+    if (this.streamingRafHandle !== null) {
+      cancelAnimationFrame(this.streamingRafHandle);
+      this.streamingRafHandle = null;
+    }
+    this.pendingStreamingContent = null;
+    this.streamingMarkdownPossible = false;
     if (!this.messagesContainer) return;
     const streamingEl = this.messagesContainer.querySelector(
       ".llm-message-streaming"
