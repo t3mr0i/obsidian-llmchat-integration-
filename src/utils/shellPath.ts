@@ -1,6 +1,7 @@
-import { execSync } from "child_process";
+import { execSync, exec } from "child_process";
 
 let cachedPath: string | null = null;
+let prewarmPromise: Promise<void> | null = null;
 
 /**
  * Get the full user shell PATH.
@@ -55,4 +56,23 @@ export function getShellEnv(extra?: Record<string, string>): Record<string, stri
     PATH: getShellPATH(),
     ...extra,
   };
+}
+
+// Resolve the shell PATH asynchronously on plugin load so the first real spawn
+// doesn't pay the login-shell boot cost (can be 100–500 ms).
+export function prewarmShellPath(): Promise<void> {
+  if (cachedPath) return Promise.resolve();
+  if (prewarmPromise) return prewarmPromise;
+
+  prewarmPromise = new Promise<void>((resolve) => {
+    const shell = process.env.SHELL || "/bin/zsh";
+    exec(`${shell} -ilc 'echo $PATH'`, { timeout: 5000, encoding: "utf-8" }, (err, stdout) => {
+      if (!err && stdout) {
+        const trimmed = stdout.trim();
+        if (trimmed) cachedPath = trimmed;
+      }
+      resolve();
+    });
+  });
+  return prewarmPromise;
 }

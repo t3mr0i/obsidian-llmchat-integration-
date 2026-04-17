@@ -6,6 +6,7 @@ import { QuickPromptModal } from "./src/modals";
 import { ChatView, CHAT_VIEW_TYPE } from "./src/views";
 import { LLMExecutor } from "./src/executor/LLMExecutor";
 import { autoDetectProviders, applyDetectionResults } from "./src/utils/autoDetect";
+import { prewarmShellPath } from "./src/utils/shellPath";
 
 export interface ChatSession {
   id: string;
@@ -21,6 +22,10 @@ export default class LLMPlugin extends Plugin {
 
   async onload() {
     await this.loadSettings();
+
+    // Resolve user's shell PATH async so the first CLI spawn doesn't pay
+    // the login-shell boot cost on the critical path.
+    void prewarmShellPath();
 
     // Auto-detect providers in the background (don't block startup)
     this.autoDetect();
