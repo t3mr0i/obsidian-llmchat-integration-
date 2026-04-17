@@ -1,6 +1,6 @@
 {
   "name": "obsidian-llm",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Obsidian plugin for integrating with multiple LLM CLI tools",
   "main": "main.js",
   "scripts": {
