@@ -113,21 +113,20 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
-  margin-left: 6px;
+  width: 22px;
+  height: 22px;
+  margin-left: 4px;
   padding: 0;
-  border-radius: 4px;
+  border-radius: 6px;
   background: transparent;
-  border: 1px dashed var(--llm-border);
+  border: none;
   color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.1s;
+  transition: background-color 120ms ease, color 120ms ease;
   flex-shrink: 0;
 }
 
 .llm-tab-new:hover {
-  border-color: var(--llm-accent);
   color: var(--llm-accent);
   background-color: var(--llm-accent-subtle);
 }
@@ -602,18 +601,19 @@
 }
 
 .llm-quick-action-btn {
-  padding: 4px 12px;
-  border-radius: 16px;
+  padding: 4px 11px;
+  border-radius: 999px;
   font-size: 11px;
-  background-color: var(--background-secondary);
+  background-color: transparent;
   border: 1px solid var(--llm-border);
   color: var(--text-muted);
   white-space: nowrap;
   cursor: pointer;
-  transition: background-color 0.1s, border-color 0.1s, color 0.1s, transform 0.1s, box-shadow 0.1s;
+  transition: background-color 120ms ease, border-color 120ms ease,
+              color 120ms ease, transform 80ms ease;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   position: relative;
   overflow: hidden;
 }
@@ -621,28 +621,27 @@
 .llm-quick-action-btn:hover {
   background-color: var(--llm-accent-subtle);
   border-color: var(--llm-accent);
-  color: var(--text-normal);
+  color: var(--llm-accent);
 }
 
 .llm-quick-action-btn:active {
-  transform: scale(0.93);
+  transform: scale(0.96);
   background-color: var(--llm-accent);
   border-color: var(--llm-accent);
-  color: #fff;
-  box-shadow: 0 0 0 3px rgba(var(--interactive-accent-rgb), 0.3);
+  color: var(--text-on-accent);
 }
 
 .llm-quick-action-btn.llm-quick-action-active {
   background-color: var(--llm-accent);
   border-color: var(--llm-accent);
-  color: #fff;
-  box-shadow: 0 0 0 3px rgba(var(--interactive-accent-rgb), 0.25);
-  animation: llm-pulse 0.8s ease-out infinite;
+  color: var(--text-on-accent);
+  /* Subtle pulsing halo — softer, slower than before */
+  animation: llm-pulse 1.4s ease-out infinite;
 }
 
 @keyframes llm-pulse {
-  0%   { box-shadow: 0 0 0 0px rgba(var(--interactive-accent-rgb), 0.4); }
-  100% { box-shadow: 0 0 0 6px rgba(var(--interactive-accent-rgb), 0); }
+  0%   { box-shadow: 0 0 0 0px rgba(var(--interactive-accent-rgb), 0.3); }
+  100% { box-shadow: 0 0 0 5px rgba(var(--interactive-accent-rgb), 0); }
 }
 
 .llm-quick-action-btn[disabled] {
@@ -665,22 +664,22 @@
 }
 
 .llm-followup-chip {
-  padding: 3px 10px;
-  border-radius: 12px;
+  padding: 4px 12px;
+  border-radius: 999px;
   font-size: 11px;
-  background-color: var(--background-secondary);
-  border: 1px dashed var(--llm-border);
+  background-color: transparent;
+  border: 1px solid var(--llm-border);
   color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background-color 120ms ease, border-color 120ms ease,
+              color 120ms ease;
   white-space: nowrap;
 }
 
 .llm-followup-chip:hover {
   background-color: var(--llm-accent-subtle);
   border-color: var(--llm-accent);
-  color: var(--text-normal);
-  border-style: solid;
+  color: var(--llm-accent);
 }
 
 .llm-followup-skeleton {
@@ -873,27 +872,38 @@ pre:hover .llm-code-copy-btn {
    ============================================ */
 .llm-thinking-block,
 .llm-tool-block {
-  border-radius: 8px;
-  margin: 8px 0;
-  border: 1px solid var(--llm-border);
-  background-color: var(--background-primary);
+  border-radius: 10px;
+  margin: 6px 0;
+  border: 1px solid transparent;
+  background-color: transparent;
   overflow: hidden;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+/* Only outline the block when expanded — the collapsed header should feel
+   like a lightweight status line, not a full card. */
+.llm-thinking-block:has(.llm-thinking-content),
+.llm-tool-block:has(.llm-tool-block-content) {
+  border-color: var(--llm-border);
+  background-color: var(--llm-bg-subtle);
 }
 
 .llm-thinking-header,
 .llm-tool-header {
-  padding: 6px 10px;
+  padding: 4px 8px;
   font-size: 11px;
   display: flex;
   align-items: center;
   gap: 6px;
   cursor: pointer;
   color: var(--text-muted);
+  border-radius: 8px;
 }
 
 .llm-thinking-header:hover,
 .llm-tool-header:hover {
-  background-color: var(--background-modifier-hover);
+  background-color: var(--llm-accent-subtle);
+  color: var(--text-normal);
 }
 
 .llm-thinking-content,
@@ -901,15 +911,19 @@ pre:hover .llm-code-copy-btn {
   padding: 8px 12px;
   font-size: 12px;
   border-top: 1px solid var(--llm-border);
-  background-color: var(--llm-bg-subtle);
   color: var(--text-muted);
+  font-family: var(--llm-font-text);
+  line-height: 1.55;
 }
 
 /* ============================================
    Progress & Status
    ============================================ */
 .llm-progress-container {
-  margin: 8px 12px;
+  margin: 4px 12px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .llm-progress {
@@ -918,12 +932,14 @@ pre:hover .llm-code-copy-btn {
   gap: 8px;
   font-size: 11px;
   color: var(--text-muted);
+  padding: 2px 4px;
 }
 
 .llm-progress-icon {
-  width: 14px;
-  height: 14px;
-  animation: llm-spin 2s linear infinite;
+  width: 12px;
+  height: 12px;
+  color: var(--llm-accent);
+  animation: llm-spin 1.6s linear infinite;
   display: flex;
   align-items: center;
   justify-content: center;
