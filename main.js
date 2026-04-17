@@ -160,7 +160,7 @@ var init_LocalLLMExecutor = __esm({
         }
         const startTime = Date.now();
         this.abortController = new AbortController();
-        onProgress == null ? void 0 : onProgress({ type: "status", message: `Connecting to ${serverUrl}...` });
+        onProgress == null ? void 0 : onProgress({ type: "status", message: "Verbinde..." });
         const endpoint = this.getChatEndpoint(serverUrl);
         const body = {
           model,
@@ -954,7 +954,7 @@ var init_LLMExecutor = __esm({
             this.sessionIds.claude = sessionId;
             this.debug("Claude session started:", sessionId);
           }
-          return { type: "status", message: "Connected to Claude..." };
+          return null;
         }
         if (eventType === "assistant") {
           const message = obj.message;
@@ -996,22 +996,6 @@ var init_LLMExecutor = __esm({
             }
           }
         }
-        if (eventType === "user") {
-          const toolResult = obj.tool_use_result;
-          if (toolResult) {
-            const file2 = toolResult.file;
-            if (file2 == null ? void 0 : file2.filePath) {
-              return { type: "status", message: `Read: ${file2.filePath}` };
-            }
-            return { type: "status", message: "Tool completed" };
-          }
-        }
-        if (eventType === "result") {
-          const numTurns = obj.num_turns;
-          if (numTurns && numTurns > 1) {
-            return { type: "status", message: `Completed (${numTurns} turns)` };
-          }
-        }
         return null;
       }
       /**
@@ -1035,7 +1019,7 @@ var init_LLMExecutor = __esm({
           };
         }
         if (type === "message.started") {
-          return { type: "status", message: "Thinking..." };
+          return { type: "status", message: "Denkt..." };
         }
         return null;
       }
@@ -1076,17 +1060,7 @@ var init_LLMExecutor = __esm({
             }
           }
           this.currentOpenCodeMessageId = messageID || this.currentOpenCodeMessageId;
-          const metadata = part == null ? void 0 : part.metadata;
-          const provider = metadata == null ? void 0 : metadata.provider;
-          const model = metadata == null ? void 0 : metadata.model;
-          const stepType = obj.step_type;
-          if (provider || model) {
-            return { type: "status", message: `Using ${model || provider}...` };
-          }
-          if (stepType) {
-            return { type: "status", message: `Starting ${stepType}...` };
-          }
-          return { type: "status", message: "Processing..." };
+          return { type: "status", message: "L\xE4dt..." };
         }
         if (type === "step_finish") {
           const reason = part == null ? void 0 : part.reason;
@@ -1104,14 +1078,6 @@ var init_LLMExecutor = __esm({
               this.pendingOpenCodeText.delete(finishMessageId);
               const truncated = intermediateText.slice(0, 300) + (intermediateText.length > 300 ? "..." : "");
               return { type: "thinking", content: truncated };
-            }
-          }
-          const tokens = part == null ? void 0 : part.tokens;
-          if (tokens) {
-            const input = tokens.input;
-            const output = tokens.output;
-            if (input && output) {
-              return { type: "status", message: `Tokens: ${input} in / ${output} out` };
             }
           }
           return null;
@@ -1139,7 +1105,7 @@ var init_LLMExecutor = __esm({
           if (content) {
             return { type: "thinking", content };
           }
-          return { type: "status", message: "Thinking..." };
+          return { type: "status", message: "Denkt..." };
         }
         if (type === "tool_use" || type === "tool_call" || type === "tool_start") {
           const toolName = (part == null ? void 0 : part.tool) || (part == null ? void 0 : part.name) || obj.tool || obj.name;
@@ -1198,7 +1164,7 @@ var init_LLMExecutor = __esm({
           }
         }
         if (type === "message_start" || type === "message.start") {
-          return { type: "status", message: "Generating response..." };
+          return null;
         }
         return null;
       }
@@ -23401,20 +23367,20 @@ Assistant answered: ${assistantResponse.slice(0, 500)}`;
    */
   async tryStartLocalServer(onProgress) {
     const { detectLocalSoftwareStatuses: detectLocalSoftwareStatuses2, startLocalServer: startLocalServer2 } = await Promise.resolve().then(() => (init_autoDetect(), autoDetect_exports));
-    onProgress({ type: "status", message: "Local server not running \u2014 checking installed software..." });
+    onProgress({ type: "status", message: "Server starten..." });
     try {
       const statuses = await detectLocalSoftwareStatuses2();
       const startable = statuses.find((s) => s.installed && !s.serverRunning && s.canAutoStart);
       if (!startable) {
-        onProgress({ type: "status", message: "No local LLM server can be auto-started." });
+        onProgress({ type: "status", message: "Kein lokaler Server verf\xFCgbar" });
         return false;
       }
-      onProgress({ type: "status", message: `Starting ${startable.name}...` });
-      new import_obsidian4.Notice(`Starting ${startable.name}...`);
+      onProgress({ type: "status", message: "Server starten..." });
+      new import_obsidian4.Notice(`Starte ${startable.name}...`);
       const result = await startLocalServer2(startable.name);
       if (!result.ok) {
-        onProgress({ type: "status", message: `Failed to start ${startable.name}: ${result.error}` });
-        new import_obsidian4.Notice(`Failed to start ${startable.name}: ${result.error}`);
+        onProgress({ type: "status", message: "Server konnte nicht gestartet werden" });
+        new import_obsidian4.Notice(`Start fehlgeschlagen: ${result.error}`);
         return false;
       }
       this.plugin.settings.providers.local.serverUrl = startable.url;
@@ -23424,11 +23390,11 @@ Assistant answered: ${assistantResponse.slice(0, 500)}`;
       }
       await this.plugin.saveSettings();
       this.localExecutor.updateSettings(this.plugin.settings);
-      onProgress({ type: "status", message: `${startable.name} started \u2014 retrying...` });
-      new import_obsidian4.Notice(`${startable.name} started`);
+      onProgress({ type: "status", message: "Erneut versuchen..." });
+      new import_obsidian4.Notice(`${startable.name} l\xE4uft`);
       return true;
-    } catch (err) {
-      onProgress({ type: "status", message: `Auto-start failed: ${err instanceof Error ? err.message : String(err)}` });
+    } catch (e) {
+      onProgress({ type: "status", message: "Server konnte nicht gestartet werden" });
       return false;
     }
   }
@@ -23464,7 +23430,7 @@ Assistant answered: ${assistantResponse.slice(0, 500)}`;
     const vaultPath = this.getVaultPath();
     this.setLoading(true);
     this.plugin.updateStatusBar(targetProvider, void 0, "connecting");
-    this.handleProgressEvent({ type: "status", message: `Connecting to ${targetProvider} ACP...` });
+    this.handleProgressEvent({ type: "status", message: "Verbinde..." });
     try {
       await this.acpExecutor.connect(targetProvider, vaultPath);
       if (this.currentProvider !== targetProvider) {
@@ -23559,7 +23525,7 @@ Assistant answered: ${assistantResponse.slice(0, 500)}`;
         }
       } else if (useAcp) {
         if (!this.acpExecutor.isConnected() || this.acpExecutor.getProvider() !== this.currentProvider) {
-          onProgress({ type: "status", message: `Connecting to ${this.currentProvider} ACP...` });
+          onProgress({ type: "status", message: "Verbinde..." });
           await this.acpExecutor.connect(this.currentProvider, vaultPath, { onProgress });
           if (!this.acpExecutor.isConnected()) {
             throw new Error("ACP agent process exited unexpectedly");
@@ -24117,12 +24083,8 @@ ${content}`);
           component
         );
         component.unload();
-        const cursor = contentEl.createSpan({ cls: "llm-streaming-cursor", text: "\u258B" });
-        const lastP = contentEl.lastElementChild;
-        if (lastP && lastP !== cursor) lastP.appendChild(cursor);
       } else {
         contentEl.textContent = cleanContent;
-        contentEl.createSpan({ cls: "llm-streaming-cursor", text: "\u258B" });
       }
     }
     this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;

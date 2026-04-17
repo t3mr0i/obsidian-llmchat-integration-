@@ -664,6 +664,20 @@
   vertical-align: baseline;
 }
 
+/* Stable cursor on the streaming bubble — lives as a pseudo-element so it
+   survives the markdown re-render inside .llm-message-content and keeps a
+   steady blink rhythm instead of flickering on every stream chunk. */
+.llm-message-streaming .llm-message-content::after {
+  content: "\25AE";
+  display: inline-block;
+  margin-left: 2px;
+  color: var(--llm-accent);
+  font-size: 0.9em;
+  line-height: 1;
+  vertical-align: baseline;
+  animation: llm-blink 0.8s step-start infinite;
+}
+
 /* Code block copy button */
 pre {
   position: relative;

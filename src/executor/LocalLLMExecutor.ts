@@ -153,7 +153,7 @@ export class LocalLLMExecutor {
     const startTime = Date.now();
     this.abortController = new AbortController();
 
-    onProgress?.({ type: "status", message: `Connecting to ${serverUrl}...` });
+    onProgress?.({ type: "status", message: "Verbinde..." });
 
     const endpoint = this.getChatEndpoint(serverUrl);
 

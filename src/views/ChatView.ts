@@ -1717,23 +1717,23 @@ export class ChatView extends ItemView {
    */
   private async tryStartLocalServer(onProgress: (e: StreamChunk) => void): Promise<boolean> {
     const { detectLocalSoftwareStatuses, startLocalServer } = await import("../utils/autoDetect");
-    onProgress({ type: "status", message: "Local server not running — checking installed software..." });
+    onProgress({ type: "status", message: "Server starten..." });
 
     try {
       const statuses = await detectLocalSoftwareStatuses();
       const startable = statuses.find((s) => s.installed && !s.serverRunning && s.canAutoStart);
       if (!startable) {
-        onProgress({ type: "status", message: "No local LLM server can be auto-started." });
+        onProgress({ type: "status", message: "Kein lokaler Server verfügbar" });
         return false;
       }
 
-      onProgress({ type: "status", message: `Starting ${startable.name}...` });
-      new Notice(`Starting ${startable.name}...`);
+      onProgress({ type: "status", message: "Server starten..." });
+      new Notice(`Starte ${startable.name}...`);
       const result = await startLocalServer(startable.name);
 
       if (!result.ok) {
-        onProgress({ type: "status", message: `Failed to start ${startable.name}: ${result.error}` });
-        new Notice(`Failed to start ${startable.name}: ${result.error}`);
+        onProgress({ type: "status", message: "Server konnte nicht gestartet werden" });
+        new Notice(`Start fehlgeschlagen: ${result.error}`);
         return false;
       }
 
@@ -1746,11 +1746,11 @@ export class ChatView extends ItemView {
       await this.plugin.saveSettings();
       this.localExecutor.updateSettings(this.plugin.settings);
 
-      onProgress({ type: "status", message: `${startable.name} started — retrying...` });
-      new Notice(`${startable.name} started`);
+      onProgress({ type: "status", message: "Erneut versuchen..." });
+      new Notice(`${startable.name} läuft`);
       return true;
-    } catch (err) {
-      onProgress({ type: "status", message: `Auto-start failed: ${err instanceof Error ? err.message : String(err)}` });
+    } catch {
+      onProgress({ type: "status", message: "Server konnte nicht gestartet werden" });
       return false;
     }
   }
@@ -1803,7 +1803,7 @@ export class ChatView extends ItemView {
     // Block user input while connecting
     this.setLoading(true);
     this.plugin.updateStatusBar(targetProvider, undefined, "connecting");
-    this.handleProgressEvent({ type: "status", message: `Connecting to ${targetProvider} ACP...` });
+    this.handleProgressEvent({ type: "status", message: "Verbinde..." });
 
     try {
       await this.acpExecutor.connect(targetProvider, vaultPath);
@@ -1950,7 +1950,7 @@ export class ChatView extends ItemView {
         // Use ACP executor for persistent connection
         // Connect if not already connected or provider changed
         if (!this.acpExecutor.isConnected() || this.acpExecutor.getProvider() !== this.currentProvider) {
-          onProgress({ type: "status", message: `Connecting to ${this.currentProvider} ACP...` });
+          onProgress({ type: "status", message: "Verbinde..." });
           await this.acpExecutor.connect(this.currentProvider, vaultPath, { onProgress });
 
           // Verify connection succeeded (process might have exited)
@@ -2693,15 +2693,12 @@ export class ChatView extends ItemView {
           component
         );
         component.unload();
-
-        const cursor = contentEl.createSpan({ cls: "llm-streaming-cursor", text: "▋" });
-        const lastP = contentEl.lastElementChild;
-        if (lastP && lastP !== cursor) lastP.appendChild(cursor);
       } else {
         // Plain-text fast path — no markdown parse, much cheaper
         contentEl.textContent = cleanContent;
-        contentEl.createSpan({ cls: "llm-streaming-cursor", text: "▋" });
       }
+      // Cursor is rendered via CSS ::after on .llm-message-streaming, so it
+      // doesn't flicker when the content is rebuilt each frame.
     }
 
     this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;

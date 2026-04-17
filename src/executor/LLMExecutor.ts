@@ -792,7 +792,7 @@ export class LLMExecutor {
         this.sessionIds.claude = sessionId;
         this.debug("Claude session started:", sessionId);
       }
-      return { type: "status", message: "Connected to Claude..." };
+      return null;
     }
 
     // Assistant message with tool use or text
@@ -844,26 +844,6 @@ export class LLMExecutor {
       }
     }
 
-    // User message with tool result - tool completed
-    if (eventType === "user") {
-      const toolResult = obj.tool_use_result as Record<string, unknown> | undefined;
-      if (toolResult) {
-        const file = toolResult.file as Record<string, unknown> | undefined;
-        if (file?.filePath) {
-          return { type: "status", message: `Read: ${file.filePath}` };
-        }
-        return { type: "status", message: "Tool completed" };
-      }
-    }
-
-    // Final result
-    if (eventType === "result") {
-      const numTurns = obj.num_turns as number | undefined;
-      if (numTurns && numTurns > 1) {
-        return { type: "status", message: `Completed (${numTurns} turns)` };
-      }
-    }
-
     return null;
   }
 
@@ -894,7 +874,7 @@ export class LLMExecutor {
 
     // Message started (thinking)
     if (type === "message.started") {
-      return { type: "status", message: "Thinking..." };
+      return { type: "status", message: "Denkt..." };
     }
 
     return null;
@@ -947,18 +927,7 @@ export class LLMExecutor {
       }
       this.currentOpenCodeMessageId = messageID || this.currentOpenCodeMessageId;
 
-      const metadata = part?.metadata as Record<string, unknown> | undefined;
-      const provider = metadata?.provider as string | undefined;
-      const model = metadata?.model as string | undefined;
-      const stepType = obj.step_type as string | undefined;
-
-      if (provider || model) {
-        return { type: "status", message: `Using ${model || provider}...` };
-      }
-      if (stepType) {
-        return { type: "status", message: `Starting ${stepType}...` };
-      }
-      return { type: "status", message: "Processing..." };
+      return { type: "status", message: "Lädt..." };
     }
 
     // Step finish - check if this is the final message (reason="stop")
@@ -985,15 +954,6 @@ export class LLMExecutor {
         }
       }
 
-      // Show token usage if available
-      const tokens = part?.tokens as Record<string, unknown> | undefined;
-      if (tokens) {
-        const input = tokens.input as number | undefined;
-        const output = tokens.output as number | undefined;
-        if (input && output) {
-          return { type: "status", message: `Tokens: ${input} in / ${output} out` };
-        }
-      }
       return null;
     }
 
@@ -1032,7 +992,7 @@ export class LLMExecutor {
       if (content) {
         return { type: "thinking", content };
       }
-      return { type: "status", message: "Thinking..." };
+      return { type: "status", message: "Denkt..." };
     }
 
     // Tool use events - OpenCode structure: part.tool, part.state.input, part.state.status
@@ -1111,7 +1071,7 @@ export class LLMExecutor {
 
     // Message events
     if (type === "message_start" || type === "message.start") {
-      return { type: "status", message: "Generating response..." };
+      return null;
     }
 
     return null;
