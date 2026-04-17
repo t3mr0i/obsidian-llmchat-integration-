@@ -707,6 +707,34 @@ export class AcpExecutor {
   }
 
   /**
+   * Start a fresh session on the *existing* connection.
+   * Used when the user switches chat tabs / clears the chat — avoids killing
+   * and respawning the agent child process just to get a clean context.
+   * Falls back to a full disconnect if the agent rejects `newSession`.
+   */
+  async resetSession(cwd: string): Promise<void> {
+    if (!this.connection || !this.currentProvider) return;
+
+    try {
+      const sessionResponse = await this.connection.newSession({
+        cwd,
+        mcpServers: [],
+      });
+      this.sessionId = sessionResponse.sessionId;
+      this.configOptions = sessionResponse.configOptions ?? [];
+      this.modelState = sessionResponse.models ?? null;
+      this.progressCallback = null;
+      if (this.modelState) {
+        setAcpModels(this.currentProvider, this.modelState.availableModels);
+      }
+      this.debug("Session reset on existing connection:", this.sessionId);
+    } catch (err) {
+      this.debug("resetSession failed, falling back to full disconnect:", err);
+      await this.disconnect();
+    }
+  }
+
+  /**
    * Disconnect from the agent
    */
   async disconnect(): Promise<void> {
